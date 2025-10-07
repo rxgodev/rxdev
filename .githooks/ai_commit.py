@@ -23,7 +23,7 @@ SYSTEM_PROMPT = (
     'Generate a Conventional Commit message.\n'
     'RULES:\n'
     '- Subject: English, max 50 chars, lowercase.\n'
-    '- Body: Russian, explains the "why", not big.\n'
+    '- Body: Russian, explains the "why", not big, but not too small.\n'
     '- Output: Raw text only. No markdown or explanations.\n'
     'EXAMPLE:\n'
     'feat(auth): implement session logic\n'
