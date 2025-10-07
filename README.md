@@ -1,13 +1,11 @@
-# auto-commit
-
+# Auto Commit System
 Система создания AI-комментариев к коммитам
 
 ## Установка
-1. Склонируйте репозиторий в ваш проект
-2. Пропишите `git config core.hooksPath .githooks`
-3. Получите ключ на https://ai.io.net/ai/api-keys
-4. В `.env` файл добавьте параметр OPENAI_API_KEY (пример в `.env.example`) со значением, равным ключу из п. 3
-
+1. Скопируйте папку `.githooks` в директорию вашего проекта
+2. Получите ключ на https://ai.io.net/ai/api-keys
+3. Добавьте его в .env с параметром `OPENAI_API_KEY`
+4. Пропишите `git config core.hooksPath .githooks` в директории проекта
 
 ## Использование
 1. `git add .`
