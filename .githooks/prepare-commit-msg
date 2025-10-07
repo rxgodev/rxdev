@@ -1,0 +1,2 @@
+echo "[+] Generating comment has been started"
+python .githooks/ai_commit.py "$1"
