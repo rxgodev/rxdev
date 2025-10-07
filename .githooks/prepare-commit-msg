@@ -1,2 +1,3 @@
-echo "[+] Generating comment has been started"
+#!/bin/sh
+echo "[+] Comment generation started"
 python .githooks/ai_commit.py "$1"
