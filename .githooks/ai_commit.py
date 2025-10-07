@@ -14,7 +14,7 @@ def log_message(message):
 
 load_dotenv()
 
-MODELS_TO_TRY = ["mistralai/Magistral-Small-2506", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", "google/gemma-3-270m-it", "mistralai/Devstral-Small-2505", "meta-llama/Llama-3.3-70B-Instruct"]
+MODELS_TO_TRY = ["mistralai/Magistral-Small-2506", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", "google/gemma-3-270m-it", "mistralai/Devstral-Small-2505", "meta-llama/Llama-3.3-70B-Instruct", "deepseek-ai/DeepSeek-R1-0528"]
 
 MAX_DIFF_LENGTH = 3000
 REQUEST_TIMEOUT = 15
@@ -72,10 +72,10 @@ def main():
     if len(sys.argv) < 2:
         log_message("Exit: Not enough arguments.")
         sys.exit(0)
-
+    
     commit_msg_file = sys.argv[1]
     log_message(f"Commit file path: {commit_msg_file}")
-    
+
     diff = get_staged_diff()
     if not diff:
         log_message("Exit: No staged changes found.")
