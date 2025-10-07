@@ -25,6 +25,7 @@ SYSTEM_PROMPT = (
     '- Subject: English, max 50 chars, lowercase.\n'
     '- Body: Russian, explains the "why", not big, but not too small.\n'
     '- Output: Raw text only. No markdown or explanations.\n'
+    '- More accuracy and deeper info\n'
     'EXAMPLE:\n'
     'feat(auth): implement session logic\n'
     '\n'
