@@ -34,11 +34,26 @@ SYSTEM_PROMPT = (
 def get_staged_diff():
     try:
         result = subprocess.run(
-            ["git", "diff", "--cached", "--unified=0"],
+            ["git", "diff", "--cached", "--no-color", "--unified=0"],
             capture_output=True, text=True, encoding='utf-8', errors='ignore'
         )
-        return result.stdout
-    except FileNotFoundError:
+        lines = result.stdout.splitlines()
+        filtered = []
+        current_file = None
+
+        for line in lines:
+            if line.startswith("diff --git"):
+                parts = line.split()
+                if len(parts) >= 3:
+                    current_file = parts[-1].lstrip("b/")
+                    filtered.append(f"\n# File: {current_file}")
+            elif line.startswith(("+", "-")) and not line.startswith(("+++", "---")):
+                if len(line) > 1:
+                    filtered.append(line)
+
+        return "\n".join(filtered).strip()
+    except Exception as e:
+        log_message(f"Error in get_minimal_diff: {e}")
         return ""
 
 def generate_commit_message(diff):
