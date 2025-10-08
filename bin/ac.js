@@ -211,6 +211,64 @@ function start() {
   runPythonScript([]);
 }
 
+async function checkVersion() {
+  const fs = require('fs');
+  const path = require('path');
+  const https = require('https');
+
+  // Текущая версия
+  const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
+  const current = packageJson.version;
+  console.log(`ℹ️ Current version: ${current}`);
+
+  // Получаем последнюю версию
+  const packageName = 'ac'; // имя после scope
+  const registryUrl = `https://npm.pkg.github.com/rxgodev/${encodeURIComponent(packageName)}`;
+
+  try {
+    const latest = await new Promise((resolve, reject) => {
+      https.get(registryUrl, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const info = JSON.parse(data);
+            resolve(info['dist-tags']?.latest || info.version);
+          } catch (e) {
+            reject(new Error('Invalid registry response'));
+          }
+        });
+      }).on('error', reject);
+    });
+
+    console.log(`🆕 Latest version: ${latest}`);
+
+    // Сравниваем
+    const currentParts = current.split('.').map(Number);
+    const latestParts = latest.split('.').map(Number);
+    let outdated = false;
+
+    for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
+      const c = currentParts[i] || 0;
+      const l = latestParts[i] || 0;
+      if (l > c) {
+        outdated = true;
+        break;
+      }
+      if (l < c) break;
+    }
+
+    if (outdated) {
+      console.log(`🔔 Update available!`);
+      console.log(`👉 Run: pnpm add -g @rxgodev/ac@latest`);
+    } else {
+      console.log(`✅ You are up to date!`);
+    }
+  } catch (e) {
+    console.warn(`⚠️ Could not check latest version: ${e.message}`);
+  }
+}
+
 // --- Главный обработчик ---
 
 const command = process.argv[2];
@@ -227,6 +285,9 @@ switch (command) {
     break;
   case 'start':
     start();
+    break;
+  case 'version':
+    checkVersion();
     break;
   default:
     console.log(`
