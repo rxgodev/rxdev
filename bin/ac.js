@@ -236,13 +236,13 @@ switch (command) {
   case 'init':
     install();
     break;
-  case 'configure':
+  case 'config':
     configure();
     break;
   case 'uninstall':
     uninstall();
     break;
-  case 'start':
+  case 'go':
     start();
     break;
   default:
@@ -251,13 +251,9 @@ Auto Commit CLI (qq)
 
 Usage:
   qq init        → Install AI commit hook
-  qq configure   → Update OPENAI_API_KEY
+  qq config      → Update OPENAI_API_KEY
   qq uninstall   → Remove hook and config
-  qq start       → Manually generate commit message
-
-Example:
-  qq init
-  git commit
+  qq go          → Manually generate commit message
 `);
     process.exit(0);
 }
