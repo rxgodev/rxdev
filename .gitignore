@@ -3,6 +3,7 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+.npmrc
 .githooks/token_usage.json
 
 # C extensions

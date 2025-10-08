@@ -1,0 +1,19 @@
+{
+  "name": "@rxgodev/ac",
+  "version": "1.0.0",
+  "description": "Auto Commit CLI for AI-powered commit messages",
+  "keywords": ["git", "commit", "ai", "cli"],
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ac": "./bin/ac.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    ".githooks/"
+  ]
+}

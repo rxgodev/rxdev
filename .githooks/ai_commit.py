@@ -1,7 +1,7 @@
 import os
 import sys
 import subprocess
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 import traceback
 from datetime import datetime, timezone
 import json
@@ -67,7 +67,7 @@ def log_message(message: str) -> None:
         f.write(f"{message}\n")
 
 
-load_dotenv()
+# load_dotenv()
 
 MODELS_TO_TRY = ["mistralai/Magistral-Small-2506", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", "google/gemma-3-270m-it", "mistralai/Devstral-Small-2505", "meta-llama/Llama-3.3-70B-Instruct", "deepseek-ai/DeepSeek-R1-0528"]
 
@@ -122,7 +122,7 @@ def read_commitignore(filepath='.commitignore') -> list:
                 if line and not line.startswith('#'):
                     ignored.append(line)
     except FileNotFoundError:
-        pass  # Игнорируем отсутствие файла
+        pass 
     return ignored
 
 
@@ -167,7 +167,7 @@ def get_staged_diff():
                 if len(parts) >= 3:
                     current_file = parts[-1].lstrip("b/")
                     if spec.match_file(current_file):
-                        current_file = None  # пропускаем
+                        current_file = None
                         continue
                     filtered.append(f"\n# File: {current_file}")
             elif current_file and line.startswith(("+", "-")) and not line.startswith(("+++", "---")):
@@ -182,12 +182,15 @@ def get_staged_diff():
 
 
 def generate_commit_message(diff):
-    # Отложенный импорт openai
     import openai
     
-    api_key = os.getenv("OPENAI_API_KEY")
+    # api_key = os.getenv("OPENAI_API_KEY")
+
+    api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        return "ERROR: OPENAI_API_KEY is missing"
+        # return "ERROR: OPENAI_API_KEY is missing"
+        log_message("ERROR: OPENAI_API_KEY is missing")
+        sys.exit(1)
 
     client = openai.OpenAI(api_key=api_key, base_url="https://api.intelligence.io.solutions/api/v1/")
 
@@ -220,7 +223,6 @@ def generate_commit_message(diff):
 
             message = response.choices[0].message.content.strip()
 
-            # Проверка: если сообщение пустое или содержит только комментарии — это ошибка
             if not message or message.startswith("#") or len(message.strip()) < 10:
                 log_message(f"Generated message too short or invalid: {repr(message)}")
                 continue
@@ -250,7 +252,6 @@ def main():
     else:
         commit_msg_file = sys.argv[1]
 
-    # Проверяем, есть ли уже пользовательское сообщение
     try:
         with open(commit_msg_file, 'r', encoding='utf-8') as f:
             existing_content = f.read().strip()
@@ -258,7 +259,6 @@ def main():
         existing_content = ""
         log_message(f"Could not read commit file: {e}")
 
-    # Если уже есть сообщение от пользователя — не трогаем
     if existing_content and not existing_content.startswith("#"):
         log_message("User-provided commit message detected. Skipping AI generation.")
         sys.exit(0)
@@ -266,11 +266,9 @@ def main():
     print("[+] Auto Commit started")
     log_message(f"Commit file path: {commit_msg_file}")
 
-    # Получаем diff только по неигнорируемым файлам
     diff = get_staged_diff()
 
     if not diff:
-        # Проверяем: есть ли вообще staged-файлы?
         try:
             result = subprocess.run(
                 ["git", "diff", "--cached", "--name-only"],
@@ -282,16 +280,13 @@ def main():
             log_message(f"Failed to check staged files: {e}")
 
         if staged_files:
-            # Есть staged-файлы, но все они проигнорированы → информируем пользователя
             reason = "All staged files are ignored (listed in .commitignore)"
             write_error_to_commit(commit_msg_file, reason)
             log_message(f"INFO: {reason}. Wrote notice to commit file.")
         else:
-            # Нет staged-файлов вообще — выходим тихо
             log_message("Exit: No staged changes found.")
             sys.exit(0)
     else:
-        # Есть неигнорируемые изменения — пытаемся сгенерировать сообщение
         log_message(f"Diff found (length: {len(diff)}).")
         print("[+] Comment generation started")
         message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
