@@ -1,10 +1,9 @@
 {
   "name": "@rxgodev/ac",
   "version": "1.0.0",
-  "description": "Auto Commit CLI for AI-powered commit messages",
-  "keywords": ["git", "commit", "ai", "cli"],
+  "description": "AI-powered commit message generator",
+  "keywords": ["git", "commit", "ai", "cli", "conventional-commits"],
   "license": "UNLICENSED",
-  "private": true,
   "type": "module",
   "bin": {
     "ac": "./bin/ac.js"
@@ -15,5 +14,16 @@
   "files": [
     "bin/",
     ".githooks/"
-  ]
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/rxgodev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rxgodev/ac-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rxgodev/ac-cli/issues"
+  },
+  "homepage": "https://github.com/rxgodev/ac-cli#readme"
 }
