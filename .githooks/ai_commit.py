@@ -8,8 +8,10 @@ from tokenizers import Tokenizer
 from transformers import AutoTokenizer
 from datetime import datetime, timezone
 import json
+import pathspec
 
-USAGE_FILE = os.path.join(os.path.dirname(__file__), "..", "token_usage.json")
+
+USAGE_FILE = ".githooks/token_usage.json"
 DAILY_QUOTA = 500_000
 
 
@@ -122,6 +124,19 @@ def write_error_to_commit(msg_file, err_msg):
         f.write(f"# Reason: {err_msg}\n") 
 
 
+def read_commentignore(filepath='.commentignore') -> list:
+    ignored = []
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    ignored.append(line)
+    except FileNotFoundError:
+        print(f"Файл {filepath} не найден.")
+    return ignored
+
+
 def get_staged_diff():
     try:
         result = subprocess.run(
@@ -135,26 +150,11 @@ def get_staged_diff():
         staged_files = result.stdout.strip().splitlines()
         if not staged_files:
             return ""
+        
+        exclude_patterns = read_commentignore()
+        spec = pathspec.GitIgnoreSpec.from_lines(exclude_patterns)
 
-        EXCLUDE_PATTERNS = [
-            ".githooks/",
-            "ai_commit.py",
-            "ai_commit_debug.log",
-            ".env",
-            ".env.local",
-            "commit-msg",
-            "prepare-commit-msg",
-        ]
-
-        relevant_files = []
-        for f in staged_files:
-            should_exclude = False
-            for pattern in EXCLUDE_PATTERNS:
-                if f.startswith(pattern) or f == pattern:
-                    should_exclude = True
-                    break
-            if not should_exclude:
-                relevant_files.append(f)
+        relevant_files = [f for f in staged_files if not spec.match_file(f)]
 
         if not relevant_files:
             log_message("No relevant staged files (only hook/config files changed).")
@@ -167,6 +167,7 @@ def get_staged_diff():
             ["git", "diff", "--cached", "--no-color", "--unified=0"] + relevant_files,
             capture_output=True, text=True, encoding='utf-8', errors='ignore'
         )
+
         lines = result.stdout.splitlines()
         filtered = []
         current_file = None
@@ -176,9 +177,8 @@ def get_staged_diff():
                 parts = line.split()
                 if len(parts) >= 3:
                     current_file = parts[-1].lstrip("b/")
-                    skip = any(current_file.startswith(p) or current_file == p for p in EXCLUDE_PATTERNS)
-                    if skip:
-                        current_file = None
+                    if spec.match_file(current_file):
+                        current_file = None  # пропускаем
                         continue
                     filtered.append(f"\n# File: {current_file}")
             elif current_file and line.startswith(("+", "-")) and not line.startswith(("+++", "---")):
@@ -186,6 +186,7 @@ def get_staged_diff():
                     filtered.append(line)
 
         return "\n".join(filtered).strip()
+
     except Exception as e:
         log_message(f"Error in get_staged_diff: {e}\n{traceback.format_exc()}")
         return ""
