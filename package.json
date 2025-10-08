@@ -6,7 +6,10 @@
   "license": "UNLICENSED",
   "type": "module",
   "bin": {
-    "ac": "./bin/ac.js"
+    "auto-commit": "./bin/ac.js",
+    "aucm": "./bin/ac.js",
+    "aicm": "./bin/ac.js",
+    "aic": "./bin/ac.js"
   },
   "engines": {
     "node": ">=18"
