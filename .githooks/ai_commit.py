@@ -25,17 +25,56 @@ SYSTEM_PROMPT = (
     '- Subject: English, max 50 chars, lowercase.\n'
     '- Body: Russian, explains the "why", not big, but not too small.\n'
     '- Output: Raw text only. No markdown or explanations.\n'
-    '- More accuracy and deeper info\n'
     'EXAMPLE:\n'
     'feat(auth): implement session logic\n'
     '\n'
     'Добавлена логика сессий с использованием JWT для аутентификации пользователей.'
 )
 
+
 def get_staged_diff():
     try:
         result = subprocess.run(
-            ["git", "diff", "--cached", "--no-color", "--unified=0"],
+            ["git", "diff", "--cached", "--name-only"],
+            capture_output=True, text=True, encoding='utf-8', errors='ignore'
+        )
+        if result.returncode != 0:
+            log_message(f"Failed to get staged files: {result.stderr}")
+            return ""
+
+        staged_files = result.stdout.strip().splitlines()
+        if not staged_files:
+            return ""
+
+        EXCLUDE_PATTERNS = [
+            ".githooks/",
+            "ai_commit.py",
+            "ai_commit_debug.log",
+            ".env",
+            ".env.local",
+            "commit-msg",
+            "prepare-commit-msg",
+        ]
+
+        relevant_files = []
+        for f in staged_files:
+            should_exclude = False
+            for pattern in EXCLUDE_PATTERNS:
+                if f.startswith(pattern) or f == pattern:
+                    should_exclude = True
+                    break
+            if not should_exclude:
+                relevant_files.append(f)
+
+        if not relevant_files:
+            log_message("No relevant staged files (only hook/config files changed).")
+            return ""
+        
+        log_message(f"Staged files: {staged_files}")
+        log_message(f"Relevant files: {relevant_files}")
+
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--no-color", "--unified=0"] + relevant_files,
             capture_output=True, text=True, encoding='utf-8', errors='ignore'
         )
         lines = result.stdout.splitlines()
@@ -47,15 +86,20 @@ def get_staged_diff():
                 parts = line.split()
                 if len(parts) >= 3:
                     current_file = parts[-1].lstrip("b/")
+                    skip = any(current_file.startswith(p) or current_file == p for p in EXCLUDE_PATTERNS)
+                    if skip:
+                        current_file = None
+                        continue
                     filtered.append(f"\n# File: {current_file}")
-            elif line.startswith(("+", "-")) and not line.startswith(("+++", "---")):
+            elif current_file and line.startswith(("+", "-")) and not line.startswith(("+++", "---")):
                 if len(line) > 1:
                     filtered.append(line)
 
         return "\n".join(filtered).strip()
     except Exception as e:
-        log_message(f"Error in get_minimal_diff: {e}")
+        log_message(f"Error in get_staged_diff: {e}\n{traceback.format_exc()}")
         return ""
+
 
 def generate_commit_message(diff):
     api_key = os.getenv("OPENAI_API_KEY")
