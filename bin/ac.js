@@ -212,20 +212,23 @@ function start() {
 }
 
 async function checkVersion() {
-  const fs = require('fs');
-  const path = require('path');
-  const https = require('https');
-
-  // Текущая версия
-  const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
-  const current = packageJson.version;
-  console.log(`ℹ️ Current version: ${current}`);
-
-  // Получаем последнюю версию
-  const packageName = 'ac'; // имя после scope
-  const registryUrl = `https://npm.pkg.github.com/rxgodev/${encodeURIComponent(packageName)}`;
+  // Импортируем fs и path как ESM
+  const { readFile } = await import('fs/promises');
+  const { join } = await import('path');
+  const https = await import('https');
 
   try {
+    // Читаем package.json
+    const packageJsonPath = join(import.meta.url.replace('file://', ''), '../package.json');
+    const packageJsonContent = await readFile(new URL('../package.json', import.meta.url), 'utf8');
+    const packageJson = JSON.parse(packageJsonContent);
+    const current = packageJson.version;
+    console.log(`ℹ️ Current version: ${current}`);
+
+    // Получаем последнюю версию из registry
+    const packageName = 'ac';
+    const registryUrl = `https://npm.pkg.github.com/rxgodev/${encodeURIComponent(packageName)}`;
+
     const latest = await new Promise((resolve, reject) => {
       https.get(registryUrl, (res) => {
         let data = '';
@@ -243,22 +246,20 @@ async function checkVersion() {
 
     console.log(`🆕 Latest version: ${latest}`);
 
-    // Сравниваем
-    const currentParts = current.split('.').map(Number);
-    const latestParts = latest.split('.').map(Number);
-    let outdated = false;
+    // Простое сравнение версий x.y.z
+    const compareVersions = (v1, v2) => {
+      const [a1, b1, c1] = v1.split('.').map(Number);
+      const [a2, b2, c2] = v2.split('.').map(Number);
+      if (a2 > a1) return -1;
+      if (a2 < a1) return 1;
+      if (b2 > b1) return -1;
+      if (b2 < b1) return 1;
+      if (c2 > c1) return -1;
+      if (c2 < c1) return 1;
+      return 0;
+    };
 
-    for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
-      const c = currentParts[i] || 0;
-      const l = latestParts[i] || 0;
-      if (l > c) {
-        outdated = true;
-        break;
-      }
-      if (l < c) break;
-    }
-
-    if (outdated) {
+    if (compareVersions(current, latest) < 0) {
       console.log(`🔔 Update available!`);
       console.log(`👉 Run: pnpm add -g @rxgodev/ac@latest`);
     } else {
