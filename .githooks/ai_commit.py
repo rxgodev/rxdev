@@ -7,10 +7,15 @@ import traceback
 
 LOG_FILE = os.path.join(os.path.dirname(__file__), '..', 'ai_commit_debug.log')
 
-def log_message(message):
-    """Записывает сообщение в лог-файл."""
+
+def log_message(message: str) -> None:
+    """
+    Функция, которая записывает логи в файл
+    :param message: Сообщение
+    """
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{message}\n")
+
 
 load_dotenv()
 
@@ -127,8 +132,11 @@ def generate_commit_message(diff):
     log_message("All models failed.")
     return None
 
+
 def main():
     log_message("\n--- HOOK STARTED ---")
+    print("[+] Auto Commit started")
+
     if len(sys.argv) < 2:
         log_message("Exit: Not enough arguments.")
         sys.exit(0)
@@ -141,7 +149,8 @@ def main():
         log_message("Exit: No staged changes found.")
         sys.exit(0)
     log_message(f"Diff found (length: {len(diff)}).")
-
+    
+    print("[+] Comment generation started")
     message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
 
     if message:
