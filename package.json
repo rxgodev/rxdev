@@ -1,8 +1,14 @@
 {
   "name": "@rxgodev/ac",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI-powered commit message generator",
-  "keywords": ["git", "commit", "ai", "cli", "conventional-commits"],
+  "keywords": [
+    "git",
+    "commit",
+    "ai",
+    "cli",
+    "conventional-commits"
+  ],
   "license": "UNLICENSED",
   "type": "module",
   "bin": {
