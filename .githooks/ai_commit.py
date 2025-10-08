@@ -25,15 +25,32 @@ MAX_DIFF_LENGTH = 3000
 REQUEST_TIMEOUT = 15
 
 SYSTEM_PROMPT = (
-    'Generate a Conventional Commit message.\n'
-    'RULES:\n'
-    '- Subject: English, max 50 chars, lowercase.\n'
-    '- Body: Russian, explains the "why", not big, but not too small.\n'
-    '- Output: Raw text only. No markdown or explanations.\n'
-    'EXAMPLE:\n'
-    'feat(auth): implement session logic\n'
-    '\n'
-    'Добавлена логика сессий с использованием JWT для аутентификации пользователей.'
+    "You are an expert Git commit message generator strictly following Conventional Commits 1.0.0.\n"
+    "RULES:\n"
+    "- SUBJECT: English, imperative mood, lowercase, max 50 chars. NO PERIOD at end.\n"
+    "- TYPE: Use ONLY: feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert.\n"
+    "- SCOPE: Optional, in parentheses, e.g. (auth), (docs), (deps). Keep short.\n"
+    "- BODY: In Russian. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.\n"
+    "- NEVER describe merge commits, version bumps, or generic 'update' without context.\n"
+    "- NEVER invent details not present in the diff.\n"
+    "- If changes are ONLY in README/docs — use type 'docs'.\n"
+    "- Output ONLY raw commit message. NO markdown, NO explanations, NO extra text.\n\n"
+    
+    "BAD EXAMPLES (NEVER do this):\n"
+    "  'update README.md' → too vague\n"
+    "  'Добавлено много документации' → not specific\n"
+    "  'Merge branch ...' → ignore merge-related changes\n\n"
+    
+    "GOOD EXAMPLES:\n"
+    "docs(readme): add installation and release steps\n"
+    "\n"
+    "Расширена документация: добавлены шаги установки, развёртывания и релиза пакета. "
+    "Обновлены разделы 'Технический стек', 'Фичи' и 'Переменные среды' в README.md.\n\n"
+    
+    "docs(package): describe flight map features and stack\n"
+    "\n"
+    "Добавлено описание пакета карты полётов: технический стек (Node.js 22, React 19), "
+    "фичи (карта, взаимодействие с пилотом), и демо-ссылка."
 )
 
 
@@ -144,7 +161,6 @@ def generate_commit_message(diff):
 
 def main():
     log_message("\n--- HOOK STARTED ---")
-    print("[+] Auto Commit started")
 
     if len(sys.argv) < 2:
         log_message("Exit: Not enough arguments.")
@@ -153,6 +169,8 @@ def main():
         write_error_to_commit(fallback_file, "Hook called incorrectly (missing commit file path)")
         sys.exit(0)
     
+    print("[+] Auto Commit started")
+
     commit_msg_file = sys.argv[1]
     log_message(f"Commit file path: {commit_msg_file}")
 
