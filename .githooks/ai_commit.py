@@ -1,11 +1,8 @@
 import os
 import sys
 import subprocess
-import openai
 from dotenv import load_dotenv
 import traceback
-from tokenizers import Tokenizer
-from transformers import AutoTokenizer
 from datetime import datetime, timezone
 import json
 import pathspec
@@ -50,24 +47,12 @@ def get_remaining_quota(model: str) -> int:
     return max(0, DAILY_QUOTA - used)
 
 
-_TOKENIZER_CACHE = {}
-
-
 def count_tokens(text: str, model_name: str) -> int:
     """
-    Функция, которая считает количество токенов в тексте для конкретной модели 
+    Быстрая эвристика: 1 токен ≈ 4 символа.
+    Точность достаточна для контроля квоты.
     """
-    if model_name in _TOKENIZER_CACHE:
-        tokenizer = _TOKENIZER_CACHE[model_name]
-    else:
-        try:
-            tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-            _TOKENIZER_CACHE[model_name] = tokenizer
-        except Exception as e:
-            log_message(f"⚠️ Failed to load tokenizer for {model_name}: {e}. Using fallback.")
-            return len(text) // 4
-    
-    return len(tokenizer.encode(text))
+    return max(1, len(text) // 4)
 
 
 LOG_FILE = os.path.join(os.path.dirname(__file__), '..', 'ai_commit_debug.log')
@@ -128,7 +113,7 @@ def write_error_to_commit(msg_file, err_msg):
         f.write(f"# Reason: {err_msg}\n") 
 
 
-def read_commentignore(filepath='.commentignore') -> list:
+def read_commitignore(filepath='.commitignore') -> list:
     ignored = []
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -137,7 +122,7 @@ def read_commentignore(filepath='.commentignore') -> list:
                 if line and not line.startswith('#'):
                     ignored.append(line)
     except FileNotFoundError:
-        print(f"Файл {filepath} не найден.")
+        pass  # Игнорируем отсутствие файла
     return ignored
 
 
@@ -155,7 +140,7 @@ def get_staged_diff():
         if not staged_files:
             return ""
         
-        exclude_patterns = read_commentignore()
+        exclude_patterns = read_commitignore()
         spec = pathspec.GitIgnoreSpec.from_lines(exclude_patterns)
 
         relevant_files = [f for f in staged_files if not spec.match_file(f)]
@@ -197,10 +182,12 @@ def get_staged_diff():
 
 
 def generate_commit_message(diff):
+    # Отложенный импорт openai
+    import openai
+    
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        log_message("ERROR: OPENAI_API_KEY not found in environment.")
-        return "OPENAI_API_KEY is missing"
+        return "ERROR: OPENAI_API_KEY is missing"
 
     client = openai.OpenAI(api_key=api_key, base_url="https://api.intelligence.io.solutions/api/v1/")
 
@@ -233,6 +220,11 @@ def generate_commit_message(diff):
 
             message = response.choices[0].message.content.strip()
 
+            # Проверка: если сообщение пустое или содержит только комментарии — это ошибка
+            if not message or message.startswith("#") or len(message.strip()) < 10:
+                log_message(f"Generated message too short or invalid: {repr(message)}")
+                continue
+
             completion_tokens = count_tokens(message, model)
             total_tokens = estimated_input + completion_tokens
 
@@ -246,42 +238,75 @@ def generate_commit_message(diff):
             log_message(f"FAILURE with {model}. Estimated tokens spent: {approx_tokens}. Error: {e}")
             continue
 
-    return "All models failed or quota exceeded"
+    return "ERROR: All models failed or quota exceeded"
 
 
 def main():
     log_message("\n--- HOOK STARTED ---")
 
     if len(sys.argv) < 2:
-        log_message("Exit: Not enough arguments.")
-        
-        fallback_file = sys.argv[1] if len(sys.argv) > 1 else ".git/COMMIT_EDITMSG"
-        write_error_to_commit(fallback_file, "Hook called incorrectly (missing commit file path)")
-        sys.exit(0)
-    
-    print("[+] Auto Commit started")
+        commit_msg_file = ".git/COMMIT_EDITMSG"
+        log_message("WARNING: No commit file provided, using default .git/COMMIT_EDITMSG")
+    else:
+        commit_msg_file = sys.argv[1]
 
-    commit_msg_file = sys.argv[1]
+    # Проверяем, есть ли уже пользовательское сообщение
+    try:
+        with open(commit_msg_file, 'r', encoding='utf-8') as f:
+            existing_content = f.read().strip()
+    except Exception as e:
+        existing_content = ""
+        log_message(f"Could not read commit file: {e}")
+
+    # Если уже есть сообщение от пользователя — не трогаем
+    if existing_content and not existing_content.startswith("#"):
+        log_message("User-provided commit message detected. Skipping AI generation.")
+        sys.exit(0)
+
+    print("[+] Auto Commit started")
     log_message(f"Commit file path: {commit_msg_file}")
 
+    # Получаем diff только по неигнорируемым файлам
     diff = get_staged_diff()
-    if not diff:
-        log_message("Exit: No staged changes found.")
-        sys.exit(0)
-    log_message(f"Diff found (length: {len(diff)}).")
-    
-    print("[+] Comment generation started")
-    message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
 
-    if message and not message.startswith("OPENAI_API_KEY") and "failed" not in message.lower():
-        with open(commit_msg_file, 'w', encoding='utf-8') as f:
-            f.write(message)
-        log_message("Message written to commit file.")
+    if not diff:
+        # Проверяем: есть ли вообще staged-файлы?
+        try:
+            result = subprocess.run(
+                ["git", "diff", "--cached", "--name-only"],
+                capture_output=True, text=True, encoding='utf-8', errors='ignore'
+            )
+            staged_files = result.stdout.strip().splitlines() if result.returncode == 0 else []
+        except Exception as e:
+            staged_files = []
+            log_message(f"Failed to check staged files: {e}")
+
+        if staged_files:
+            # Есть staged-файлы, но все они проигнорированы → информируем пользователя
+            reason = "All staged files are ignored (listed in .commitignore)"
+            write_error_to_commit(commit_msg_file, reason)
+            log_message(f"INFO: {reason}. Wrote notice to commit file.")
+        else:
+            # Нет staged-файлов вообще — выходим тихо
+            log_message("Exit: No staged changes found.")
+            sys.exit(0)
     else:
-        write_error_to_commit(commit_msg_file, message)
-        log_message(f"ERROR: {message}")
-    
+        # Есть неигнорируемые изменения — пытаемся сгенерировать сообщение
+        log_message(f"Diff found (length: {len(diff)}).")
+        print("[+] Comment generation started")
+        message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
+
+        if message and not message.startswith("ERROR:"):
+            with open(commit_msg_file, 'w', encoding='utf-8') as f:
+                f.write(message)
+            log_message("Message written to commit file.")
+        else:
+            error_text = message.replace("ERROR: ", "", 1) if message else "Unknown error"
+            write_error_to_commit(commit_msg_file, error_text)
+            log_message(f"ERROR: {error_text}")
+
     log_message("--- HOOK FINISHED ---\n")
+
 
 if __name__ == "__main__":
     if os.path.exists(LOG_FILE):

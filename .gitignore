@@ -3,6 +3,8 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+.githooks/token_usage.json
+
 # C extensions
 *.so
 
