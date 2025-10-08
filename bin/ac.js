@@ -4,6 +4,7 @@ import { existsSync, writeFileSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import readline from 'readline';
+import { homedir } from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -75,13 +76,28 @@ async function saveKeyToEnv(key) {
     process.exit(1);
   }
 
-  // Сохраняем в текущую сессию
+  // Сохраняем в текущую сессию (работает везде)
   process.env.OPENAI_API_KEY = key;
 
-  // Пытаемся сохранить в shell profile (для будущих сессий)
-  const home = process.env.HOME || process.env.USERPROFILE;
+  // === WINDOWS ===
+  if (process.platform === 'win32') {
+    try {
+      const { execSync } = await import('child_process');
+      // setx сохраняет переменную для текущего пользователя
+      execSync(`setx OPENAI_API_KEY "${key}"`, { stdio: 'pipe' });
+      console.log('✅ OPENAI_API_KEY saved to Windows user environment variables.');
+      console.log('👉 Please restart your terminal for the changes to take effect.');
+      return;
+    } catch (e) {
+      console.log('⚠️ Failed to save to Windows environment. Key will only persist in this session.');
+      return;
+    }
+  }
+
+  // === macOS / Linux ===
+  const home = homedir();
   if (!home) {
-    console.log('⚠️  Could not determine home directory. Key will only persist in this session.');
+    console.log('⚠️ Could not determine home directory. Key will only persist in this session.');
     return;
   }
 
@@ -94,7 +110,7 @@ async function saveKeyToEnv(key) {
   }
 
   if (existsSync(rcFile)) {
-    let content = readFileSync(rcFile, 'utf-8');
+    let content = readFileSync(rcFile, 'utf8');
     const exportLine = `export OPENAI_API_KEY="${key}"`;
     const regex = /export OPENAI_API_KEY=".*"/;
 
@@ -105,9 +121,10 @@ async function saveKeyToEnv(key) {
       content += `\n${exportLine}\n`;
       console.log(`✅ Added OPENAI_API_KEY to ${rcFile}`);
     }
-    writeFileSync(rcFile, content, 'utf-8');
+    writeFileSync(rcFile, content, 'utf8');
   } else {
-    console.log(`⚠️  Shell config file not found. Key will only persist in this session.`);
+    console.log(`⚠️ Shell config file not found: ${rcFile}`);
+    console.log('⚠️ Key will only persist in this session.');
   }
 }
 
@@ -211,65 +228,6 @@ function start() {
   runPythonScript([]);
 }
 
-async function checkVersion() {
-  // Импортируем fs и path как ESM
-  const { readFile } = await import('fs/promises');
-  const { join } = await import('path');
-  const https = await import('https');
-
-  try {
-    // Читаем package.json
-    const packageJsonPath = join(import.meta.url.replace('file://', ''), '../package.json');
-    const packageJsonContent = await readFile(new URL('../package.json', import.meta.url), 'utf8');
-    const packageJson = JSON.parse(packageJsonContent);
-    const current = packageJson.version;
-    console.log(`ℹ️ Current version: ${current}`);
-
-    // Получаем последнюю версию из registry
-    const packageName = 'ac';
-    const registryUrl = `https://npm.pkg.github.com/rxgodev/${encodeURIComponent(packageName)}`;
-
-    const latest = await new Promise((resolve, reject) => {
-      https.get(registryUrl, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          try {
-            const info = JSON.parse(data);
-            resolve(info['dist-tags']?.latest || info.version);
-          } catch (e) {
-            reject(new Error('Invalid registry response'));
-          }
-        });
-      }).on('error', reject);
-    });
-
-    console.log(`🆕 Latest version: ${latest}`);
-
-    // Простое сравнение версий x.y.z
-    const compareVersions = (v1, v2) => {
-      const [a1, b1, c1] = v1.split('.').map(Number);
-      const [a2, b2, c2] = v2.split('.').map(Number);
-      if (a2 > a1) return -1;
-      if (a2 < a1) return 1;
-      if (b2 > b1) return -1;
-      if (b2 < b1) return 1;
-      if (c2 > c1) return -1;
-      if (c2 < c1) return 1;
-      return 0;
-    };
-
-    if (compareVersions(current, latest) < 0) {
-      console.log(`🔔 Update available!`);
-      console.log(`👉 Run: pnpm add -g @rxgodev/ac@latest`);
-    } else {
-      console.log(`✅ You are up to date!`);
-    }
-  } catch (e) {
-    console.warn(`⚠️ Could not check latest version: ${e.message}`);
-  }
-}
-
 // --- Главный обработчик ---
 
 const command = process.argv[2];
@@ -286,9 +244,6 @@ switch (command) {
     break;
   case 'start':
     start();
-    break;
-  case 'version':
-    checkVersion();
     break;
   default:
     console.log(`
