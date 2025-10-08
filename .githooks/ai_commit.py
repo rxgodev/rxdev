@@ -4,6 +4,65 @@ import subprocess
 import openai
 from dotenv import load_dotenv
 import traceback
+from tokenizers import Tokenizer
+from transformers import AutoTokenizer
+from datetime import datetime, timezone
+import json
+
+USAGE_FILE = os.path.join(os.path.dirname(__file__), "..", "token_usage.json")
+DAILY_QUOTA = 500_000
+
+
+def _load_usage():
+    if os.path.exists(USAGE_FILE):
+        with open(USAGE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            today = datetime.now(timezone.utc).date().isoformat()
+            if data.get("date") != today:
+                return {"date": today, "models": {}}
+            return data
+    today = datetime.now(timezone.utc).date().isoformat()
+    return {"date": today, "models": {}}
+
+def _save_usage(data):
+    with open(USAGE_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+def record_token_usage(model: str, tokens: int):
+    data = _load_usage()
+    data["models"][model] = data["models"].get(model, 0) + tokens
+    _save_usage(data)
+
+def has_quota(model: str, needed: int) -> bool:
+    data = _load_usage()
+    used = data["models"].get(model, 0)
+    return (used + needed) <= DAILY_QUOTA
+
+def get_remaining_quota(model: str) -> int:
+    data = _load_usage()
+    used = data["models"].get(model, 0)
+    return max(0, DAILY_QUOTA - used)
+
+
+_TOKENIZER_CACHE = {}
+
+
+def count_tokens(text: str, model_name: str) -> int:
+    """
+    Функция, которая считает количество токенов в тексте для конкретной модели 
+    """
+    if model_name in _TOKENIZER_CACHE:
+        tokenizer = _TOKENIZER_CACHE[model_name]
+    else:
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+            _TOKENIZER_CACHE[model_name] = tokenizer
+        except Exception as e:
+            log_message(f"⚠️ Failed to load tokenizer for {model_name}: {e}. Using fallback.")
+            return len(text) // 4
+    
+    return len(tokenizer.encode(text))
+
 
 LOG_FILE = os.path.join(os.path.dirname(__file__), '..', 'ai_commit_debug.log')
 
@@ -136,27 +195,53 @@ def generate_commit_message(diff):
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         log_message("ERROR: OPENAI_API_KEY not found in environment.")
-        return None
-    log_message(f"API key found, starting with first {len(api_key[:5])} chars: {api_key[:5]}...")
+        return "OPENAI_API_KEY is missing"
 
     client = openai.OpenAI(api_key=api_key, base_url="https://api.intelligence.io.solutions/api/v1/")
-    user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
 
+    user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
+ 
     for model in MODELS_TO_TRY:
         try:
-            log_message(f"Attempting model: {model}")
+            system_tokens = count_tokens(SYSTEM_PROMPT, model)
+            user_tokens = count_tokens(user_prompt, model)
+            estimated_input = system_tokens + user_tokens
+            estimated_total = estimated_input + 100
+
+            if not has_quota(model, estimated_total):
+                remaining = get_remaining_quota(model)
+                log_message(f"Skipping {model}: not enough quota (need {estimated_total}, have {remaining})")
+                continue
+
+            log_message(f"Attempting model: {model} (est. tokens: {estimated_total})")
+
             response = client.chat.completions.create(
-                model=model, messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_prompt}],
-                temperature=0.2, max_tokens=200, timeout=REQUEST_TIMEOUT
+                model=model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.2,
+                max_tokens=200,
+                timeout=REQUEST_TIMEOUT
             )
+
             message = response.choices[0].message.content.strip()
-            log_message(f"SUCCESS with {model}. Message: {message}")
+
+            completion_tokens = count_tokens(message, model)
+            total_tokens = estimated_input + completion_tokens
+
+            record_token_usage(model, total_tokens)
+            log_message(f"SUCCESS with {model}. Tokens: {total_tokens} (in: {estimated_input}, out: {completion_tokens})")
             return message
+
         except Exception as e:
-            log_message(f"FAILURE with {model}. Error: {e}\n{traceback.format_exc()}")
-    
-    log_message("All models failed.")
-    return None
+            approx_tokens = estimated_input + 50
+            record_token_usage(model, approx_tokens)
+            log_message(f"FAILURE with {model}. Estimated tokens spent: {approx_tokens}. Error: {e}")
+            continue
+
+    return "All models failed or quota exceeded"
 
 
 def main():
