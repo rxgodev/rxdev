@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 .npmrc
+npmrc
 .githooks/token_usage.json
 
 # C extensions
