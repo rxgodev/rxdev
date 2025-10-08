@@ -37,6 +37,15 @@ SYSTEM_PROMPT = (
 )
 
 
+def write_error_to_commit(msg_file, err_msg):
+    """
+    Функция, которая записывает ошибку как комментарий в файл коммита
+    """
+    with open(msg_file, "w", encoding="utf-8") as f:
+        f.write("# ❌ AI COMMIT HOOK FAILED\n")
+        f.write(f"# Reason: {err_msg}\n") 
+
+
 def get_staged_diff():
     try:
         result = subprocess.run(
@@ -139,6 +148,9 @@ def main():
 
     if len(sys.argv) < 2:
         log_message("Exit: Not enough arguments.")
+        
+        fallback_file = sys.argv[1] if len(sys.argv) > 1 else ".git/COMMIT_EDITMSG"
+        write_error_to_commit(fallback_file, "Hook called incorrectly (missing commit file path)")
         sys.exit(0)
     
     commit_msg_file = sys.argv[1]
@@ -153,12 +165,14 @@ def main():
     print("[+] Comment generation started")
     message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
 
-    if message:
+    if message and not message.startswith("OPENAI_API_KEY") and "failed" not in message.lower():
         with open(commit_msg_file, 'w', encoding='utf-8') as f:
             f.write(message)
         log_message("Message written to commit file.")
     else:
-        log_message("Exit: No message was generated.")
+        write_error_to_commit(commit_msg_file, message)
+        log_message(f"ERROR: {message}")
+    
     log_message("--- HOOK FINISHED ---\n")
 
 if __name__ == "__main__":
