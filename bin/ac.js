@@ -247,16 +247,16 @@ switch (command) {
     break;
   default:
     console.log(`
-Auto Commit CLI (ac)
+Auto Commit CLI (qq)
 
 Usage:
-  ac init        → Install AI commit hook
-  ac configure   → Update OPENAI_API_KEY
-  ac uninstall   → Remove hook and config
-  ac start       → Manually generate commit message
+  qq init        → Install AI commit hook
+  qq configure   → Update OPENAI_API_KEY
+  qq uninstall   → Remove hook and config
+  qq start       → Manually generate commit message
 
 Example:
-  ac init
+  qq init
   git commit
 `);
     process.exit(0);
