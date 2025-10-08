@@ -26,19 +26,23 @@ def _load_usage():
     today = datetime.now(timezone.utc).date().isoformat()
     return {"date": today, "models": {}}
 
+
 def _save_usage(data):
     with open(USAGE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
 
 def record_token_usage(model: str, tokens: int):
     data = _load_usage()
     data["models"][model] = data["models"].get(model, 0) + tokens
     _save_usage(data)
 
+
 def has_quota(model: str, needed: int) -> bool:
     data = _load_usage()
     used = data["models"].get(model, 0)
     return (used + needed) <= DAILY_QUOTA
+
 
 def get_remaining_quota(model: str) -> int:
     data = _load_usage()
