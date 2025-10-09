@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'child_process';
-import { existsSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, writeFileSync, readFileSync, mkdirSync } from 'fs'; // Добавили mkdirSync
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import readline from 'readline';
@@ -56,6 +56,51 @@ function unsetGitHooksPath() {
   });
 }
 
+// Проверяем наличие API ключа
+function checkExistingKey() {
+  // Проверяем переменную окружения
+  if (process.env.OPENAI_API_KEY) {
+    return process.env.OPENAI_API_KEY;
+  }
+
+  // Для Windows проверяем через REG QUERY
+  if (process.platform === 'win32') {
+    try {
+      const result = spawnSync('reg', 
+        ['query', 'HKCU\\Environment', '/v', 'OPENAI_API_KEY'], 
+        { stdio: 'pipe', encoding: 'utf8' }
+      );
+      if (result.status === 0 && result.stdout) {
+        const match = result.stdout.match(/OPENAI_API_KEY\s+REG_\w+\s+(.+)/);
+        if (match && match[1]) {
+          return match[1].trim();
+        }
+      }
+    } catch {}
+  }
+
+  // Для Unix-подобных систем проверяем в shell config
+  const home = homedir();
+  if (home) {
+    const shell = process.env.SHELL || '/bin/bash';
+    const rcFile = shell.includes('zsh') 
+      ? join(home, '.zshrc') 
+      : join(home, '.bashrc');
+    
+    if (existsSync(rcFile)) {
+      try {
+        const content = readFileSync(rcFile, 'utf8');
+        const match = content.match(/export OPENAI_API_KEY="(.+)"/);
+        if (match && match[1]) {
+          return match[1];
+        }
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
 function askForKey() {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -66,6 +111,20 @@ function askForKey() {
     rl.question('Enter your OPENAI_API_KEY: ', (key) => {
       rl.close();
       resolve(key.trim());
+    });
+  });
+}
+
+async function askYesNo(question) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(`${question} (y/n): `, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'y');
     });
   });
 }
@@ -132,10 +191,11 @@ function createGithooksDir() {
   const githooksDir = join(process.cwd(), '.githooks');
   if (!existsSync(githooksDir)) {
     try {
-      require('fs').mkdirSync(githooksDir, { recursive: true });
+      // Исправление 1: используем импортированную mkdirSync вместо require('fs')
+      mkdirSync(githooksDir, { recursive: true });
       console.log(`✅ Created .githooks directory`);
     } catch (e) {
-      console.error('❌ Failed to create .githooks directory.');
+      console.error('❌ Failed to create .githooks directory:', e.message);
       process.exit(1);
     }
   }
@@ -155,8 +215,10 @@ function copyHookFiles(githooksDir) {
     writeFileSync(dst, content);
   });
 
-  // Делаем хук исполняемым
-  spawnSync('chmod', ['+x', join(githooksDir, 'prepare-commit-msg')]);
+  // Делаем хук исполняемым (только на Unix-системах)
+  if (process.platform !== 'win32') {
+    spawnSync('chmod', ['+x', join(githooksDir, 'prepare-commit-msg')]);
+  }
   console.log('✅ Hook files copied to .githooks/');
 }
 
@@ -190,8 +252,24 @@ async function install() {
 
   installPythonDeps();
 
-  const key = await askForKey();
-  await saveKeyToEnv(key);
+  // Исправление 2: проверяем существующий ключ
+  const existingKey = checkExistingKey();
+  let key = existingKey;
+  
+  if (existingKey) {
+    console.log('✅ Found existing OPENAI_API_KEY');
+    const shouldUpdate = await askYesNo('Do you want to update it?');
+    if (shouldUpdate) {
+      key = await askForKey();
+      await saveKeyToEnv(key);
+    } else {
+      // Убеждаемся, что ключ доступен в текущей сессии
+      process.env.OPENAI_API_KEY = existingKey;
+    }
+  } else {
+    key = await askForKey();
+    await saveKeyToEnv(key);
+  }
 
   const githooksDir = createGithooksDir();
   copyHookFiles(githooksDir);
@@ -203,6 +281,17 @@ async function install() {
 
 async function configure() {
   console.log('🔧 Configuring OPENAI_API_KEY...');
+  
+  const existingKey = checkExistingKey();
+  if (existingKey) {
+    console.log('✅ Found existing OPENAI_API_KEY');
+    const shouldUpdate = await askYesNo('Do you want to update it?');
+    if (!shouldUpdate) {
+      console.log('✅ Configuration unchanged.');
+      return;
+    }
+  }
+  
   const key = await askForKey();
   await saveKeyToEnv(key);
   console.log('✅ Configuration updated.');
@@ -213,7 +302,12 @@ function uninstall() {
 
   const githooksDir = join(process.cwd(), '.githooks');
   if (existsSync(githooksDir)) {
-    spawnSync('rm', ['-rf', githooksDir]);
+    // Используем кроссплатформенное удаление
+    if (process.platform === 'win32') {
+      spawnSync('cmd', ['/c', 'rmdir', '/s', '/q', githooksDir]);
+    } else {
+      spawnSync('rm', ['-rf', githooksDir]);
+    }
     console.log('✅ Removed .githooks directory');
   }
 
