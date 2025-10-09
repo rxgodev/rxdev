@@ -1,6 +1,11 @@
 {
-  "date": "2025-10-08",
+  "date": "2025-10-09",
   "models": {
-    "mistralai/Magistral-Small-2506": 803
+    "mistralai/Magistral-Small-2506": 594,
+    "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8": 594,
+    "google/gemma-3-270m-it": 594,
+    "mistralai/Devstral-Small-2505": 594,
+    "meta-llama/Llama-3.3-70B-Instruct": 594,
+    "deepseek-ai/DeepSeek-R1-0528": 594
   }
 }

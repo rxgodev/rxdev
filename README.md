@@ -1,17 +1,18 @@
 # Auto Commit System
 Система создания AI-комментариев к коммитам
 
-## LEGACY README! Не использовать при установке с нуля
-
 ## Установка
-1. Скопируйте папку `.githooks` в директорию вашего проекта
-2. Получите ключ на https://ai.io.net/ai/api-keys
-3. Добавьте его в .env с параметром `OPENAI_API_KEY`
-4. Пропишите `git config core.hooksPath .githooks` в директории проекта
+1. Получите PAT-ключ от аккаунта по [ссылке](https://github.com/settings/tokens)
+2. Залогиньтесь в `pnpm`: `pnpm login --scope=@rxgodev --registry=https://npm.pkg.github.com/`
+3. Введите свой юзернейм и токен (в поле пароль)
+4. Получите ключ на https://ai.io.net/ai/api-keys
+5. Установите пакет: `pnpm add -g @rxgodev/ac@latest`
+6. Используйте `qq init` для создания хуков в директории проекта, либо `qq config` для установки ключа из п. 2
+
 
 ## Использование
 1. `git add .`
-2. `git commit`
+2. `git commit` OR `qq go` 
 3. Прочитайте комментарий, при необходимости, добавьте или измените свои пункты
 4. `:wq`
-5. `git push...`
+5. `git push`

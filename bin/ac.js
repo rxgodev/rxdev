@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'child_process';
-import { existsSync, writeFileSync, readFileSync, mkdirSync } from 'fs'; // Добавили mkdirSync
+import { existsSync, writeFileSync, readFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import readline from 'readline';
@@ -11,6 +11,18 @@ const __dirname = dirname(__filename);
 
 // Путь к исходным файлам в пакете
 const SOURCE_GITHOOKS_DIR = join(__dirname, '../.githooks');
+
+// Содержимое .commitignore по умолчанию
+const DEFAULT_COMMITIGNORE = `# Auto-commit configuration files
+.githooks/
+ai_commit.py
+ai_commit_debug.log
+.env
+.env.local
+.commitignore
+
+# You can add more patterns below:
+`;
 
 // --- Вспомогательные функции ---
 
@@ -191,7 +203,6 @@ function createGithooksDir() {
   const githooksDir = join(process.cwd(), '.githooks');
   if (!existsSync(githooksDir)) {
     try {
-      // Исправление 1: используем импортированную mkdirSync вместо require('fs')
       mkdirSync(githooksDir, { recursive: true });
       console.log(`✅ Created .githooks directory`);
     } catch (e) {
@@ -200,6 +211,23 @@ function createGithooksDir() {
     }
   }
   return githooksDir;
+}
+
+function createCommitIgnoreFile() {
+  const commitIgnorePath = join(process.cwd(), '.commitignore');
+  
+  if (existsSync(commitIgnorePath)) {
+    console.log('⚠️  .commitignore file already exists, skipping...');
+    return;
+  }
+
+  try {
+    writeFileSync(commitIgnorePath, DEFAULT_COMMITIGNORE, 'utf-8');
+    console.log('✅ Created .commitignore file');
+  } catch (e) {
+    console.error('⚠️  Failed to create .commitignore file:', e.message);
+    // Не прерываем установку из-за этой ошибки
+  }
 }
 
 function copyHookFiles(githooksDir) {
@@ -227,6 +255,7 @@ function runPythonScript(args) {
   const scriptPath = join(process.cwd(), '.githooks', 'ai_commit.py');
   if (!existsSync(scriptPath)) {
     console.error('❌ ai_commit.py not found in .githooks/');
+    console.error('👉 Run "qq init" first to install the auto-commit hook.');
     process.exit(1);
   }
 
@@ -252,7 +281,7 @@ async function install() {
 
   installPythonDeps();
 
-  // Исправление 2: проверяем существующий ключ
+  // Проверяем существующий ключ
   const existingKey = checkExistingKey();
   let key = existingKey;
   
@@ -273,6 +302,7 @@ async function install() {
 
   const githooksDir = createGithooksDir();
   copyHookFiles(githooksDir);
+  createCommitIgnoreFile(); // Создаем .commitignore
   setGitHooksPath();
 
   console.log('🎉 Auto-commit installed successfully!');
@@ -314,11 +344,19 @@ function uninstall() {
   unsetGitHooksPath();
   console.log('✅ Git hooks path reset.');
 
+  // Спрашиваем про .commitignore
+  const commitIgnorePath = join(process.cwd(), '.commitignore');
+  if (existsSync(commitIgnorePath)) {
+    console.log('⚠️  .commitignore file found');
+    console.log('   (keeping it, delete manually if needed)');
+  }
+
   console.log('🎉 Auto-commit uninstalled!');
 }
 
 function start() {
-  console.log('▶️ Starting manual commit message generation...');
+  console.log('▶️  Starting manual commit message generation...');
+  console.log('📝 Analyzing staged changes...\n');
   runPythonScript([]);
 }
 
@@ -344,10 +382,15 @@ switch (command) {
 Auto Commit CLI (qq)
 
 Usage:
-  qq init        → Install AI commit hook
+  qq init        → Install AI commit hook & create .commitignore
   qq config      → Update OPENAI_API_KEY
   qq uninstall   → Remove hook and config
-  qq go          → Manually generate commit message
+  qq go          → Manually generate commit message for staged changes
+
+Examples:
+  qq init        # First time setup
+  qq go          # Generate commit message without committing
+  git commit     # Auto-generate message via hook
 `);
     process.exit(0);
 }
