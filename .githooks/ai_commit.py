@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+
 # from dotenv import load_dotenv
 import traceback
 from datetime import datetime, timezone
@@ -55,7 +56,7 @@ def count_tokens(text: str, model_name: str) -> int:
     return max(1, len(text) // 4)
 
 
-LOG_FILE = os.path.join(os.path.dirname(__file__), '..', 'ai_commit_debug.log')
+LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "ai_commit_debug.log")
 
 
 def log_message(message: str) -> None:
@@ -69,7 +70,14 @@ def log_message(message: str) -> None:
 
 # load_dotenv()
 
-MODELS_TO_TRY = ["mistralai/Magistral-Small-2506", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", "google/gemma-3-270m-it", "mistralai/Devstral-Small-2505", "meta-llama/Llama-3.3-70B-Instruct", "deepseek-ai/DeepSeek-R1-0528"]
+MODELS_TO_TRY = [
+    "mistralai/Magistral-Small-2506",
+    "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+    "google/gemma-3-270m-it",
+    "mistralai/Devstral-Small-2505",
+    "meta-llama/Llama-3.3-70B-Instruct",
+    "deepseek-ai/DeepSeek-R1-0528",
+]
 
 MAX_DIFF_LENGTH = 3000
 REQUEST_TIMEOUT = 15
@@ -85,18 +93,15 @@ SYSTEM_PROMPT = (
     "- NEVER invent details not present in the diff.\n"
     "- If changes are ONLY in README/docs — use type 'docs'.\n"
     "- Output ONLY raw commit message. NO markdown, NO explanations, NO extra text.\n\n"
-    
     "BAD EXAMPLES (NEVER do this):\n"
     "  'update README.md' → too vague\n"
     "  'Добавлено много документации' → not specific\n"
     "  'Merge branch ...' → ignore merge-related changes\n\n"
-    
     "GOOD EXAMPLES:\n"
     "docs(readme): add installation and release steps\n"
     "\n"
     "Расширена документация: добавлены шаги установки, развёртывания и релиза пакета. "
     "Обновлены разделы 'Технический стек', 'Фичи' и 'Переменные среды' в README.md.\n\n"
-    
     "docs(package): describe flight map features and stack\n"
     "\n"
     "Добавлено описание пакета карты полётов: технический стек (Node.js 22, React 19), "
@@ -110,19 +115,19 @@ def write_error_to_commit(msg_file, err_msg):
     """
     with open(msg_file, "w", encoding="utf-8") as f:
         f.write("# ❌ AI COMMIT HOOK FAILED\n")
-        f.write(f"# Reason: {err_msg}\n") 
+        f.write(f"# Reason: {err_msg}\n")
 
 
-def read_commitignore(filepath='.commitignore') -> list:
+def read_commitignore(filepath=".commitignore") -> list:
     ignored = []
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith('#'):
+                if line and not line.startswith("#"):
                     ignored.append(line)
     except FileNotFoundError:
-        pass 
+        pass
     return ignored
 
 
@@ -130,7 +135,10 @@ def get_staged_diff():
     try:
         result = subprocess.run(
             ["git", "diff", "--cached", "--name-only"],
-            capture_output=True, text=True, encoding='utf-8', errors='ignore'
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
         )
         if result.returncode != 0:
             log_message(f"Failed to get staged files: {result.stderr}")
@@ -139,7 +147,7 @@ def get_staged_diff():
         staged_files = result.stdout.strip().splitlines()
         if not staged_files:
             return ""
-        
+
         exclude_patterns = read_commitignore()
         spec = pathspec.GitIgnoreSpec.from_lines(exclude_patterns)
 
@@ -148,13 +156,16 @@ def get_staged_diff():
         if not relevant_files:
             log_message("No relevant staged files (only hook/config files changed).")
             return ""
-        
+
         log_message(f"Staged files: {staged_files}")
         log_message(f"Relevant files: {relevant_files}")
 
         result = subprocess.run(
             ["git", "diff", "--cached", "--no-color", "--unified=0"] + relevant_files,
-            capture_output=True, text=True, encoding='utf-8', errors='ignore'
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
         )
 
         lines = result.stdout.splitlines()
@@ -170,7 +181,11 @@ def get_staged_diff():
                         current_file = None
                         continue
                     filtered.append(f"\n# File: {current_file}")
-            elif current_file and line.startswith(("+", "-")) and not line.startswith(("+++", "---")):
+            elif (
+                current_file
+                and line.startswith(("+", "-"))
+                and not line.startswith(("+++", "---"))
+            ):
                 if len(line) > 1:
                     filtered.append(line)
 
@@ -183,7 +198,7 @@ def get_staged_diff():
 
 def generate_commit_message(diff):
     import openai
-    
+
     # api_key = os.getenv("OPENAI_API_KEY")
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -192,10 +207,12 @@ def generate_commit_message(diff):
         log_message("ERROR: OPENAI_API_KEY is missing")
         sys.exit(1)
 
-    client = openai.OpenAI(api_key=api_key, base_url="https://api.intelligence.io.solutions/api/v1/")
+    client = openai.OpenAI(
+        api_key=api_key, base_url="https://api.intelligence.io.solutions/api/v1/"
+    )
 
     user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
- 
+
     for model in MODELS_TO_TRY:
         try:
             system_tokens = count_tokens(SYSTEM_PROMPT, model)
@@ -205,7 +222,9 @@ def generate_commit_message(diff):
 
             if not has_quota(model, estimated_total):
                 remaining = get_remaining_quota(model)
-                log_message(f"Skipping {model}: not enough quota (need {estimated_total}, have {remaining})")
+                log_message(
+                    f"Skipping {model}: not enough quota (need {estimated_total}, have {remaining})"
+                )
                 continue
 
             log_message(f"Attempting model: {model} (est. tokens: {estimated_total})")
@@ -214,11 +233,11 @@ def generate_commit_message(diff):
                 model=model,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.2,
                 max_tokens=200,
-                timeout=REQUEST_TIMEOUT
+                timeout=REQUEST_TIMEOUT,
             )
 
             message = response.choices[0].message.content.strip()
@@ -231,13 +250,17 @@ def generate_commit_message(diff):
             total_tokens = estimated_input + completion_tokens
 
             record_token_usage(model, total_tokens)
-            log_message(f"SUCCESS with {model}. Tokens: {total_tokens} (in: {estimated_input}, out: {completion_tokens})")
+            log_message(
+                f"SUCCESS with {model}. Tokens: {total_tokens} (in: {estimated_input}, out: {completion_tokens})"
+            )
             return message
 
         except Exception as e:
             approx_tokens = estimated_input + 50
             record_token_usage(model, approx_tokens)
-            log_message(f"FAILURE with {model}. Estimated tokens spent: {approx_tokens}. Error: {e}")
+            log_message(
+                f"FAILURE with {model}. Estimated tokens spent: {approx_tokens}. Error: {e}"
+            )
             continue
 
     return "ERROR: All models failed or quota exceeded"
@@ -248,12 +271,14 @@ def main():
 
     if len(sys.argv) < 2:
         commit_msg_file = ".git/COMMIT_EDITMSG"
-        log_message("WARNING: No commit file provided, using default .git/COMMIT_EDITMSG")
+        log_message(
+            "WARNING: No commit file provided, using default .git/COMMIT_EDITMSG"
+        )
     else:
         commit_msg_file = sys.argv[1]
 
     try:
-        with open(commit_msg_file, 'r', encoding='utf-8') as f:
+        with open(commit_msg_file, "r", encoding="utf-8") as f:
             existing_content = f.read().strip()
     except Exception as e:
         existing_content = ""
@@ -266,15 +291,29 @@ def main():
     print("[+] Auto Commit started")
     log_message(f"Commit file path: {commit_msg_file}")
 
+    log_message("\nCHECKING FOR .husky")
+    files = []
+    files += os.listdir("")
+
+    if ".husky" in files:
+        reason = "Founded .husky directory in your project. Delete this!"
+        write_error_to_commit(commit_msg_file, reason)
+        sys.exit(0)
+
     diff = get_staged_diff()
 
     if not diff:
         try:
             result = subprocess.run(
                 ["git", "diff", "--cached", "--name-only"],
-                capture_output=True, text=True, encoding='utf-8', errors='ignore'
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
             )
-            staged_files = result.stdout.strip().splitlines() if result.returncode == 0 else []
+            staged_files = (
+                result.stdout.strip().splitlines() if result.returncode == 0 else []
+            )
         except Exception as e:
             staged_files = []
             log_message(f"Failed to check staged files: {e}")
@@ -292,11 +331,13 @@ def main():
         message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
 
         if message and not message.startswith("ERROR:"):
-            with open(commit_msg_file, 'w', encoding='utf-8') as f:
+            with open(commit_msg_file, "w", encoding="utf-8") as f:
                 f.write(message)
             log_message("Message written to commit file.")
         else:
-            error_text = message.replace("ERROR: ", "", 1) if message else "Unknown error"
+            error_text = (
+                message.replace("ERROR: ", "", 1) if message else "Unknown error"
+            )
             write_error_to_commit(commit_msg_file, error_text)
             log_message(f"ERROR: {error_text}")
 

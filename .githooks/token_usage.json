@@ -1,11 +1,11 @@
 {
   "date": "2025-10-09",
   "models": {
-    "mistralai/Magistral-Small-2506": 594,
-    "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8": 594,
-    "google/gemma-3-270m-it": 594,
-    "mistralai/Devstral-Small-2505": 594,
-    "meta-llama/Llama-3.3-70B-Instruct": 594,
-    "deepseek-ai/DeepSeek-R1-0528": 594
+    "mistralai/Magistral-Small-2506": 1005,
+    "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8": 1005,
+    "google/gemma-3-270m-it": 1005,
+    "mistralai/Devstral-Small-2505": 1005,
+    "meta-llama/Llama-3.3-70B-Instruct": 1005,
+    "deepseek-ai/DeepSeek-R1-0528": 1005
   }
 }
