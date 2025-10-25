@@ -292,8 +292,8 @@ def main():
     log_message(f"Commit file path: {commit_msg_file}")
 
     log_message("\nCHECKING FOR .husky")
-    files = []
-    files += os.listdir("")
+
+    files = os.listdir()
 
     if ".husky" in files:
         reason = "Founded .husky directory in your project. Delete this!"
