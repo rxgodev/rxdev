@@ -10,7 +10,7 @@
 
 <div align="center">
 
-  <a href="./README.md">English</a>
+  <a href="https://github.com/rxgodev/auto-commit/blob/main/README.md">English</a>
 
 </div>
 
