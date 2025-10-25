@@ -7,9 +7,13 @@ import traceback
 from datetime import datetime, timezone
 import json
 import pathspec
+from pathlib import Path
 
 
-USAGE_FILE = ".githooks/token_usage.json"
+CONFIG_DIR = Path.home() / ".config" / "ai-commit"
+CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+USAGE_FILE = CONFIG_DIR / "token_usage.json"
+print(CONFIG_DIR, USAGE_FILE)
 DAILY_QUOTA = 500_000
 
 
