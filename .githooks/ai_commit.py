@@ -1,22 +1,49 @@
 import os
 import sys
 import subprocess
-
-# from dotenv import load_dotenv
 import traceback
 from datetime import datetime, timezone
 import json
 import pathspec
 from pathlib import Path
 
-
+# === CONFIGURATION ===
 CONFIG_DIR = Path.home() / ".config" / "ai-commit"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG_FILE = CONFIG_DIR / "config.json"
 USAGE_FILE = CONFIG_DIR / "token_usage.json"
-print(CONFIG_DIR, USAGE_FILE)
+
 DAILY_QUOTA = 500_000
 
 
+# Load user config (models, coauthor)
+def load_user_config():
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"⚠️ Failed to load config: {e}", file=sys.stderr)
+    # Default fallback
+    return {
+        "coauthor": True,
+        "modelQueue": [
+            "mistralai/Magistral-Small-2506",
+            "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+            "google/gemma-3-270m-it",
+            "mistralai/Devstral-Small-2505",
+            "meta-llama/Llama-3.3-70B-Instruct",
+            "deepseek-ai/DeepSeek-R1-0528",
+        ],
+    }
+
+
+USER_CONFIG = load_user_config()
+MODELS_TO_TRY = USER_CONFIG["modelQueue"]
+ADD_COAUTHOR = USER_CONFIG.get("coauthor", True)
+
+
+# === TOKEN USAGE ===
 def _load_usage():
     if os.path.exists(USAGE_FILE):
         with open(USAGE_FILE, "r", encoding="utf-8") as f:
@@ -53,36 +80,19 @@ def get_remaining_quota(model: str) -> int:
 
 
 def count_tokens(text: str, model_name: str) -> int:
-    """
-    Быстрая эвристика: 1 токен ≈ 4 символа.
-    Точность достаточна для контроля квоты.
-    """
     return max(1, len(text) // 4)
 
 
+# === LOGGING ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "ai_commit_debug.log")
 
 
 def log_message(message: str) -> None:
-    """
-    Функция, которая записывает логи в файл
-    :param message: Сообщение
-    """
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{message}\n")
 
 
-# load_dotenv()
-
-MODELS_TO_TRY = [
-    "mistralai/Magistral-Small-2506",
-    "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
-    "google/gemma-3-270m-it",
-    "mistralai/Devstral-Small-2505",
-    "meta-llama/Llama-3.3-70B-Instruct",
-    "deepseek-ai/DeepSeek-R1-0528",
-]
-
+# === PROMPT & UTILS ===
 MAX_DIFF_LENGTH = 3000
 REQUEST_TIMEOUT = 15
 
@@ -97,10 +107,12 @@ SYSTEM_PROMPT = (
     "- NEVER invent details not present in the diff.\n"
     "- If changes are ONLY in README/docs — use type 'docs'.\n"
     "- Output ONLY raw commit message. NO markdown, NO explanations, NO extra text.\n\n"
+    "- Before you can updated code style by linters. DO NOT describe this in comment, ONLY IF this is only update\n\n"
     "BAD EXAMPLES (NEVER do this):\n"
     "  'update README.md' → too vague\n"
     "  'Добавлено много документации' → not specific\n"
     "  'Merge branch ...' → ignore merge-related changes\n\n"
+    "  'Изменён стиль: добавлены кавычки' → изменение было не единственным, а комментарий описывает это\n\n"
     "GOOD EXAMPLES:\n"
     "docs(readme): add installation and release steps\n"
     "\n"
@@ -114,9 +126,6 @@ SYSTEM_PROMPT = (
 
 
 def write_error_to_commit(msg_file, err_msg):
-    """
-    Функция, которая записывает ошибку как комментарий в файл коммита
-    """
     with open(msg_file, "w", encoding="utf-8") as f:
         f.write("# ❌ AI COMMIT HOOK FAILED\n")
         f.write(f"# Reason: {err_msg}\n")
@@ -203,11 +212,8 @@ def get_staged_diff():
 def generate_commit_message(diff):
     import openai
 
-    # api_key = os.getenv("OPENAI_API_KEY")
-
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        # return "ERROR: OPENAI_API_KEY is missing"
         log_message("ERROR: OPENAI_API_KEY is missing")
         sys.exit(1)
 
@@ -296,10 +302,7 @@ def main():
     log_message(f"Commit file path: {commit_msg_file}")
 
     log_message("\nCHECKING FOR .husky")
-
-    files = os.listdir()
-
-    if ".husky" in files:
+    if ".husky" in os.listdir():
         reason = "Founded .husky directory in your project. Delete this!"
         write_error_to_commit(commit_msg_file, reason)
         sys.exit(0)
@@ -333,7 +336,10 @@ def main():
         log_message(f"Diff found (length: {len(diff)}).")
         print("[+] Comment generation started")
         message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
-        message += "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
+
+        # Add co-author only if enabled
+        if ADD_COAUTHOR:
+            message += "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
 
         if message and not message.startswith("ERROR:"):
             with open(commit_msg_file, "w", encoding="utf-8") as f:
