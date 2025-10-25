@@ -329,7 +329,7 @@ def main():
         log_message(f"Diff found (length: {len(diff)}).")
         print("[+] Comment generation started")
         message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
-        message += "\n\nCo-authored-by: autocommit-rxgo <autocommit-rxgo@gmail.com>"
+        message += "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
 
         if message and not message.startswith("ERROR:"):
             with open(commit_msg_file, "w", encoding="utf-8") as f:
