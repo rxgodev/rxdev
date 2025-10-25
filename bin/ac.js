@@ -41,6 +41,22 @@ function ensureConfigDir() {
   if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true });
 }
 
+function loadTokenUsage() {
+  const usageFile = join(homedir(), ".config", "ai-commit", "token_usage.json");
+  try {
+    if (existsSync(usageFile)) {
+      const data = JSON.parse(readFileSync(usageFile, "utf8"));
+      const today = new Date().toISOString().split("T")[0];
+      if (data.date === today) {
+        return data.models || {};
+      }
+    }
+  } catch (e) {
+    console.warn("⚠️ Failed to load token usage");
+  }
+  return {};
+}
+
 function loadConfig() {
   try {
     if (existsSync(CONFIG_FILE)) {
@@ -189,14 +205,13 @@ async function promptCheckbox(choices, message) {
 }
 
 async function configInteractive() {
-  const ALL_MODELS = DEFAULT_CONFIG.modelQueue;
   const config = loadConfig();
 
   while (true) {
-    const action = await promptSelect(
+    const mainAction = await promptSelect(
       [
-        { name: "🔑 View/edit API key", value: "key" },
-        { name: "🧠 Model queue", value: "models" },
+        { name: "🔑 API Key", value: "key" },
+        { name: "🧠 Models", value: "models" },
         {
           name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
           value: "coauthor",
@@ -206,59 +221,101 @@ async function configInteractive() {
       "Configuration",
     );
 
-    if (action === "exit") break;
+    if (mainAction === "exit") break;
 
-    if (action === "key") {
-      const current = checkExistingKey();
-      if (current) {
-        console.log(
-          `\nCurrent key: ${current.substring(0, 6)}...${current.slice(-4)}\n`,
-        );
-      } else {
-        console.log("\n❌ No API key found.\n");
-      }
-
-      const choice = await promptSelect(
+    // --- API KEY ---
+    if (mainAction === "key") {
+      const keyAction = await promptSelect(
         [
-          { name: "✏️ Enter new key", value: "new" },
+          { name: "👁️ View current key", value: "view" },
+          { name: "✏️ Edit key", value: "edit" },
           { name: "⬅️ Back", value: "back" },
         ],
-        "What would you like to do?",
+        "API Key",
       );
 
-      if (choice === "new") {
+      if (keyAction === "view") {
+        const current = checkExistingKey();
+        if (current) {
+          console.log(
+            `\n🔑 Current: ${current.substring(0, 6)}...${current.slice(-4)}\n`,
+          );
+        } else {
+          console.log("\n❌ No API key found.\n");
+        }
+      } else if (keyAction === "edit") {
         const key = await askForKey();
         await saveKeyToEnv(key);
         console.log("✅ Key updated.\n");
       }
-      // else: просто вернёмся в главное меню
     }
 
-    if (action === "models") {
-      console.log("\n🧠 Select your primary model");
-      console.log(
-        "💡 Fallback models will be added automatically (from smarter to simpler).\n",
+    // --- MODELS ---
+    if (mainAction === "models") {
+      const modelAction = await promptSelect(
+        [
+          { name: "📊 Show models & limits", value: "limits" },
+          { name: "⚙️ Set primary model", value: "set" },
+          { name: "📋 Show current queue", value: "queue" },
+          { name: "⬅️ Back", value: "back" },
+        ],
+        "Models",
       );
 
-      const primary = await promptSelect(
-        SMART_TO_SIMPLE_MODELS.map((m) => ({ name: m, value: m })),
-        "Choose primary model:",
-      );
+      if (modelAction === "limits") {
+        const usage = loadTokenUsage();
+        const today = new Date().toISOString().split("T")[0];
+        const DAILY_QUOTA = 500_000;
 
-      // Формируем очередь: primary + все модели, идущие ПОСЛЕ неё в списке
-      const primaryIndex = SMART_TO_SIMPLE_MODELS.indexOf(primary);
-      const fallbacks = SMART_TO_SIMPLE_MODELS.slice(primaryIndex + 1);
-      const newQueue = [primary, ...fallbacks];
+        console.log(
+          `\n📊 Token usage for ${today} (quota: ${DAILY_QUOTA.toLocaleString()} tokens)\n`,
+        );
 
-      config.modelQueue = newQueue;
-      saveConfig(config);
+        // Показываем все модели из очереди + их использование
+        const allModels = [
+          ...new Set([...config.modelQueue, ...SMART_TO_SIMPLE_MODELS]),
+        ];
+        const rows = allModels.map((model) => {
+          const used = usage[model] || 0;
+          const remaining = Math.max(0, DAILY_QUOTA - used);
+          const pct = ((used / DAILY_QUOTA) * 100).toFixed(1);
+          return {
+            Model: model,
+            Used: used.toLocaleString(),
+            Remaining: remaining.toLocaleString(),
+            "%": pct,
+          };
+        });
 
-      console.log("\n✅ Model queue updated:");
-      newQueue.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
-      console.log("");
+        // Сортируем по использованию (больше — выше)
+        rows.sort((a, b) => parseFloat(b["%"]) - parseFloat(a["%"]));
+
+        console.table(rows);
+        console.log("");
+      }
+
+      if (modelAction === "queue") {
+        console.log("\n📋 Current model queue:");
+        config.modelQueue.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
+        console.log("");
+      }
+
+      if (modelAction === "set") {
+        const primary = await promptSelect(
+          SMART_TO_SIMPLE_MODELS.map((m) => ({ name: m, value: m })),
+          "Select primary model:",
+        );
+        const idx = SMART_TO_SIMPLE_MODELS.indexOf(primary);
+        config.modelQueue = [primary, ...SMART_TO_SIMPLE_MODELS.slice(idx + 1)];
+        saveConfig(config);
+        console.log("\n✅ Queue updated. New order:");
+        config.modelQueue.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
+        console.log("");
+      }
     }
 
-    if (action === "coauthor") {
+    // --- CO-AUTHOR ---
+    if (mainAction === "coauthor") {
       config.coauthor = !config.coauthor;
       saveConfig(config);
       console.log(
@@ -327,8 +384,11 @@ async function install() {
   createCommitIgnoreFile();
   setGitHooksPath();
 
-  // Init shared config if missing
-  if (!existsSync(CONFIG_FILE)) saveConfig(DEFAULT_CONFIG);
+  ensureConfigDir();
+  if (!existsSync(CONFIG_FILE)) {
+    saveConfig(DEFAULT_CONFIG); // ← создаёт ~/.config/ai-commit/config.json
+    console.log("✅ Created shared config with full model queue.");
+  }
 
   console.log("🎉 Installed!");
 }
