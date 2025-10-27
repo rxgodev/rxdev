@@ -78,13 +78,8 @@ git push
 pnpm add -g @rxgodev/ac@latest
 ```
 
-#### Initialize root directory again
-
-```bash
-qq init
-```
-
 The update was successfully installed 🎉
+P.S. Updates are installed automatically whenever you interact with `qq`
 
 ## License
 
