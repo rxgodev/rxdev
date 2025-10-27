@@ -157,7 +157,7 @@ function installPythonDeps() {
     "pip",
     "install",
     "--quiet",
-    "openai",
+    "httpx",
     "pathspec",
   ];
   if (spawnSync(cmd[0], cmd.slice(1), { stdio: "inherit" }).status !== 0) {
