@@ -1,5 +1,3 @@
-.githooks/
-ai_commit.py
 ai_commit_debug.log
 .env
 .env.local
