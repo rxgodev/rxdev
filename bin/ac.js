@@ -19,9 +19,10 @@ ai_commit_debug.log
 .commitignore
 `;
 
-// === SHARED CONFIG ===
+// === CONFIGURATION ===
 const CONFIG_DIR = join(homedir(), ".config", "ai-commit");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+const MANAGED_PROJECTS_FILE = join(CONFIG_DIR, "managed-projects.json");
 
 const SMART_TO_SIMPLE_MODELS = [
   "meta-llama/Llama-3.3-70B-Instruct",
@@ -41,8 +42,27 @@ function ensureConfigDir() {
   if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true });
 }
 
+function loadConfig() {
+  try {
+    if (existsSync(CONFIG_FILE)) {
+      return {
+        ...DEFAULT_CONFIG,
+        ...JSON.parse(readFileSync(CONFIG_FILE, "utf8")),
+      };
+    }
+  } catch (e) {
+    console.warn("⚠️ Failed to load config, using defaults.");
+  }
+  return { ...DEFAULT_CONFIG };
+}
+
+function saveConfig(config) {
+  ensureConfigDir();
+  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf8");
+}
+
 function loadTokenUsage() {
-  const usageFile = join(homedir(), ".config", "ai-commit", "token_usage.json");
+  const usageFile = join(CONFIG_DIR, "token_usage.json");
   try {
     if (existsSync(usageFile)) {
       const data = JSON.parse(readFileSync(usageFile, "utf8"));
@@ -57,26 +77,66 @@ function loadTokenUsage() {
   return {};
 }
 
-function loadConfig() {
+function getManagedProjects() {
+  if (!existsSync(MANAGED_PROJECTS_FILE)) return [];
   try {
-    if (existsSync(CONFIG_FILE)) {
-      return {
-        ...DEFAULT_CONFIG,
-        ...JSON.parse(readFileSync(CONFIG_FILE, "utf8")),
-      };
-    }
-  } catch (e) {
-    console.warn("⚠️ Failed to parse config, using defaults.");
+    return (
+      JSON.parse(readFileSync(MANAGED_PROJECTS_FILE, "utf8")).projects || []
+    );
+  } catch {
+    return [];
   }
-  return { ...DEFAULT_CONFIG };
 }
 
-function saveConfig(config) {
+function registerProject() {
   ensureConfigDir();
-  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf8");
+  let data = { projects: [] };
+  if (existsSync(MANAGED_PROJECTS_FILE)) {
+    try {
+      data = JSON.parse(readFileSync(MANAGED_PROJECTS_FILE, "utf8"));
+    } catch {}
+  }
+  const projectPath = process.cwd();
+  if (!data.projects.includes(projectPath)) {
+    data.projects.push(projectPath);
+    writeFileSync(MANAGED_PROJECTS_FILE, JSON.stringify(data, null, 2));
+  }
 }
 
-// === UTILS (same as before, but simplified) ===
+function unregisterProject() {
+  if (!existsSync(MANAGED_PROJECTS_FILE)) return;
+  try {
+    const data = JSON.parse(readFileSync(MANAGED_PROJECTS_FILE, "utf8"));
+    const filtered = data.projects.filter((p) => p !== process.cwd());
+    writeFileSync(
+      MANAGED_PROJECTS_FILE,
+      JSON.stringify({ projects: filtered }, null, 2),
+    );
+  } catch {}
+}
+
+function updateProjectHooks(projectPath) {
+  const githooksDir = join(projectPath, ".githooks");
+  if (!existsSync(githooksDir)) return false;
+
+  const filesToUpdate = ["ai_commit.py"];
+  let updated = false;
+  for (const file of filesToUpdate) {
+    const src = join(SOURCE_GITHOOKS_DIR, file);
+    const dst = join(githooksDir, file);
+    if (existsSync(src)) {
+      const current = existsSync(dst) ? readFileSync(dst, "utf8") : "";
+      const latest = readFileSync(src, "utf8");
+      if (current !== latest) {
+        writeFileSync(dst, latest);
+        updated = true;
+      }
+    }
+  }
+  return updated;
+}
+
+// === UTILS ===
 
 function checkPython() {
   for (const cmd of ["python3", "python"]) {
@@ -125,7 +185,6 @@ function unsetGitHooksPath() {
 
 function checkExistingKey() {
   if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
-  // ... (same logic as before for Windows / Unix)
   const home = homedir();
   if (home) {
     const rcFile = (process.env.SHELL || "/bin/bash").includes("zsh")
@@ -186,7 +245,7 @@ async function saveKeyToEnv(key) {
   console.log("⚠️ Key saved only for current session.");
 }
 
-// === NEW: CONFIG INTERACTION ===
+// === CONFIG INTERACTION ===
 
 async function promptSelect(options, message) {
   const inquirer = await import("inquirer");
@@ -194,14 +253,6 @@ async function promptSelect(options, message) {
     { type: "list", name: "choice", message, choices: options },
   ]);
   return choice;
-}
-
-async function promptCheckbox(choices, message) {
-  const inquirer = await import("inquirer");
-  const { selected } = await inquirer.default.prompt([
-    { type: "checkbox", name: "selected", message, choices },
-  ]);
-  return selected;
 }
 
 async function configInteractive() {
@@ -223,7 +274,6 @@ async function configInteractive() {
 
     if (mainAction === "exit") break;
 
-    // --- API KEY ---
     if (mainAction === "key") {
       const keyAction = await promptSelect(
         [
@@ -250,11 +300,10 @@ async function configInteractive() {
       }
     }
 
-    // --- MODELS ---
     if (mainAction === "models") {
       const modelAction = await promptSelect(
         [
-          { name: "📊 Show models & limits", value: "limits" },
+          { name: "📊 Show models & token usage", value: "limits" },
           { name: "⚙️ Set primary model", value: "set" },
           { name: "📋 Show current queue", value: "queue" },
           { name: "⬅️ Back", value: "back" },
@@ -271,7 +320,6 @@ async function configInteractive() {
           `\n📊 Token usage for ${today} (quota: ${DAILY_QUOTA.toLocaleString()} tokens)\n`,
         );
 
-        // Показываем все модели из очереди + их использование
         const allModels = [
           ...new Set([...config.modelQueue, ...SMART_TO_SIMPLE_MODELS]),
         ];
@@ -287,9 +335,7 @@ async function configInteractive() {
           };
         });
 
-        // Сортируем по использованию (больше — выше)
         rows.sort((a, b) => parseFloat(b["%"]) - parseFloat(a["%"]));
-
         console.table(rows);
         console.log("");
       }
@@ -314,7 +360,6 @@ async function configInteractive() {
       }
     }
 
-    // --- CO-AUTHOR ---
     if (mainAction === "coauthor") {
       config.coauthor = !config.coauthor;
       saveConfig(config);
@@ -327,20 +372,21 @@ async function configInteractive() {
   }
 }
 
-// === INSTALL / UNINSTALL / RUN ===
+// === COMMANDS ===
 
-function createGithooksDir() {
-  const dir = join(process.cwd(), ".githooks");
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  return dir;
-}
+async function install() {
+  if (!existsSync(join(process.cwd(), ".git"))) {
+    console.error("❌ Not a git repo.");
+    process.exit(1);
+  }
 
-function createCommitIgnoreFile() {
-  const path = join(process.cwd(), ".commitignore");
-  if (!existsSync(path)) writeFileSync(path, DEFAULT_COMMITIGNORE);
-}
+  installPythonDeps();
+  const key = checkExistingKey() || (await askForKey());
+  await saveKeyToEnv(key);
 
-function copyHookFiles(githooksDir) {
+  const githooksDir = join(process.cwd(), ".githooks");
+  if (!existsSync(githooksDir)) mkdirSync(githooksDir, { recursive: true });
+
   for (const file of ["ai_commit.py", "prepare-commit-msg"]) {
     const src = join(SOURCE_GITHOOKS_DIR, file);
     const dst = join(githooksDir, file);
@@ -350,9 +396,43 @@ function copyHookFiles(githooksDir) {
     }
     writeFileSync(dst, readFileSync(src, "utf8"));
   }
+
   if (process.platform !== "win32") {
     spawnSync("chmod", ["+x", join(githooksDir, "prepare-commit-msg")]);
   }
+
+  const commitIgnorePath = join(process.cwd(), ".commitignore");
+  if (!existsSync(commitIgnorePath)) {
+    writeFileSync(commitIgnorePath, DEFAULT_COMMITIGNORE);
+  }
+
+  setGitHooksPath();
+
+  ensureConfigDir();
+  if (!existsSync(CONFIG_FILE)) {
+    saveConfig(DEFAULT_CONFIG);
+  }
+  registerProject();
+
+  console.log("🎉 Auto-commit installed successfully!");
+}
+
+function uninstall() {
+  unregisterProject();
+
+  const githooks = join(process.cwd(), ".githooks");
+  if (existsSync(githooks)) {
+    if (process.platform === "win32") {
+      spawnSync("cmd", ["/c", "rmdir", "/s", "/q", githooks]);
+    } else {
+      spawnSync("rm", ["-rf", githooks]);
+    }
+    console.log("✅ Removed .githooks directory");
+  }
+
+  unsetGitHooksPath();
+  console.log("✅ Git hooks path reset.");
+  console.log("🗑️ Auto-commit uninstalled!");
 }
 
 function runPythonScript() {
@@ -369,47 +449,57 @@ function runPythonScript() {
   if (result.status !== 0) process.exit(result.status || 1);
 }
 
-async function install() {
-  if (!existsSync(join(process.cwd(), ".git"))) {
-    console.error("❌ Not a git repo.");
-    process.exit(1);
+function listProjects() {
+  const allProjects = getManagedProjects();
+  const valid = allProjects.filter((p) => existsSync(p));
+  const invalid = allProjects.filter((p) => !existsSync(p));
+
+  if (allProjects.length === 0) {
+    console.log("📭 No integrated projects found.");
+    return;
   }
 
-  installPythonDeps();
-  const key = checkExistingKey() || (await askForKey());
-  await saveKeyToEnv(key);
+  console.log(
+    `\n📦 Integrated projects (${valid.length} active${invalid.length ? `, ${invalid.length} missing` : ""}):\n`,
+  );
 
-  createGithooksDir();
-  copyHookFiles(createGithooksDir());
-  createCommitIgnoreFile();
-  setGitHooksPath();
-
-  ensureConfigDir();
-  if (!existsSync(CONFIG_FILE)) {
-    saveConfig(DEFAULT_CONFIG); // ← создаёт ~/.config/ai-commit/config.json
-    console.log("✅ Created shared config with full model queue.");
+  if (valid.length > 0) {
+    valid.forEach((p) => {
+      const name = p.split(/[\\/]/).pop();
+      console.log(`  ✅ ${name}`);
+      console.log(`     ${p}`);
+    });
   }
 
-  console.log("🎉 Installed!");
+  if (invalid.length > 0) {
+    console.log(
+      '\n  ⚠️  Missing projects (run "qq uninstall" in them to clean up):',
+    );
+    invalid.forEach((p) => {
+      const name = p.split(/[\\/]/).pop();
+      console.log(`     ❌ ${name} → ${p}`);
+    });
+  }
+  console.log("");
 }
 
-function uninstall() {
-  const githooks = join(process.cwd(), ".githooks");
-  if (existsSync(githooks)) {
-    spawnSync(
-      process.platform === "win32" ? "cmd" : "rm",
-      process.platform === "win32"
-        ? ["/c", "rmdir", "/s", "/q", githooks]
-        : ["-rf", githooks],
-    );
+// === AUTO-UPDATE HOOKS (только при изменении) ===
+
+const cmd = process.argv[2];
+if (!["uninstall", "go"].includes(cmd)) {
+  const projects = getManagedProjects().filter((p) => existsSync(p));
+  let updatedCount = 0;
+  for (const proj of projects) {
+    if (updateProjectHooks(proj)) updatedCount++;
   }
-  unsetGitHooksPath();
-  console.log("🗑️ Uninstalled.");
+  // Выводим сообщение ТОЛЬКО если что-то обновилось
+  if (updatedCount > 0) {
+    console.log(`\n🔄 Updated AI hooks in ${updatedCount} project(s).\n`);
+  }
 }
 
 // === MAIN ===
 
-const cmd = process.argv[2];
 switch (cmd) {
   case "init":
     install();
@@ -423,14 +513,33 @@ switch (cmd) {
   case "go":
     runPythonScript();
     break;
+  case "projects":
+    if (process.argv[3] === "--update") {
+      const projects = getManagedProjects().filter((p) => existsSync(p));
+      let count = 0;
+      for (const proj of projects) {
+        if (updateProjectHooks(proj)) count++;
+      }
+      console.log(`\n✅ Updated hooks in ${count} project(s).\n`);
+    } else {
+      listProjects();
+    }
+    break;
   default:
     console.log(`
 Auto Commit CLI (qq)
 
 Usage:
-  qq init        → Install
+  qq init        → Install AI commit hook
   qq config      → Configure key, models, co-author
-  qq uninstall   → Remove
+  qq uninstall   → Remove hook
   qq go          → Generate message manually
+  qq projects    → List integrated projects
+  qq projects --update → Update hooks manually
+
+Examples:
+  qq init
+  qq config
+  git commit
 `);
 }
