@@ -245,6 +245,19 @@ async function saveKeyToEnv(key) {
   console.log("⚠️ Key saved only for current session.");
 }
 
+async function askYesNo(question) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve) => {
+    rl.question(`${question} (y/n): `, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === "y");
+    });
+  });
+}
+
 // === CONFIG INTERACTION ===
 
 async function promptSelect(options, message) {
@@ -374,6 +387,28 @@ async function configInteractive() {
 
 // === COMMANDS ===
 
+async function addToGitignore() {
+  const gitignorePath = join(process.cwd(), ".gitignore");
+  const entry = ".githooks/";
+
+  let content = "";
+  if (existsSync(gitignorePath)) {
+    content = readFileSync(gitignorePath, "utf8");
+  }
+
+  if (content.includes(entry)) {
+    console.log("ℹ️  .githooks/ already in .gitignore");
+    return;
+  }
+
+  const shouldAdd = await askYesNo("Add .githooks/ to .gitignore?");
+  if (shouldAdd) {
+    const newContent = content.trimEnd() + `\n${entry}\n`;
+    writeFileSync(gitignorePath, newContent);
+    console.log("✅ Added .githooks/ to .gitignore");
+  }
+}
+
 async function install() {
   if (!existsSync(join(process.cwd(), ".git"))) {
     console.error("❌ Not a git repo.");
@@ -406,6 +441,8 @@ async function install() {
     writeFileSync(commitIgnorePath, DEFAULT_COMMITIGNORE);
   }
 
+  await addToGitignore(); // ← НОВОЕ
+
   setGitHooksPath();
 
   ensureConfigDir();
@@ -433,20 +470,6 @@ function uninstall() {
   unsetGitHooksPath();
   console.log("✅ Git hooks path reset.");
   console.log("🗑️ Auto-commit uninstalled!");
-}
-
-function runPythonScript() {
-  const python = checkPython();
-  const script = join(process.cwd(), ".githooks", "ai_commit.py");
-  if (!existsSync(script)) {
-    console.error('❌ ai_commit.py not found. Run "qq init" first.');
-    process.exit(1);
-  }
-  const result = spawnSync(python, [script], {
-    stdio: "inherit",
-    env: { ...process.env, PYTHONUNBUFFERED: "1" },
-  });
-  if (result.status !== 0) process.exit(result.status || 1);
 }
 
 function listProjects() {
@@ -483,16 +506,15 @@ function listProjects() {
   console.log("");
 }
 
-// === AUTO-UPDATE HOOKS (только при изменении) ===
+// === AUTO-UPDATE HOOKS ===
 
 const cmd = process.argv[2];
-if (!["uninstall", "go"].includes(cmd)) {
+if (!["uninstall"].includes(cmd)) {
   const projects = getManagedProjects().filter((p) => existsSync(p));
   let updatedCount = 0;
   for (const proj of projects) {
     if (updateProjectHooks(proj)) updatedCount++;
   }
-  // Выводим сообщение ТОЛЬКО если что-то обновилось
   if (updatedCount > 0) {
     console.log(`\n🔄 Updated AI hooks in ${updatedCount} project(s).\n`);
   }
@@ -509,9 +531,6 @@ switch (cmd) {
     break;
   case "uninstall":
     uninstall();
-    break;
-  case "go":
-    runPythonScript();
     break;
   case "projects":
     if (process.argv[3] === "--update") {
@@ -533,7 +552,6 @@ Usage:
   qq init        → Install AI commit hook
   qq config      → Configure key, models, co-author
   qq uninstall   → Remove hook
-  qq go          → Generate message manually
   qq projects    → List integrated projects
   qq projects --update → Update hooks manually
 

@@ -4,10 +4,10 @@ __pycache__/
 *$py.class
 
 node_modules/
+.githooks/token_usage.json
 
 .npmrc
 npmrc
-.githooks/token_usage.json
 
 # C extensions
 *.so
