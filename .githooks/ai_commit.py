@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import json
 import pathspec
 from pathlib import Path
+import re
 
 # === CONFIGURATION ===
 CONFIG_DIR = Path.home() / ".config" / "ai-commit"
@@ -41,6 +42,56 @@ def load_user_config():
 USER_CONFIG = load_user_config()
 MODELS_TO_TRY = USER_CONFIG["modelQueue"]
 ADD_COAUTHOR = USER_CONFIG.get("coauthor", True)
+
+
+def is_valid_commit_message(msg: str) -> bool:
+    """
+    Проверяет, что:
+    - Первая строка (заголовок) на английском
+    - Заголовок соответствует Conventional Commits
+    """
+    if not msg.strip():
+        return False
+
+    lines = msg.strip().split("\n")
+    subject = lines[0].strip()
+
+    # Проверка: заголовок не должен содержать кириллицу
+    if re.search(r"[а-яА-ЯёЁ]", subject):
+        return False
+
+    # Проверка формата: type(scope): description
+    # Разрешаем только указанные типы
+    valid_types = {
+        "feat",
+        "fix",
+        "chore",
+        "docs",
+        "style",
+        "refactor",
+        "perf",
+        "test",
+        "build",
+        "ci",
+        "revert",
+    }
+    match = re.match(r"^([a-z]+)(?:$[^)]*$)?:\s*(.+)$", subject)
+    if not match:
+        return False
+
+    msg_type = match.group(1)
+    description = match.group(2)
+
+    if msg_type not in valid_types:
+        return False
+
+    if len(subject) > 50:
+        return False
+
+    if description.endswith("."):
+        return False
+
+    return True
 
 
 # === TOKEN USAGE ===
@@ -224,54 +275,72 @@ def generate_commit_message(diff):
     user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
 
     for model in MODELS_TO_TRY:
-        try:
-            system_tokens = count_tokens(SYSTEM_PROMPT, model)
-            user_tokens = count_tokens(user_prompt, model)
-            estimated_input = system_tokens + user_tokens
-            estimated_total = estimated_input + 100
+        attempts = 0
+        max_attempts = 2  # Основная попытка + 1 повтор при ошибке валидации
 
-            if not has_quota(model, estimated_total):
-                remaining = get_remaining_quota(model)
-                log_message(
-                    f"Skipping {model}: not enough quota (need {estimated_total}, have {remaining})"
+        while attempts < max_attempts:
+            try:
+                system_tokens = count_tokens(SYSTEM_PROMPT, model)
+                user_tokens = count_tokens(user_prompt, model)
+                estimated_input = system_tokens + user_tokens
+                estimated_total = estimated_input + 150  # чуть больше на повтор
+
+                if not has_quota(model, estimated_total):
+                    remaining = get_remaining_quota(model)
+                    log_message(
+                        f"Skipping {model}: not enough quota (need {estimated_total}, have {remaining})"
+                    )
+                    break  # переходим к следующей модели
+
+                log_message(f"Attempting model: {model} (attempt {attempts + 1})")
+
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.2,
+                    max_tokens=200,
+                    timeout=REQUEST_TIMEOUT,
                 )
-                continue
 
-            log_message(f"Attempting model: {model} (est. tokens: {estimated_total})")
+                message = response.choices[0].message.content.strip()
 
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.2,
-                max_tokens=200,
-                timeout=REQUEST_TIMEOUT,
-            )
+                if not message or message.startswith("#") or len(message.strip()) < 10:
+                    log_message(
+                        f"Generated message too short or invalid: {repr(message)}"
+                    )
+                    attempts += 1
+                    continue
 
-            message = response.choices[0].message.content.strip()
+                # 🔍 ВАЛИДАЦИЯ
+                if not is_valid_commit_message(message):
+                    log_message(
+                        f"Validation failed for model {model} (attempt {attempts + 1}): {repr(message[:100])}"
+                    )
+                    attempts += 1
+                    continue
 
-            if not message or message.startswith("#") or len(message.strip()) < 10:
-                log_message(f"Generated message too short or invalid: {repr(message)}")
-                continue
+                # Успешно!
+                completion_tokens = count_tokens(message, model)
+                total_tokens = estimated_input + completion_tokens
+                record_token_usage(model, total_tokens)
+                log_message(
+                    f"SUCCESS with {model}. Tokens: {total_tokens} (in: {estimated_input}, out: {completion_tokens})"
+                )
+                return message
 
-            completion_tokens = count_tokens(message, model)
-            total_tokens = estimated_input + completion_tokens
+            except Exception as e:
+                approx_tokens = estimated_input + 50
+                record_token_usage(model, approx_tokens)
+                log_message(
+                    f"FAILURE with {model}. Estimated tokens spent: {approx_tokens}. Error: {e}"
+                )
+                break  # при ошибке API — не повторяем, идём к следующей модели
 
-            record_token_usage(model, total_tokens)
-            log_message(
-                f"SUCCESS with {model}. Tokens: {total_tokens} (in: {estimated_input}, out: {completion_tokens})"
-            )
-            return message
-
-        except Exception as e:
-            approx_tokens = estimated_input + 50
-            record_token_usage(model, approx_tokens)
-            log_message(
-                f"FAILURE with {model}. Estimated tokens spent: {approx_tokens}. Error: {e}"
-            )
-            continue
+        # Если все попытки исчерпаны — пробуем следующую модель
+        log_message(f"All attempts failed for {model}, trying next model...")
 
     return "ERROR: All models failed or quota exceeded"
 
