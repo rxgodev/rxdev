@@ -822,6 +822,11 @@ if (!["uninstall"].includes(cmd)) {
 
 // === MAIN ===
 
+const versionStatus =
+  update?.latest && update.latest !== pkg.version
+    ? "Need update"
+    : "Up-to-date";
+
 switch (cmd) {
   case "init":
     install();
@@ -832,32 +837,12 @@ switch (cmd) {
   case "uninstall":
     uninstall();
     break;
-  case "projects":
-    if (process.argv[3] === "--update") {
-      const projects = getManagedProjects().filter((p) => existsSync(p));
-      let count = 0;
-      for (const proj of projects) {
-        if (updateProjectHooks(proj)) count++;
-      }
-      console.log(`\n✅ Updated hooks in ${count} project(s).\n`);
-    } else {
-      listProjects();
-    }
-    break;
   default:
-    console.log(`
-Auto Commit CLI (qq)
+    console.log(`NeuroCommit (v${pkg.version})
+[${versionStatus}]
 
 Usage:
-  qq init        → Install AI commit hook
-  qq config      → Configure key, models, co-author, projects & templates
-  qq uninstall   → Remove hook
-  qq projects    → List integrated projects
-  qq projects --update → Update hooks manually
-
-Examples:
-  qq init
-  qq config
-  git commit
-`);
+  qq init          Install AI commit hook
+  qq config        Configure key, models, co-author, projects & templates
+  qq uninstall     Remove hook`);
 }
