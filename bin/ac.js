@@ -5,9 +5,15 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import readline from "readline";
 import { homedir } from "os";
-
 import updateNotifier from "update-notifier";
-import pkg from "../package.json" assert { type: "json" };
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const SOURCE_GITHOOKS_DIR = join(__dirname, "../.githooks");
+
+const pkg = JSON.parse(
+  readFileSync(join(__dirname, "../package.json"), "utf8"),
+);
 
 const update = updateNotifier({
   pkg,
@@ -37,10 +43,6 @@ if (update?.latest && update.latest !== pkg.version) {
   }
   console.log(`${output}${padding}\n${bottom}\n`);
 }
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const SOURCE_GITHOOKS_DIR = join(__dirname, "../.githooks");
 
 const DEFAULT_COMMITIGNORE = `# Auto-commit configuration files
 .githooks/

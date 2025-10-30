@@ -4,7 +4,7 @@
 
 **AI-powered generator comments for your commits**
 
-[Installation](#installation) • [Configuration](#configuration) •  [Quick Start](#quick-start) • [Updating](#updating)
+[Installation](#installation) • [Configuration](#configuration) •  [Quick Start](#quick-start)
 
 </div>
 
@@ -34,7 +34,7 @@ pnpm login --scope=@rxgodev --registry=https://npm.pkg.github.com/
 #### Install from pnpm
 
 ```bash
-pnpm add -g @rxgodev/ac@latest
+pnpm add -g @rxgodev/neuro-commit@latest
 ```
 
 NeuroCommit was successfully installed 🎉
@@ -69,17 +69,6 @@ git commit
 :wq # Command for Save + Exit from file
 git push
 ```
-
-## Updating
-
-#### Install latest version from pnpm
-
-```bash
-pnpm add -g @rxgodev/ac@latest
-```
-
-The update was successfully installed 🎉
-P.S. Updates are installed automatically whenever you interact with `qq`
 
 ## License
 
