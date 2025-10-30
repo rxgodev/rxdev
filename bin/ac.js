@@ -392,8 +392,6 @@ async function applyTemplateToProjects(templateName) {
       name: "selected",
       message: "Select projects to apply template to:",
       choices: [
-        { name: "(Cancel)", value: "__cancel__" },
-        { type: "separator" },
         ...allProjects.map((p) => ({
           name: `${p.split(/[\\/]/).pop()} → ${p}`,
           value: p,
