@@ -59,12 +59,12 @@ const MANAGED_PROJECTS_FILE = join(CONFIG_DIR, "managed-projects.json");
 const TEMPLATES_FILE = join(CONFIG_DIR, "templates.json");
 
 const SMART_TO_SIMPLE_MODELS = [
-  "meta-llama/Llama-3.3-70B-Instruct",
-  "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
   "deepseek-ai/DeepSeek-R1-0528",
-  "mistralai/Magistral-Small-2506",
   "mistralai/Devstral-Small-2505",
-  "google/gemma-3-270m-it",
+  "meta-llama/Llama-3.3-70B-Instruct",
+  "mistralai/Magistral-Small-2506",
+  "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+  "Qwen3-235B-A22B-Thinking-2507",
 ];
 
 const DEFAULT_CONFIG = {

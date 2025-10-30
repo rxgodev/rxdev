@@ -31,12 +31,12 @@ def load_user_config():
     return {
         "coauthor": True,
         "modelQueue": [
-            "mistralai/Magistral-Small-2506",
-            "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
-            "google/gemma-3-270m-it",
+            "deepseek-ai/DeepSeek-R1-0528",
             "mistralai/Devstral-Small-2505",
             "meta-llama/Llama-3.3-70B-Instruct",
-            "deepseek-ai/DeepSeek-R1-0528",
+            "mistralai/Magistral-Small-2506",
+            "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+            "Qwen3-235B-A22B-Thinking-2507",
         ],
     }
 
