@@ -1,4 +1,4 @@
-# 🧠 Auto Commit
+# 🧠
 
 <div align="center">
 
@@ -14,7 +14,7 @@
 
 </div>
 
-Auto Commit is a powerful AI command-line CLI for creating comments on your commits. This allows you not to think about changes in your code, not to study the rules of writing comments, but just to enjoy.
+NeuroCommit is a powerful AI command-line CLI for creating comments on your commits. This allows you not to think about changes in your code, not to study the rules of writing comments, but just to enjoy.
 
 > [!WARNING]
 > **Token Usage Notice**: We use a free solution from [io.net](https://io.net). All tokens used are spent in their API. The limits are restored daily.
@@ -37,7 +37,7 @@ pnpm login --scope=@rxgodev --registry=https://npm.pkg.github.com/
 pnpm add -g @rxgodev/ac@latest
 ```
 
-Auto Commit was successfully installed 🎉
+NeuroCommit was successfully installed 🎉
 
 ## Configuration
 

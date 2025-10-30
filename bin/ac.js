@@ -6,6 +6,38 @@ import { fileURLToPath } from "url";
 import readline from "readline";
 import { homedir } from "os";
 
+import updateNotifier from "update-notifier";
+import pkg from "../package.json" assert { type: "json" };
+
+const update = updateNotifier({
+  pkg,
+  updateCheckInterval: 0,
+}).update;
+
+if (update?.latest && update.latest !== pkg.version) {
+  const stripAnsi = (str) => str.replace(/\x1b\[[0-9;]*m/g, "");
+
+  const lines = [
+    `Update available! ${"\x1b[31m"}${pkg.version}${"\x1b[0m"} → ${"\x1b[32m"}${update.latest}${"\x1b[0m"}.`,
+    // `${"\x1b[34m"}Changelog: ${"\x1b[0m"}https://github.com/rxgodev/neuro-commit/releases/latest`,
+    `To update, run: ${"\x1b[34m"}pnpm add -g @rxgodev/neuro-commit@${update.latest}${"\x1b[0m"}`,
+  ];
+
+  const maxWidth = Math.max(...lines.map((l) => stripAnsi(l).length)) + 8;
+  const top = "   ╭" + "─".repeat(maxWidth) + "╮";
+  const bottom = "   ╰" + "─".repeat(maxWidth) + "╯";
+  const padding = "   │" + " ".repeat(maxWidth) + "│";
+
+  let output = `\n${top}\n${padding}\n`;
+  for (const line of lines) {
+    const cleanLen = stripAnsi(line).length;
+    const left = Math.floor((maxWidth - cleanLen) / 2);
+    const right = maxWidth - cleanLen - left;
+    output += `   │${" ".repeat(left)}${line}${" ".repeat(right)}│\n`;
+  }
+  console.log(`${output}${padding}\n${bottom}\n`);
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SOURCE_GITHOOKS_DIR = join(__dirname, "../.githooks");
