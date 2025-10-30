@@ -7,7 +7,8 @@ import json
 import pathspec
 from pathlib import Path
 import re
-import httpx
+import urllib.request
+import urllib.error
 
 # === CONFIGURATION ===
 CONFIG_DIR = Path.home() / ".config" / "ai-commit"
@@ -269,85 +270,94 @@ def generate_commit_message(diff):
         log_message("ERROR: OPENAI_API_KEY is missing")
         sys.exit(1)
 
-    # Уберите лишние пробелы в URL!
     url = "https://api.intelligence.io.solutions/api/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
 
-    # Создаём клиент ОДИН раз вне цикла
-    with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
-        for model in MODELS_TO_TRY:
-            attempts = 0
-            max_attempts = 2
+    for model in MODELS_TO_TRY:
+        attempts = 0
+        max_attempts = 2
 
-            while attempts < max_attempts:
+        while attempts < max_attempts:
+            try:
+                system_tokens = count_tokens(SYSTEM_PROMPT, model)
+                user_tokens = count_tokens(user_prompt, model)
+                estimated_input = system_tokens + user_tokens
+                estimated_total = estimated_input + 150
+
+                if not has_quota(model, estimated_total):
+                    remaining = get_remaining_quota(model)
+                    log_message(
+                        f"Skipping {model}: not enough quota (need {estimated_total}, have {remaining})"
+                    )
+                    break
+
+                log_message(f"Attempting model: {model} (attempt {attempts + 1})")
+
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": 200,
+                }
+
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "ai-commit-cli/1.0",
+                    },
+                    method="POST",
+                )
+
                 try:
-                    system_tokens = count_tokens(SYSTEM_PROMPT, model)
-                    user_tokens = count_tokens(user_prompt, model)
-                    estimated_input = system_tokens + user_tokens
-                    estimated_total = estimated_input + 150
+                    with urllib.request.urlopen(
+                        req, timeout=REQUEST_TIMEOUT
+                    ) as response:
+                        data = json.load(response)
+                except urllib.error.HTTPError as e:
+                    error_body = e.read().decode("utf-8")
+                    raise Exception(f"HTTP {e.code}: {error_body}")
+                except urllib.error.URLError as e:
+                    raise Exception(f"URL error: {e.reason}")
 
-                    if not has_quota(model, estimated_total):
-                        remaining = get_remaining_quota(model)
-                        log_message(
-                            f"Skipping {model}: not enough quota (need {estimated_total}, have {remaining})"
-                        )
-                        break  # переходим к следующей модели
+                message = data["choices"][0]["message"]["content"].strip()
 
-                    log_message(f"Attempting model: {model} (attempt {attempts + 1})")
-
-                    # 🔥 ЗАПРОС ЧЕРЕЗ HTTPX (не через openai!)
-                    payload = {
-                        "model": model,
-                        "messages": [
-                            {"role": "system", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        "temperature": 0.2,
-                        "max_tokens": 200,
-                    }
-
-                    response = client.post(url, headers=headers, json=payload)
-                    response.raise_for_status()  # выбросит исключение при 4xx/5xx
-
-                    data = response.json()
-                    message = data["choices"][0]["message"]["content"].strip()
-
-                    if (
-                        not message
-                        or message.startswith("#")
-                        or len(message.strip()) < 10
-                    ):
-                        log_message(
-                            f"Generated message too short or invalid: {repr(message)}"
-                        )
-                        attempts += 1
-                        continue
-
-                    if not is_valid_commit_message(message):
-                        log_message(
-                            f"Validation failed for model {model} (attempt {attempts + 1}): {repr(message[:100])}"
-                        )
-                        attempts += 1
-                        continue
-
-                    completion_tokens = count_tokens(message, model)
-                    total_tokens = estimated_input + completion_tokens
-                    record_token_usage(model, total_tokens)
+                if not message or message.startswith("#") or len(message.strip()) < 10:
                     log_message(
-                        f"SUCCESS with {model}. Tokens: {total_tokens} (in: {estimated_input}, out: {completion_tokens})"
+                        f"Generated message too short or invalid: {repr(message)}"
                     )
-                    return message
+                    attempts += 1
+                    continue
 
-                except Exception as e:
-                    approx_tokens = estimated_input + 50
-                    record_token_usage(model, approx_tokens)
+                if not is_valid_commit_message(message):
                     log_message(
-                        f"FAILURE with {model}. Estimated tokens spent: {approx_tokens}. Error: {e}"
+                        f"Validation failed for model {model} (attempt {attempts + 1}): {repr(message[:100])}"
                     )
-                    break  # при ошибке — выходим из попыток для этой модели
+                    attempts += 1
+                    continue
 
-            log_message(f"All attempts failed for {model}, trying next model...")
+                completion_tokens = count_tokens(message, model)
+                total_tokens = estimated_input + completion_tokens
+                record_token_usage(model, total_tokens)
+                log_message(
+                    f"SUCCESS with {model}. Tokens: {total_tokens} (in: {estimated_input}, out: {completion_tokens})"
+                )
+                return message
+
+            except Exception as e:
+                approx_tokens = estimated_input + 50
+                record_token_usage(model, approx_tokens)
+                log_message(
+                    f"FAILURE with {model}. Estimated tokens spent: {approx_tokens}. Error: {e}"
+                )
+                break
+
+        log_message(f"All attempts failed for {model}, trying next model...")
 
     return "ERROR: All models failed or quota exceeded"
 
@@ -413,11 +423,11 @@ def main():
         print("[+] Comment generation started")
         message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
 
-        # Add co-author only if enabled
-        if ADD_COAUTHOR:
-            message += "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
-
         if message and not message.startswith("ERROR:"):
+            if ADD_COAUTHOR:
+                message += (
+                    "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
+                )
             with open(commit_msg_file, "w", encoding="utf-8") as f:
                 f.write(message)
             log_message("Message written to commit file.")

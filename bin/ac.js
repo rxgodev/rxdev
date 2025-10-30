@@ -185,15 +185,7 @@ function checkPython() {
 
 function installPythonDeps() {
   console.log("📦 Installing Python dependencies...");
-  const cmd = [
-    checkPython(),
-    "-m",
-    "pip",
-    "install",
-    "--quiet",
-    "httpx",
-    "pathspec",
-  ];
+  const cmd = [checkPython(), "-m", "pip", "install", "--quiet", "pathspec"];
   if (spawnSync(cmd[0], cmd.slice(1), { stdio: "inherit" }).status !== 0) {
     console.error("❌ Failed to install Python dependencies.");
     process.exit(1);
