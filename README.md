@@ -1,4 +1,4 @@
-# 🧠
+# 🧠 NeuroCommit
 
 <div align="center">
 
