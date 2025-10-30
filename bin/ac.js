@@ -512,24 +512,25 @@ function listProjects() {
     `\n📦 Integrated projects (${valid.length} active${invalid.length ? `, ${invalid.length} missing` : ""}):\n`,
   );
 
-  if (valid.length > 0) {
-    valid.forEach((p) => {
-      const name = p.split(/[\\/]/).pop();
-      console.log(`  ✅ ${name}`);
-      console.log(`     ${p}`);
-    });
-  }
+  const rows = [];
+
+  valid.forEach((p) => {
+    const name = p.split(/[\\/]/).pop();
+    rows.push({ Status: "✅", Name: name, Path: p });
+  });
+
+  invalid.forEach((p) => {
+    const name = p.split(/[\\/]/).pop();
+    rows.push({ Status: "❌", Name: name, Path: p });
+  });
+
+  console.table(rows);
 
   if (invalid.length > 0) {
     console.log(
-      '\n  ⚠️  Missing projects (run "qq uninstall" in them to clean up):',
+      '\n⚠️  Missing projects: run "qq uninstall" in them to clean up.\n',
     );
-    invalid.forEach((p) => {
-      const name = p.split(/[\\/]/).pop();
-      console.log(`     ❌ ${name} → ${p}`);
-    });
   }
-  console.log("");
 }
 
 // === AUTO-UPDATE HOOKS ===
