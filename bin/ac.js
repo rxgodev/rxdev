@@ -310,6 +310,16 @@ function loadTemplates() {
   }
 }
 
+function getTemplateForProject(projectPath) {
+  const templates = loadTemplates();
+  for (const [name, tpl] of Object.entries(templates)) {
+    if (tpl.appliedTo?.includes(projectPath)) {
+      return name;
+    }
+  }
+  return null;
+}
+
 function saveTemplates(templates) {
   ensureConfigDir();
   writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2));
@@ -555,12 +565,14 @@ function listProjects() {
 
   valid.forEach((p) => {
     const name = p.split(/[\\/]/).pop();
-    rows.push({ Status: "✅", Name: name, Path: p });
+    const template = getTemplateForProject(p) || "—";
+    rows.push({ Status: "✅", Name: name, Template: template, Path: p });
   });
 
   invalid.forEach((p) => {
     const name = p.split(/[\\/]/).pop();
-    rows.push({ Status: "❌", Name: name, Path: p });
+    const template = getTemplateForProject(p) || "—";
+    rows.push({ Status: "❌", Name: name, Template: template, Path: p });
   });
 
   console.table(rows);
