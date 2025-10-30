@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "child_process";
+import { spawnSync, spawn } from "child_process";
 import { existsSync, writeFileSync, readFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -25,8 +25,7 @@ if (update?.latest && update.latest !== pkg.version) {
 
   const lines = [
     `Update available! ${"\x1b[31m"}${pkg.version}${"\x1b[0m"} → ${"\x1b[32m"}${update.latest}${"\x1b[0m"}.`,
-    // `${"\x1b[34m"}Changelog: ${"\x1b[0m"}https://github.com/rxgodev/neuro-commit/releases/latest`,
-    `To update, run: ${"\x1b[34m"}pnpm add -g @rxgodev/neuro-commit@${update.latest}${"\x1b[0m"}`,
+    `To update, run: ${"\x1b[36m"}pnpm add -g @rxgodev/neuro-commit@${update.latest}${"\x1b[0m"}`,
   ];
 
   const maxWidth = Math.max(...lines.map((l) => stripAnsi(l).length)) + 8;
@@ -57,6 +56,7 @@ ai_commit_debug.log
 const CONFIG_DIR = join(homedir(), ".config", "ai-commit");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 const MANAGED_PROJECTS_FILE = join(CONFIG_DIR, "managed-projects.json");
+const TEMPLATES_FILE = join(CONFIG_DIR, "templates.json");
 
 const SMART_TO_SIMPLE_MODELS = [
   "meta-llama/Llama-3.3-70B-Instruct",
@@ -284,8 +284,6 @@ async function askYesNo(question) {
   });
 }
 
-// === CONFIG INTERACTION ===
-
 async function promptSelect(options, message) {
   const inquirer = await import("inquirer");
   const { choice } = await inquirer.default.prompt([
@@ -293,6 +291,288 @@ async function promptSelect(options, message) {
   ]);
   return choice;
 }
+
+function spawnAsync(cmd, args, options = {}) {
+  return new Promise((resolve) => {
+    const proc = spawn(cmd, args, { ...options, stdio: "ignore" });
+    proc.on("close", resolve);
+  });
+}
+
+// === TEMPLATES ===
+
+function loadTemplates() {
+  if (!existsSync(TEMPLATES_FILE)) return {};
+  try {
+    return JSON.parse(readFileSync(TEMPLATES_FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveTemplates(templates) {
+  ensureConfigDir();
+  writeFileSync(TEMPLATES_FILE, JSON.stringify(templates, null, 2));
+}
+
+async function askForScript(initial) {
+  const inquirer = await import("inquirer");
+  const defaultContent =
+    initial || '#!/bin/sh\npython .githooks/ai_commit.py "$1"';
+  while (true) {
+    const { script } = await inquirer.default.prompt([
+      {
+        type: "editor",
+        name: "script",
+        message: "Edit full prepare-commit-msg script:",
+        default: defaultContent,
+      },
+    ]);
+
+    const trimmed = script.trim();
+    if (!trimmed) return null;
+
+    const error = validatePreCommitScript(trimmed);
+    if (error) {
+      console.log(`\n❌ Invalid hook: ${error}\nPlease fix and try again.\n`);
+    } else {
+      return trimmed;
+    }
+  }
+}
+
+function validatePreCommitScript(script) {
+  const lines = script
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "");
+  if (lines.length === 0) return "Script is empty.";
+
+  const firstLine = lines[0];
+  if (!firstLine.startsWith("#!/bin/sh")) {
+    return "First line must be: #!/bin/sh";
+  }
+
+  const hasCall = lines.some(
+    (line) =>
+      line.includes('python .githooks/ai_commit.py "$1"') ||
+      line.includes('python .githooks/ai_commit.py "\$1"') ||
+      // also allow single quotes or no quotes (less strict)
+      /python\s+\.githooks\/ai_commit\.py\s+"\$1"/.test(line),
+  );
+
+  if (!hasCall) {
+    return 'Script must contain: python .githooks/ai_commit.py "$1"';
+  }
+
+  return null;
+}
+
+async function applyTemplateToProjects(templateName) {
+  const allProjects = getManagedProjects().filter((p) => existsSync(p));
+  if (allProjects.length === 0) {
+    console.log("📭 No managed projects found.");
+    return;
+  }
+
+  const inquirer = await import("inquirer");
+  const { selected } = await inquirer.default.prompt([
+    {
+      type: "checkbox",
+      name: "selected",
+      message: "Select projects to apply template to:",
+      choices: [
+        { name: "(Cancel)", value: "__cancel__" },
+        { type: "separator" },
+        ...allProjects.map((p) => ({
+          name: `${p.split(/[\\/]/).pop()} → ${p}`,
+          value: p,
+        })),
+      ],
+    },
+  ]);
+
+  if (selected.includes("__cancel__") || selected.length === 0) {
+    console.log("↩️  Cancelled.");
+    return;
+  }
+
+  const templates = loadTemplates();
+  const scriptContent = templates[templateName].script;
+
+  for (const proj of selected) {
+    const hookDir = join(proj, ".githooks");
+    if (!existsSync(hookDir)) mkdirSync(hookDir, { recursive: true });
+
+    const hookPath = join(hookDir, "prepare-commit-msg");
+    writeFileSync(hookPath, scriptContent);
+    if (process.platform !== "win32") {
+      await spawnAsync("chmod", ["+x", hookPath]);
+    }
+
+    await spawnAsync("git", ["config", "core.hooksPath", ".githooks"], {
+      cwd: proj,
+    });
+  }
+
+  templates[templateName].appliedTo = [
+    ...new Set([...(templates[templateName].appliedTo || []), ...selected]),
+  ];
+  saveTemplates(templates);
+
+  console.log(`\n✅ Template applied to ${selected.length} project(s).\n`);
+}
+
+async function inspectTemplate(name) {
+  const templates = loadTemplates();
+  const tpl = templates[name];
+  const scriptPreview =
+    tpl.script.length > 60 ? tpl.script.slice(0, 57) + "..." : tpl.script;
+
+  const action = await promptSelect(
+    [
+      { name: `👁️ View: ${scriptPreview}`, value: "view" },
+      { name: "✏️ Edit script", value: "edit" },
+      { name: "🚀 Apply to projects", value: "apply" },
+      { name: "🗑️ Delete template", value: "delete" },
+      { name: "⬅️ Back", value: "back" },
+    ],
+    `Template: ${name}`,
+  );
+
+  if (action === "view") {
+    console.log(`\n📜 Script:\n${tpl.script}\n`);
+    await askToContinue();
+  } else if (action === "edit") {
+    const newScript = await askForScript(tpl.script);
+    if (newScript !== null) {
+      tpl.script = newScript;
+      const templates = loadTemplates();
+      templates[name] = tpl;
+      saveTemplates(templates);
+      console.log("✅ Template updated.");
+
+      if (tpl.appliedTo && tpl.appliedTo.length > 0) {
+        console.log(
+          `\n🔄 Updating template in ${tpl.appliedTo.length} project(s)...`,
+        );
+        for (const proj of tpl.appliedTo) {
+          if (!existsSync(proj)) {
+            console.warn(`⚠️  Skipped missing project: ${proj}`);
+            continue;
+          }
+          const hookDir = join(proj, ".githooks");
+          if (!existsSync(hookDir)) mkdirSync(hookDir, { recursive: true });
+          const hookPath = join(hookDir, "prepare-commit-msg");
+          writeFileSync(hookPath, newScript);
+          if (process.platform !== "win32") {
+            await spawnAsync("chmod", ["+x", hookPath]);
+          }
+          await spawnAsync("git", ["config", "core.hooksPath", ".githooks"], {
+            cwd: proj,
+          });
+        }
+        console.log("✅ All linked projects updated.\n");
+      } else {
+        console.log("ℹ️  No projects to update.\n");
+      }
+    }
+  } else if (action === "apply") {
+    await applyTemplateToProjects(name);
+  } else if (action === "delete") {
+    const confirm = await askYesNo(`Delete template "${name}"?`);
+    if (confirm) {
+      delete templates[name];
+      saveTemplates(templates);
+      console.log(`✅ Template "${name}" deleted.\n`);
+      return; // выйти, чтобы не вернуться в просмотр
+    }
+  }
+}
+
+async function createTemplate() {
+  const inquirer = await import("inquirer");
+  const { name } = await inquirer.default.prompt([
+    { type: "input", name: "name", message: "Template name:" },
+  ]);
+
+  if (!name.trim()) return;
+
+  const script = await askForScript("");
+  if (script === null) return;
+
+  const templates = loadTemplates();
+  templates[name] = { script, appliedTo: [] };
+  saveTemplates(templates);
+  console.log(`✅ Template "${name}" created.\n`);
+}
+
+async function manageTemplates() {
+  while (true) {
+    const templates = loadTemplates();
+    const templateNames = Object.keys(templates);
+    const choices = [
+      ...templateNames.map((name) => ({ name, value: name })),
+      { name: "➕ Create new template", value: "__new__" },
+      { name: "⬅️ Back", value: "__back__" },
+    ];
+
+    const selected = await promptSelect(choices, "Templates");
+
+    if (selected === "__back__") return;
+    if (selected === "__new__") {
+      await createTemplate();
+    } else {
+      await inspectTemplate(selected);
+    }
+  }
+}
+
+async function askToContinue() {
+  const inquirer = await import("inquirer");
+  await inquirer.default.prompt([
+    { type: "input", name: "ok", message: "Press Enter to continue" },
+  ]);
+}
+
+// === PROJECTS LIST (TABLE) ===
+
+function listProjects() {
+  const allProjects = getManagedProjects();
+  const valid = allProjects.filter((p) => existsSync(p));
+  const invalid = allProjects.filter((p) => !existsSync(p));
+
+  if (allProjects.length === 0) {
+    console.log("📭 No integrated projects found.");
+    return;
+  }
+
+  console.log(
+    `\n📦 Integrated projects (${valid.length} active${invalid.length ? `, ${invalid.length} missing` : ""}):\n`,
+  );
+
+  const rows = [];
+
+  valid.forEach((p) => {
+    const name = p.split(/[\\/]/).pop();
+    rows.push({ Status: "✅", Name: name, Path: p });
+  });
+
+  invalid.forEach((p) => {
+    const name = p.split(/[\\/]/).pop();
+    rows.push({ Status: "❌", Name: name, Path: p });
+  });
+
+  console.table(rows);
+
+  if (invalid.length > 0) {
+    console.log(
+      '\n⚠️  Missing projects: run "qq uninstall" in them to clean up.\n',
+    );
+  }
+}
+
+// === CONFIG INTERACTION ===
 
 async function configInteractive() {
   const config = loadConfig();
@@ -302,6 +582,7 @@ async function configInteractive() {
       [
         { name: "🔑 API Key", value: "key" },
         { name: "🧠 Models", value: "models" },
+        { name: "📂 Projects & Templates", value: "projects-templates" },
         {
           name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
           value: "coauthor",
@@ -408,6 +689,23 @@ async function configInteractive() {
           : "✅ Co-author disabled.\n",
       );
     }
+
+    if (mainAction === "projects-templates") {
+      const ptAction = await promptSelect(
+        [
+          { name: "📋 List all projects", value: "list-projects" },
+          { name: "🎨 Templates", value: "templates" },
+          { name: "⬅️ Back", value: "back" },
+        ],
+        "Projects & Templates",
+      );
+
+      if (ptAction === "list-projects") {
+        listProjects();
+      } else if (ptAction === "templates") {
+        await manageTemplates();
+      }
+    }
   }
 }
 
@@ -467,7 +765,7 @@ async function install() {
     writeFileSync(commitIgnorePath, DEFAULT_COMMITIGNORE);
   }
 
-  await addToGitignore(); // ← НОВОЕ
+  await addToGitignore();
 
   setGitHooksPath();
 
@@ -496,41 +794,6 @@ function uninstall() {
   unsetGitHooksPath();
   console.log("✅ Git hooks path reset.");
   console.log("🗑️ Auto-commit uninstalled!");
-}
-
-function listProjects() {
-  const allProjects = getManagedProjects();
-  const valid = allProjects.filter((p) => existsSync(p));
-  const invalid = allProjects.filter((p) => !existsSync(p));
-
-  if (allProjects.length === 0) {
-    console.log("📭 No integrated projects found.");
-    return;
-  }
-
-  console.log(
-    `\n📦 Integrated projects (${valid.length} active${invalid.length ? `, ${invalid.length} missing` : ""}):\n`,
-  );
-
-  const rows = [];
-
-  valid.forEach((p) => {
-    const name = p.split(/[\\/]/).pop();
-    rows.push({ Status: "✅", Name: name, Path: p });
-  });
-
-  invalid.forEach((p) => {
-    const name = p.split(/[\\/]/).pop();
-    rows.push({ Status: "❌", Name: name, Path: p });
-  });
-
-  console.table(rows);
-
-  if (invalid.length > 0) {
-    console.log(
-      '\n⚠️  Missing projects: run "qq uninstall" in them to clean up.\n',
-    );
-  }
 }
 
 // === AUTO-UPDATE HOOKS ===
@@ -577,7 +840,7 @@ Auto Commit CLI (qq)
 
 Usage:
   qq init        → Install AI commit hook
-  qq config      → Configure key, models, co-author
+  qq config      → Configure key, models, co-author, projects & templates
   qq uninstall   → Remove hook
   qq projects    → List integrated projects
   qq projects --update → Update hooks manually

@@ -90,7 +90,7 @@ def is_valid_commit_message(msg: str) -> bool:
         return False
 
     # 4. Длина и отсутствие точки
-    if len(subject) > 50:
+    if len(subject) > 150:
         return False
     if description.endswith("."):
         return False
@@ -325,7 +325,10 @@ def generate_commit_message(diff):
                 except urllib.error.URLError as e:
                     raise Exception(f"URL error: {e.reason}")
 
-                message = data["choices"][0]["message"]["content"].strip()
+                content = data["choices"][0]["message"].get("content")
+                if not isinstance(content, str):
+                    raise Exception(f"Unexpected content type or null: {repr(content)}")
+                message = content.strip()
 
                 if not message or message.startswith("#") or len(message.strip()) < 10:
                     log_message(
