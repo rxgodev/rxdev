@@ -822,10 +822,8 @@ if (!["uninstall"].includes(cmd)) {
 
 // === MAIN ===
 
-const versionStatus =
-  update?.latest && update.latest !== pkg.version
-    ? "Need update"
-    : "Up-to-date";
+const boldCyan = "\x1b[1m\x1b[38;2;57;186;229m";
+const resetColor = "\x1b[0m";
 
 switch (cmd) {
   case "init":
@@ -838,11 +836,13 @@ switch (cmd) {
     uninstall();
     break;
   default:
-    console.log(`NeuroCommit (v${pkg.version})
-[${versionStatus}]
+    // \x1b[1m - bold
+    console.log(`${boldCyan}NeuroCommit ${resetColor}is a powerful AI command-line CLI for creating comments on your commits. ${"\x1b[38;5;16m"}(v${pkg.version})${resetColor}
 
-Usage:
-  qq init          Install AI commit hook
-  qq config        Configure key, models, co-author, projects & templates
-  qq uninstall     Remove hook`);
+${"\x1b[1m\x1b[37m"}Usage: qq <command>${resetColor}
+
+${"\x1b[1m\x1b[37m"}Commands:${resetColor}
+  ${boldCyan}init${resetColor}          Install AI commit hook
+  ${boldCyan}config${resetColor}        Configure key, models, co-author, projects & templates
+  ${boldCyan}uninstall${resetColor}     Remove hook`);
 }
