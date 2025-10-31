@@ -57,6 +57,9 @@ const CONFIG_DIR = join(homedir(), ".config", "ai-commit");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 const MANAGED_PROJECTS_FILE = join(CONFIG_DIR, "managed-projects.json");
 const TEMPLATES_FILE = join(CONFIG_DIR, "templates.json");
+const ENV_FILE = join(CONFIG_DIR, ".env");
+
+ensureSecureKeyStorage();
 
 const SMART_TO_SIMPLE_MODELS = [
   "deepseek-ai/DeepSeek-R1-0528",
@@ -93,6 +96,105 @@ function loadConfig() {
 function saveConfig(config) {
   ensureConfigDir();
   writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf8");
+}
+
+function loadKeyFromEnvFile() {
+  try {
+    if (existsSync(ENV_FILE)) {
+      const content = readFileSync(ENV_FILE, "utf8");
+      const match = content.match(/^OPENAI_API_KEY\s*=\s*(.+)$/m);
+      if (match) {
+        return match[1].trim().replace(/^["']|["']$/g, "");
+      }
+    }
+  } catch (e) {
+    console.warn("⚠️ Failed to read .env file");
+  }
+  return null;
+}
+
+function migrateKeyFromShellToEnv() {
+  const home = homedir();
+  if (!home) return null;
+
+  const rcFile = (process.env.SHELL || "/bin/bash").includes("zsh")
+    ? join(home, ".zshrc")
+    : join(home, ".bashrc");
+
+  if (!existsSync(rcFile)) return null;
+
+  try {
+    let content = readFileSync(rcFile, "utf8");
+    const match = content.match(/export OPENAI_API_KEY=["']?(.+?)["']?$/m);
+    if (match) {
+      const key = match[1];
+      ensureConfigDir();
+      writeFileSync(ENV_FILE, `OPENAI_API_KEY="${key}"\n`, { mode: 0o600 });
+      content =
+        content
+          .replace(/export OPENAI_API_KEY=["']?.*?["']?\s*$/m, "")
+          .trimEnd() + "\n";
+      writeFileSync(rcFile, content);
+      console.log(`🔒 Migrated API key from ${rcFile} to ${ENV_FILE}`);
+      return key;
+    }
+  } catch (e) {
+    console.warn("⚠️ Failed to migrate API key from shell config");
+  }
+  return null;
+}
+
+function checkExistingKey() {
+  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
+
+  const fromEnvFile = loadKeyFromEnvFile();
+  if (fromEnvFile) return fromEnvFile;
+
+  const migrated = migrateKeyFromShellToEnv();
+  if (migrated) return migrated;
+
+  return null;
+}
+
+async function saveKeyToEnv(key) {
+  ensureConfigDir();
+  const envContent = `OPENAI_API_KEY="${key}"\n`;
+  writeFileSync(ENV_FILE, envContent, { mode: 0o600 });
+  process.env.OPENAI_API_KEY = key;
+
+  try {
+    const home = homedir();
+    if (home) {
+      const rcFile = (process.env.SHELL || "/bin/bash").includes("zsh")
+        ? join(home, ".zshrc")
+        : join(home, ".bashrc");
+      if (existsSync(rcFile)) {
+        let content = readFileSync(rcFile, "utf8");
+        const regex = /export OPENAI_API_KEY=["']?.*?["']?\s*$/m;
+        if (regex.test(content)) {
+          content = content.replace(regex, "").trimEnd() + "\n";
+          writeFileSync(rcFile, content);
+          console.log(`🧹 Removed API key from ${rcFile}`);
+        }
+      }
+    }
+  } catch (e) {}
+
+  console.log(`✅ API key saved securely to ${ENV_FILE}`);
+}
+
+function ensureSecureKeyStorage() {
+  if (existsSync(ENV_FILE)) return;
+
+  const key = process.env.OPENAI_API_KEY || migrateKeyFromShellToEnv();
+
+  if (key) {
+    ensureConfigDir();
+    const envContent = `OPENAI_API_KEY="${key}"\n`;
+    writeFileSync(ENV_FILE, envContent, { mode: 0o600 });
+    process.env.OPENAI_API_KEY = key;
+    console.log(`🔒 API key secured to ${ENV_FILE}`);
+  }
 }
 
 function loadTokenUsage() {
@@ -209,23 +311,6 @@ function unsetGitHooksPath() {
   });
 }
 
-function checkExistingKey() {
-  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
-  const home = homedir();
-  if (home) {
-    const rcFile = (process.env.SHELL || "/bin/bash").includes("zsh")
-      ? join(home, ".zshrc")
-      : join(home, ".bashrc");
-    if (existsSync(rcFile)) {
-      const match = readFileSync(rcFile, "utf8").match(
-        /export OPENAI_API_KEY="(.+)"/,
-      );
-      if (match) return match[1];
-    }
-  }
-  return null;
-}
-
 async function askForKey() {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -237,38 +322,6 @@ async function askForKey() {
       resolve(key.trim());
     });
   });
-}
-
-async function saveKeyToEnv(key) {
-  process.env.OPENAI_API_KEY = key;
-  if (process.platform === "win32") {
-    try {
-      const { execSync } = await import("child_process");
-      execSync(`setx OPENAI_API_KEY "${key}"`, { stdio: "pipe" });
-      console.log("✅ Saved to Windows environment.");
-      console.log("👉 Restart terminal to apply.");
-      return;
-    } catch {}
-  } else {
-    const home = homedir();
-    if (home) {
-      const rcFile = (process.env.SHELL || "/bin/bash").includes("zsh")
-        ? join(home, ".zshrc")
-        : join(home, ".bashrc");
-      if (existsSync(rcFile)) {
-        let content = readFileSync(rcFile, "utf8");
-        const line = `export OPENAI_API_KEY="${key}"`;
-        const regex = /export OPENAI_API_KEY=".*"/;
-        content = regex.test(content)
-          ? content.replace(regex, line)
-          : content + `\n${line}\n`;
-        writeFileSync(rcFile, content);
-        console.log(`✅ Updated ${rcFile}`);
-        return;
-      }
-    }
-  }
-  console.log("⚠️ Key saved only for current session.");
 }
 
 async function askYesNo(question) {
