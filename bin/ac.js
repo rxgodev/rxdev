@@ -919,10 +919,46 @@ function showStatus() {
   console.log("");
 }
 
-// === AUTO-UPDATE HOOKS ===
+// === HELP & VERSION ===
 
-const cmd = process.argv[2];
-if (!["uninstall"].includes(cmd)) {
+const boldCyan = "\x1b[1m\x1b[38;2;57;186;229m";
+const resetColor = "\x1b[0m";
+
+function showHelp() {
+  console.log(`${boldCyan}NeuroCommit ${resetColor}— AI-powered conventional commit messages ${"\x1b[38;5;16m"}(v${pkg.version})${resetColor}
+
+${"\x1b[1m\x1b[37m"}Usage:${resetColor}
+  ${boldCyan}qq${resetColor} <command> [options]
+
+${"\x1b[1m\x1b[37m"}Commands:${resetColor}
+  ${boldCyan}init${resetColor}          Install AI commit hook
+  ${boldCyan}config${resetColor}        Configure key, models, co-author, projects & templates
+  ${boldCyan}uninstall${resetColor}     Remove hook
+  ${boldCyan}status${resetColor}        Show integration status
+  ${boldCyan}retry${resetColor}         Revert last commit and regenerate message
+
+${"\x1b[1m\x1b[37m"}Options:${resetColor}
+  ${boldCyan}-v, --version${resetColor}   Show version
+  ${boldCyan}-h, --help${resetColor}      Show this help`);
+}
+
+const args = process.argv.slice(2);
+
+// Handle global flags first
+if (args.includes("--version") || args.includes("-v")) {
+  console.log(`v${pkg.version}`);
+  process.exit(0);
+}
+
+if (args.includes("--help") || args.includes("-h")) {
+  showHelp();
+  process.exit(0);
+}
+
+const cmd = args[0];
+
+// === AUTO-UPDATE HOOKS (only for real commands, not flags) ===
+if (cmd !== "uninstall") {
   const projects = getManagedProjects().filter((p) => existsSync(p));
   let updatedCount = 0;
   for (const proj of projects) {
@@ -933,11 +969,7 @@ if (!["uninstall"].includes(cmd)) {
   }
 }
 
-// === MAIN ===
-
-const boldCyan = "\x1b[1m\x1b[38;2;57;186;229m";
-const resetColor = "\x1b[0m";
-
+// === COMMANDS ===
 switch (cmd) {
   case "init":
     install();
@@ -951,14 +983,9 @@ switch (cmd) {
   case "status":
     showStatus();
     break;
+  case "retry":
+    retryLastCommit();
+    break;
   default:
-    // \x1b[1m - bold
-    console.log(`${boldCyan}NeuroCommit ${resetColor}is a powerful AI command-line CLI for creating comments on your commits. ${"\x1b[38;5;16m"}(v${pkg.version})${resetColor}
-
-${"\x1b[1m\x1b[37m"}Usage: qq <command>${resetColor}
-
-${"\x1b[1m\x1b[37m"}Commands:${resetColor}
-  ${boldCyan}init${resetColor}          Install AI commit hook
-  ${boldCyan}config${resetColor}        Configure key, models, co-author, projects & templates
-  ${boldCyan}uninstall${resetColor}     Remove hook`);
+    showHelp();
 }
