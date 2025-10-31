@@ -806,6 +806,66 @@ function uninstall() {
   console.log("🗑️ Auto-commit uninstalled!");
 }
 
+function showStatus() {
+  const cwd = process.cwd();
+  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+
+  if (gitRoot.status !== 0) {
+    console.log("❌ Not inside a Git repository.");
+    return;
+  }
+
+  const root = gitRoot.stdout.trim();
+  const githooksDir = join(root, ".githooks");
+  const hookPath = join(githooksDir, "prepare-commit-msg");
+  const commitignorePath = join(root, ".commitignore");
+
+  const hooksPathResult = spawnSync("git", ["config", "core.hooksPath"], {
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+  const configuredHooksPath =
+    hooksPathResult.status === 0 ? hooksPathResult.stdout.trim() : null;
+  const hooksConfigured = configuredHooksPath === ".githooks";
+
+  const hookExists = existsSync(hookPath);
+
+  const commitignoreExists = existsSync(commitignorePath);
+
+  const hasApiKey = !!checkExistingKey();
+
+  const templateName = getTemplateForProject(root) || "—";
+
+  const config = loadConfig();
+  const firstModel = config.modelQueue[0] || "—";
+  let quotaInfo = "—";
+  if (firstModel !== "—") {
+    const usage = loadTokenUsage();
+    const used = usage[firstModel] || 0;
+    const remaining = Math.max(0, 500_000 - used);
+    quotaInfo = `${remaining.toLocaleString()} tokens`;
+  }
+
+  console.log("\n🔍 NeuroCommit Status\n");
+  console.log(`📁 Git root:       ${root}`);
+  console.log(
+    `⚙️  Hooks path:     ${hooksConfigured ? "✅ .githooks" : "❌ not set"}`,
+  );
+  console.log(
+    `📜 Hook file:       ${hookExists ? "✅ present" : "❌ missing"}`,
+  );
+  console.log(
+    `📄 .commitignore:   ${commitignoreExists ? "✅ exists" : "⚠️ missing"}`,
+  );
+  console.log(`🔑 API key:         ${hasApiKey ? "✅ found" : "❌ not found"}`);
+  console.log(`🎨 Template:        ${templateName}`);
+  console.log(`📊 Quota (next):    ${quotaInfo}`);
+  console.log("");
+}
+
 // === AUTO-UPDATE HOOKS ===
 
 const cmd = process.argv[2];
@@ -834,6 +894,9 @@ switch (cmd) {
     break;
   case "uninstall":
     uninstall();
+    break;
+  case "status":
+    showStatus();
     break;
   default:
     // \x1b[1m - bold
