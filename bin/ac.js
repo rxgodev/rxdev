@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import readline from "readline";
 import { homedir } from "os";
 import updateNotifier from "update-notifier";
+import { unlinkSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -924,8 +925,147 @@ function showStatus() {
 const boldCyan = "\x1b[1m\x1b[38;2;57;186;229m";
 const resetColor = "\x1b[0m";
 
+async function quickFlow() {
+  const bold = "\x1b[1m";
+  const dim = "\x1b[38;5;16m";
+  const reset = "\x1b[0m";
+  const green = "\x1b[32m";
+  const cyan = "\x1b[36m";
+  const yellow = "\x1b[33m";
+
+  console.log(`\n${bold}🚀 NeuroCommit Quick Flow${reset}\n`);
+
+  // === 1. git add ===
+  console.log(`${bold}Stage changes:${reset}`);
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const addPath = await new Promise((resolve) => {
+    rl.question(`${dim}git add ${reset}`, (answer) => {
+      rl.close();
+      resolve(answer.trim() || ".");
+    });
+  });
+
+  const addResult = spawnSync("git", ["add", addPath], { stdio: "pipe" });
+  if (addResult.status !== 0) {
+    console.error(`❌ Failed to stage changes.`);
+    process.exit(1);
+  }
+  console.log(`\n${green}✅ Staged${reset}\n`);
+
+  // === Вспомогательная функция: сделать коммит через хук ===
+  const makeCommit = () => {
+    return spawnSync("git", ["commit"], {
+      stdio: "pipe",
+      env: { ...process.env, GIT_EDITOR: "true" },
+    });
+  };
+
+  // === 2. Первый коммит ===
+  console.log(`${bold}💬 Generating commit message...${reset}`);
+  let commitResult = makeCommit();
+
+  if (commitResult.status !== 0) {
+    console.error(`\n❌ Failed to generate commit message`);
+    process.exit(1);
+  }
+
+  // === Читаем сгенерированное сообщение ===
+  const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
+  let currentMessage = readFileSync(commitMsgFile, "utf8").trim();
+
+  currentMessage = currentMessage
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("#"))
+    .join("\n")
+    .trim();
+
+  if (!currentMessage) {
+    console.error("\n❌ Empty commit message");
+    process.exit(1);
+  }
+
+  // === Цикл: показ + выбор ===
+  while (true) {
+    console.log(`\n${bold}📄 Generated commit message:${reset}`);
+    console.log(currentMessage);
+    console.log("");
+
+    const inquirer = await import("inquirer");
+    const { action } = await inquirer.default.prompt([
+      {
+        type: "list",
+        name: "action",
+        message: "What next?",
+        choices: [
+          { name: `${green}✅ Push${reset}`, value: "push" },
+          { name: `${yellow}🔄 Regenerate${reset}`, value: "regenerate" },
+          { name: `${bold}❌ Cancel${reset}`, value: "cancel" },
+        ],
+        default: "push",
+      },
+    ]);
+
+    if (action === "push") {
+      break;
+    }
+
+    if (action === "cancel") {
+      spawnSync("git", ["reset", "--soft", "HEAD~1"], { stdio: "pipe" });
+      console.log(`\n${bold}↩️  Commit cancelled${reset}`);
+      return;
+    }
+
+    if (action === "regenerate") {
+      spawnSync("git", ["reset", "--soft", "HEAD~1"], { stdio: "pipe" });
+      console.log(`\n${yellow}↩️  Regenerating...${reset}`);
+      commitResult = makeCommit();
+      if (commitResult.status !== 0) {
+        console.error(`\n❌ Failed to regenerate`);
+        process.exit(1);
+      }
+      currentMessage = readFileSync(commitMsgFile, "utf8")
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("#"))
+        .join("\n")
+        .trim();
+      if (!currentMessage) {
+        console.error("\n❌ Empty message after regeneration");
+        process.exit(1);
+      }
+      continue;
+    }
+  }
+
+  console.log(`\n${bold}Push changes:${reset}`);
+  const rl3 = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const pushPath = await new Promise((resolve) => {
+    rl3.question(`${dim}git push ${reset}`, (answer) => {
+      rl3.close();
+      resolve(answer.trim() || "origin main");
+    });
+  });
+
+  console.log(`\n⬆️  Pushing...`);
+  const pushArgs = ["push", ...pushPath.split(/\s+/)];
+  const push = spawnSync("git", pushArgs, { stdio: "inherit" });
+
+  if (push.status !== 0) {
+    console.error(`\n❌ Push failed`);
+    process.exit(1);
+  }
+  console.log(`\n${green}✅ Done${reset}`);
+}
+
 function showHelp() {
-  console.log(`${boldCyan}NeuroCommit ${resetColor}— AI-powered conventional commit messages ${"\x1b[38;5;16m"}(v${pkg.version})${resetColor}
+  console.log(`${boldCyan}NeuroCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;16m"}(v${pkg.version})${resetColor}
 
 ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
   ${boldCyan}qq${resetColor} <command> [options]
@@ -933,6 +1073,7 @@ ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
 ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}init${resetColor}          Install AI commit hook
   ${boldCyan}config${resetColor}        Configure key, models, co-author, projects & templates
+  ${boldCyan}go${resetColor}            Start quick flow for commiting
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
   ${boldCyan}retry${resetColor}         Revert last commit and regenerate message
@@ -985,6 +1126,9 @@ switch (cmd) {
     break;
   case "retry":
     retryLastCommit();
+    break;
+  case "go":
+    quickFlow();
     break;
   default:
     showHelp();
