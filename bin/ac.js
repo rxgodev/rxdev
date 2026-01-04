@@ -963,6 +963,8 @@ async function quickFlow() {
 
   console.log(`\n${bold}🚀 NeuroCommit Quick Flow${reset}\n`);
 
+  installPythonDeps();
+
   // === 1. git add ===
   console.log(`${bold}Stage changes:${reset}`);
   const rl = readline.createInterface({
