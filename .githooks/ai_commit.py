@@ -211,7 +211,7 @@ def get_staged_diff():
         )
         if result.returncode != 0:
             log_message(f"Failed to get staged files: {result.stderr}")
-            return "", False  # (diff, all_ignored)
+            return "", False
 
         staged_files = result.stdout.strip().splitlines()
         if not staged_files:
@@ -227,7 +227,7 @@ def get_staged_diff():
 
         if not relevant_files:
             log_message("No relevant staged files (all ignored by .commitignore).")
-            return "", True  # all_ignored = True
+            return "", True
 
         result = subprocess.run(
             ["git", "diff", "--cached", "--no-color", "--unified=0"] + relevant_files,
@@ -236,6 +236,11 @@ def get_staged_diff():
             encoding="utf-8",
             errors="ignore",
         )
+
+        # === ДОБАВЬ ЭТО ДЛЯ ОТЛАДКИ ===
+        log_message(f"Raw diff length: {len(result.stdout)}")
+        log_message(f"Raw diff first 500 chars:\n{result.stdout[:500]}")
+        # ==============================
 
         lines = result.stdout.splitlines()
         filtered = []
@@ -246,6 +251,11 @@ def get_staged_diff():
                 parts = line.split()
                 if len(parts) >= 3:
                     current_file = parts[-1].lstrip("b/")
+                    # === ДОБАВЬ ЛОГИРОВАНИЕ ===
+                    log_message(
+                        f"Processing file: {current_file}, ignored: {spec.match_file(current_file)}"
+                    )
+                    # ==========================
                     if spec.match_file(current_file):
                         current_file = None
                         continue
@@ -260,7 +270,10 @@ def get_staged_diff():
 
         diff_text = "\n".join(filtered).strip()
 
-        # Если текстовый diff пустой, но есть файлы — создаём список файлов
+        # === ДОБАВЬ ЛОГИРОВАНИЕ ===
+        log_message(f"Filtered diff length: {len(diff_text)}")
+        # ==========================
+
         if not diff_text and relevant_files:
             log_message(
                 "No text diff (binary files or empty changes). Using file list."
