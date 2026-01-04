@@ -298,7 +298,8 @@ function installPythonDeps() {
 
     if (isVenv) {
       const venvName = (process.env.VIRTUAL_ENV || process.env.CONDA_PREFIX)
-        .split(/[\\/]/).pop();
+        .split(/[\\/]/)
+        .pop();
       console.error(`\n❌ Missing dependency: pathspec`);
       console.error(`\n   You're in venv "${venvName}". Install manually:\n`);
       console.error(`   pip install pathspec\n`);
@@ -307,15 +308,20 @@ function installPythonDeps() {
 
     // Не в venv — устанавливаем сами
     console.log("📦 Installing pathspec...");
-    const install = spawnSync(pythonCmd, ["-m", "pip", "install", "--quiet", "pathspec"], {
-      stdio: "inherit",
-    });
+    const install = spawnSync(
+      pythonCmd,
+      ["-m", "pip", "install", "--quiet", "pathspec"],
+      {
+        stdio: "inherit",
+      },
+    );
 
     if (install.status !== 0) {
       console.error("❌ Failed to install pathspec. Try: pip install pathspec");
       process.exit(1);
     }
   }
+}
 
 function setGitHooksPath() {
   if (
