@@ -959,7 +959,7 @@ async function quickFlow() {
   // === Вспомогательная функция: сделать коммит через хук ===
   const makeCommit = () => {
     return spawnSync("git", ["commit"], {
-      stdio: "pipe",
+      stdio: "inherit",
       env: { ...process.env, GIT_EDITOR: "true" },
     });
   };
