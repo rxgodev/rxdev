@@ -1,14 +1,15 @@
-import os
-import sys
-import subprocess
-import traceback
-from datetime import datetime, timezone
 import json
-import pathspec
-from pathlib import Path
+import os
 import re
-import urllib.request
+import subprocess
+import sys
+import traceback
 import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pathspec
 
 # === CONFIGURATION ===
 CONFIG_DIR = Path.home() / ".config" / "ai-commit"
@@ -210,23 +211,23 @@ def get_staged_diff():
         )
         if result.returncode != 0:
             log_message(f"Failed to get staged files: {result.stderr}")
-            return ""
+            return "", False  # (diff, all_ignored)
 
         staged_files = result.stdout.strip().splitlines()
         if not staged_files:
-            return ""
+            return "", False
 
         exclude_patterns = read_commitignore()
         spec = pathspec.GitIgnoreSpec.from_lines(exclude_patterns)
 
         relevant_files = [f for f in staged_files if not spec.match_file(f)]
 
-        if not relevant_files:
-            log_message("No relevant staged files (only hook/config files changed).")
-            return ""
-
         log_message(f"Staged files: {staged_files}")
         log_message(f"Relevant files: {relevant_files}")
+
+        if not relevant_files:
+            log_message("No relevant staged files (all ignored by .commitignore).")
+            return "", True  # all_ignored = True
 
         result = subprocess.run(
             ["git", "diff", "--cached", "--no-color", "--unified=0"] + relevant_files,
@@ -257,11 +258,21 @@ def get_staged_diff():
                 if len(line) > 1:
                     filtered.append(line)
 
-        return "\n".join(filtered).strip()
+        diff_text = "\n".join(filtered).strip()
+
+        # Если текстовый diff пустой, но есть файлы — создаём список файлов
+        if not diff_text and relevant_files:
+            log_message(
+                "No text diff (binary files or empty changes). Using file list."
+            )
+            file_list = "\n".join(f"  - {f}" for f in relevant_files)
+            diff_text = f"Files changed (binary or no text diff):\n{file_list}"
+
+        return diff_text, False
 
     except Exception as e:
         log_message(f"Error in get_staged_diff: {e}\n{traceback.format_exc()}")
-        return ""
+        return "", False
 
 
 def generate_commit_message(diff):
@@ -396,50 +407,31 @@ def main():
         write_error_to_commit(commit_msg_file, reason)
         sys.exit(0)
 
-    diff = get_staged_diff()
+    diff, all_ignored = get_staged_diff()  # <-- Изменено!
 
     if not diff:
-        try:
-            result = subprocess.run(
-                ["git", "diff", "--cached", "--name-only"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="ignore",
-            )
-            staged_files = (
-                result.stdout.strip().splitlines() if result.returncode == 0 else []
-            )
-        except Exception as e:
-            staged_files = []
-            log_message(f"Failed to check staged files: {e}")
-
-        if staged_files:
+        if all_ignored:
             reason = "All staged files are ignored (listed in .commitignore)"
             write_error_to_commit(commit_msg_file, reason)
-            log_message(f"INFO: {reason}. Wrote notice to commit file.")
+            log_message(f"INFO: {reason}")
         else:
             log_message("Exit: No staged changes found.")
-            sys.exit(0)
-    else:
-        log_message(f"Diff found (length: {len(diff)}).")
-        print("[+] Comment generation started")
-        message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
+        sys.exit(0)
 
-        if message and not message.startswith("ERROR:"):
-            if ADD_COAUTHOR:
-                message += (
-                    "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
-                )
-            with open(commit_msg_file, "w", encoding="utf-8") as f:
-                f.write(message)
-            log_message("Message written to commit file.")
-        else:
-            error_text = (
-                message.replace("ERROR: ", "", 1) if message else "Unknown error"
-            )
-            write_error_to_commit(commit_msg_file, error_text)
-            log_message(f"ERROR: {error_text}")
+    log_message(f"Diff found (length: {len(diff)}).")
+    print("[+] Comment generation started")
+    message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
+
+    if message and not message.startswith("ERROR:"):
+        if ADD_COAUTHOR:
+            message += "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
+        with open(commit_msg_file, "w", encoding="utf-8") as f:
+            f.write(message)
+        log_message("Message written to commit file.")
+    else:
+        error_text = message.replace("ERROR: ", "", 1) if message else "Unknown error"
+        write_error_to_commit(commit_msg_file, error_text)
+        log_message(f"ERROR: {error_text}")
 
     log_message("--- HOOK FINISHED ---\n")
 
