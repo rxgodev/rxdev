@@ -1,5 +1,8 @@
 # 🧠 NeuroCommit
 
+# ARCHIVED NOW
+## Do not install this!
+
 <div align="center">
 
 **AI-powered generator comments for your commits**
