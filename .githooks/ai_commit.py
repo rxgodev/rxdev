@@ -6,7 +6,6 @@ import sys
 import traceback
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pathspec
@@ -15,12 +14,13 @@ import pathspec
 CONFIG_DIR = Path.home() / ".config" / "ai-commit"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = CONFIG_DIR / "config.json"
-USAGE_FILE = CONFIG_DIR / "token_usage.json"
 
-DAILY_QUOTA = 500_000
+API_URL = "https://apifreellm.com/api/chatAPI"
+REQUEST_TIMEOUT = 30
+MAX_ATTEMPTS = 3
+MAX_DIFF_LENGTH = 3000
 
 
-# Load user config (models, coauthor)
 def load_user_config():
     if CONFIG_FILE.exists():
         try:
@@ -28,44 +28,24 @@ def load_user_config():
                 return json.load(f)
         except Exception as e:
             print(f"⚠️ Failed to load config: {e}", file=sys.stderr)
-    # Default fallback
-    return {
-        "coauthor": True,
-        "modelQueue": [
-            "deepseek-ai/DeepSeek-R1-0528",
-            "mistralai/Devstral-Small-2505",
-            "meta-llama/Llama-3.3-70B-Instruct",
-            "mistralai/Magistral-Small-2506",
-            "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
-            "Qwen3-235B-A22B-Thinking-2507",
-        ],
-    }
+    return {"coauthor": True, "bumpVersion": False}
 
 
 USER_CONFIG = load_user_config()
-MODELS_TO_TRY = USER_CONFIG["modelQueue"]
 ADD_COAUTHOR = USER_CONFIG.get("coauthor", True)
+BUMP_VERSION = USER_CONFIG.get("bumpVersion", False)
 
 
 def is_valid_commit_message(msg: str) -> bool:
-    """
-    Проверяет, что:
-    - Первая строка (заголовок) на английском (нет кириллицы)
-    - Соответствует формату Conventional Commits: type[(scope)]: description
-    - type из разрешённого списка
-    - длина ≤ 50, нет точки в конце
-    """
     if not msg.strip():
         return False
 
     lines = msg.strip().split("\n")
     subject = lines[0].strip()
 
-    # 1. Нет кириллицы в заголовке
     if re.search(r"[а-яА-ЯёЁ]", subject):
         return False
 
-    # 2. Формат: type[(scope)]: description
     match = re.match(r"^([a-z]+)(?:\([^)]*\))?:\s*(.+)$", subject)
     if not match:
         return False
@@ -73,70 +53,19 @@ def is_valid_commit_message(msg: str) -> bool:
     msg_type = match.group(1)
     description = match.group(2)
 
-    # 3. Правильный тип
     valid_types = {
-        "feat",
-        "fix",
-        "chore",
-        "docs",
-        "style",
-        "refactor",
-        "perf",
-        "test",
-        "build",
-        "ci",
-        "revert",
+        "feat", "fix", "chore", "docs", "style", "refactor",
+        "perf", "test", "build", "ci", "revert",
     }
     if msg_type not in valid_types:
         return False
 
-    # 4. Длина и отсутствие точки
     if len(subject) > 150:
         return False
     if description.endswith("."):
         return False
 
     return True
-
-
-# === TOKEN USAGE ===
-def _load_usage():
-    if os.path.exists(USAGE_FILE):
-        with open(USAGE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            today = datetime.now(timezone.utc).date().isoformat()
-            if data.get("date") != today:
-                return {"date": today, "models": {}}
-            return data
-    today = datetime.now(timezone.utc).date().isoformat()
-    return {"date": today, "models": {}}
-
-
-def _save_usage(data):
-    with open(USAGE_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
-def record_token_usage(model: str, tokens: int):
-    data = _load_usage()
-    data["models"][model] = data["models"].get(model, 0) + tokens
-    _save_usage(data)
-
-
-def has_quota(model: str, needed: int) -> bool:
-    data = _load_usage()
-    used = data["models"].get(model, 0)
-    return (used + needed) <= DAILY_QUOTA
-
-
-def get_remaining_quota(model: str) -> int:
-    data = _load_usage()
-    used = data["models"].get(model, 0)
-    return max(0, DAILY_QUOTA - used)
-
-
-def count_tokens(text: str, model_name: str) -> int:
-    return max(1, len(text) // 4)
 
 
 # === LOGGING ===
@@ -147,10 +76,6 @@ def log_message(message: str) -> None:
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{message}\n")
 
-
-# === PROMPT & UTILS ===
-MAX_DIFF_LENGTH = 3000
-REQUEST_TIMEOUT = 15
 
 SYSTEM_PROMPT = (
     "You are an expert Git commit message generator strictly following Conventional Commits 1.0.0.\n"
@@ -237,10 +162,7 @@ def get_staged_diff():
             errors="ignore",
         )
 
-        # === ДОБАВЬ ЭТО ДЛЯ ОТЛАДКИ ===
         log_message(f"Raw diff length: {len(result.stdout)}")
-        log_message(f"Raw diff first 500 chars:\n{result.stdout[:500]}")
-        # ==============================
 
         lines = result.stdout.splitlines()
         filtered = []
@@ -251,11 +173,6 @@ def get_staged_diff():
                 parts = line.split()
                 if len(parts) >= 3:
                     current_file = parts[-1].lstrip("b/")
-                    # === ДОБАВЬ ЛОГИРОВАНИЕ ===
-                    log_message(
-                        f"Processing file: {current_file}, ignored: {spec.match_file(current_file)}"
-                    )
-                    # ==========================
                     if spec.match_file(current_file):
                         current_file = None
                         continue
@@ -269,15 +186,10 @@ def get_staged_diff():
                     filtered.append(line)
 
         diff_text = "\n".join(filtered).strip()
-
-        # === ДОБАВЬ ЛОГИРОВАНИЕ ===
         log_message(f"Filtered diff length: {len(diff_text)}")
-        # ==========================
 
         if not diff_text and relevant_files:
-            log_message(
-                "No text diff (binary files or empty changes). Using file list."
-            )
+            log_message("No text diff (binary files or empty changes). Using file list.")
             file_list = "\n".join(f"  - {f}" for f in relevant_files)
             diff_text = f"Files changed (binary or no text diff):\n{file_list}"
 
@@ -288,105 +200,228 @@ def get_staged_diff():
         return "", False
 
 
-def generate_commit_message(diff):
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        log_message("ERROR: OPENAI_API_KEY is missing")
-        sys.exit(1)
+def call_apifreellm(messages):
+    payload = {"inputCode": messages}
+    req = urllib.request.Request(
+        API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Origin": "https://apifreellm.com",
+            "Referer": "https://apifreellm.com/",
+            "User-Agent": "neuro-commit/3.0",
+        },
+        method="POST",
+    )
 
-    url = "https://api.intelligence.io.solutions/api/v1/chat/completions"
-    user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
+    try:
+        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as response:
+            raw = response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise Exception(f"HTTP {e.code}: {body}")
+    except urllib.error.URLError as e:
+        raise Exception(f"URL error: {e.reason}")
 
-    for model in MODELS_TO_TRY:
-        attempts = 0
-        max_attempts = 2
+    text = raw.strip()
 
-        while attempts < max_attempts:
-            try:
-                system_tokens = count_tokens(SYSTEM_PROMPT, model)
-                user_tokens = count_tokens(user_prompt, model)
-                estimated_input = system_tokens + user_tokens
-                estimated_total = estimated_input + 150
-
-                if not has_quota(model, estimated_total):
-                    remaining = get_remaining_quota(model)
-                    log_message(
-                        f"Skipping {model}: not enough quota (need {estimated_total}, have {remaining})"
-                    )
+    # If the server happens to return JSON instead of plain text, unwrap common fields.
+    if text.startswith("{"):
+        try:
+            data = json.loads(text)
+            for key in ("response", "message", "content", "output", "result"):
+                if isinstance(data.get(key), str):
+                    text = data[key].strip()
                     break
+        except json.JSONDecodeError:
+            pass
 
-                log_message(f"Attempting model: {model} (attempt {attempts + 1})")
+    return text
 
-                payload = {
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.2,
-                    "max_tokens": 200,
-                }
 
-                req = urllib.request.Request(
-                    url,
-                    data=json.dumps(payload).encode("utf-8"),
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                        "User-Agent": "ai-commit-cli/1.0",
-                    },
-                    method="POST",
-                )
+def generate_commit_message(diff):
+    user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
 
-                try:
-                    with urllib.request.urlopen(
-                        req, timeout=REQUEST_TIMEOUT
-                    ) as response:
-                        data = json.load(response)
-                except urllib.error.HTTPError as e:
-                    error_body = e.read().decode("utf-8")
-                    raise Exception(f"HTTP {e.code}: {error_body}")
-                except urllib.error.URLError as e:
-                    raise Exception(f"URL error: {e.reason}")
+    last_error = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            log_message(f"Calling apifreellm.com (attempt {attempt}/{MAX_ATTEMPTS})")
+            message = call_apifreellm(messages)
 
-                content = data["choices"][0]["message"].get("content")
-                if not isinstance(content, str):
-                    raise Exception(f"Unexpected content type or null: {repr(content)}")
-                message = content.strip()
+            if not message or message.startswith("#") or len(message) < 10:
+                log_message(f"Response too short or invalid: {repr(message)}")
+                last_error = "Empty or too-short response"
+                continue
 
-                if not message or message.startswith("#") or len(message.strip()) < 10:
-                    log_message(
-                        f"Generated message too short or invalid: {repr(message)}"
-                    )
-                    attempts += 1
-                    continue
+            if not is_valid_commit_message(message):
+                log_message(f"Validation failed (attempt {attempt}): {repr(message[:120])}")
+                last_error = "Response did not match Conventional Commits format"
+                continue
 
-                if not is_valid_commit_message(message):
-                    log_message(
-                        f"Validation failed for model {model} (attempt {attempts + 1}): {repr(message[:100])}"
-                    )
-                    attempts += 1
-                    continue
+            log_message(f"SUCCESS on attempt {attempt}")
+            return message
 
-                completion_tokens = count_tokens(message, model)
-                total_tokens = estimated_input + completion_tokens
-                record_token_usage(model, total_tokens)
-                log_message(
-                    f"SUCCESS with {model}. Tokens: {total_tokens} (in: {estimated_input}, out: {completion_tokens})"
-                )
-                return message
+        except Exception as e:
+            last_error = str(e)
+            log_message(f"FAILURE on attempt {attempt}: {e}")
 
-            except Exception as e:
-                approx_tokens = estimated_input + 50
-                record_token_usage(model, approx_tokens)
-                log_message(
-                    f"FAILURE with {model}. Estimated tokens spent: {approx_tokens}. Error: {e}"
-                )
-                break
+    return f"ERROR: apifreellm.com failed after {MAX_ATTEMPTS} attempts ({last_error})"
 
-        log_message(f"All attempts failed for {model}, trying next model...")
 
-    return "ERROR: All models failed or quota exceeded"
+# === VERSION BUMP ===
+
+def determine_bump_kind(message: str) -> str:
+    subject = message.strip().split("\n", 1)[0]
+    match = re.match(r"^([a-z]+)(\([^)]*\))?(!)?:\s*", subject)
+    if not match:
+        return "patch"
+    msg_type, _scope, breaking = match.groups()
+    if breaking or "BREAKING CHANGE" in message:
+        return "major"
+    if msg_type == "feat":
+        return "minor"
+    return "patch"
+
+
+def bump_semver(version: str, kind: str):
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)(.*)$", version.strip())
+    if not match:
+        return None
+    major, minor, patch, suffix = match.groups()
+    major, minor, patch = int(major), int(minor), int(patch)
+    if kind == "major":
+        return f"{major + 1}.0.0"
+    if kind == "minor":
+        return f"{major}.{minor + 1}.0"
+    return f"{major}.{minor}.{patch + 1}"
+
+
+def find_repo_root():
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore",
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    except Exception as e:
+        log_message(f"find_repo_root failed: {e}")
+    return None
+
+
+def staged_files() -> set:
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore",
+        )
+        if result.returncode != 0:
+            return set()
+        return set(result.stdout.split())
+    except Exception:
+        return set()
+
+
+def replace_package_json_version(content: str, new_version: str):
+    match = re.search(r'^(\s*"version"\s*:\s*")([^"]+)(")', content, re.MULTILINE)
+    if not match:
+        return None, None
+    old = match.group(2)
+    return content[: match.start(2)] + new_version + content[match.end(2):], old
+
+
+def replace_toml_version(content: str, sections: list, new_version: str):
+    section_re = re.compile(r"^\s*\[([^\]]+)\]\s*$")
+    ver_re = re.compile(r'^(\s*version\s*=\s*")([^"]+)(".*)$')
+    out_lines = []
+    current_section = None
+    old = None
+    for line in content.splitlines(keepends=True):
+        stripped = line.rstrip("\r\n")
+        eol = line[len(stripped):]
+        sm = section_re.match(stripped)
+        if sm:
+            current_section = sm.group(1).strip()
+            out_lines.append(line)
+            continue
+        if old is None and current_section in sections:
+            vm = ver_re.match(stripped)
+            if vm:
+                old = vm.group(2)
+                out_lines.append(vm.group(1) + new_version + vm.group(3) + eol)
+                continue
+        out_lines.append(line)
+    if old is None:
+        return None, None
+    return "".join(out_lines), old
+
+
+MANIFESTS = [
+    ("package.json", lambda c, v: replace_package_json_version(c, v)),
+    ("Cargo.toml", lambda c, v: replace_toml_version(c, ["package"], v)),
+    ("pyproject.toml", lambda c, v: replace_toml_version(c, ["project", "tool.poetry"], v)),
+]
+
+
+def bump_project_version(kind: str):
+    repo_root = find_repo_root()
+    if repo_root is None:
+        return []
+
+    already_staged = staged_files()
+    bumps = []
+
+    for filename, replacer in MANIFESTS:
+        path = repo_root / filename
+        if not path.exists():
+            continue
+        if filename in already_staged:
+            log_message(f"bump: {filename} already staged — assuming manual bump, skipping")
+            continue
+        try:
+            content = path.read_text(encoding="utf-8")
+        except Exception as e:
+            log_message(f"bump: cannot read {filename}: {e}")
+            continue
+
+        # Read current version to compute new value, then replace
+        peek_old = None
+        peek_new_content, peek_old = replacer(content, "__PLACEHOLDER__")
+        if peek_old is None:
+            log_message(f"bump: no version field in {filename}")
+            continue
+
+        new_version = bump_semver(peek_old, kind)
+        if new_version is None:
+            log_message(f"bump: cannot parse version '{peek_old}' in {filename} as semver")
+            continue
+
+        new_content, _ = replacer(content, new_version)
+        if new_content is None:
+            continue
+
+        try:
+            path.write_text(new_content, encoding="utf-8")
+        except Exception as e:
+            log_message(f"bump: cannot write {filename}: {e}")
+            continue
+
+        add = subprocess.run(
+            ["git", "add", str(path)],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore",
+        )
+        if add.returncode != 0:
+            log_message(f"bump: git add {filename} failed: {add.stderr}")
+            continue
+
+        log_message(f"bump: {filename} {peek_old} → {new_version} ({kind})")
+        bumps.append((filename, peek_old, new_version))
+
+    return bumps
 
 
 def main():
@@ -394,9 +429,7 @@ def main():
 
     if len(sys.argv) < 2:
         commit_msg_file = ".git/COMMIT_EDITMSG"
-        log_message(
-            "WARNING: No commit file provided, using default .git/COMMIT_EDITMSG"
-        )
+        log_message("WARNING: No commit file provided, using default .git/COMMIT_EDITMSG")
     else:
         commit_msg_file = sys.argv[1]
 
@@ -420,7 +453,7 @@ def main():
         write_error_to_commit(commit_msg_file, reason)
         sys.exit(0)
 
-    diff, all_ignored = get_staged_diff()  # <-- Изменено!
+    diff, all_ignored = get_staged_diff()
 
     if not diff:
         if all_ignored:
@@ -436,6 +469,17 @@ def main():
     message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
 
     if message and not message.startswith("ERROR:"):
+        if BUMP_VERSION:
+            kind = determine_bump_kind(message)
+            bumps = bump_project_version(kind)
+            if bumps:
+                footer_lines = [
+                    f"Bump version ({kind}):",
+                    *(f"  {f}: {o} → {n}" for f, o, n in bumps),
+                ]
+                for f, o, n in bumps:
+                    print(f"[+] Bumped {f}: {o} → {n} ({kind})")
+                message += "\n\n" + "\n".join(footer_lines)
         if ADD_COAUTHOR:
             message += "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
         with open(commit_msg_file, "w", encoding="utf-8") as f:

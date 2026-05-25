@@ -58,22 +58,10 @@ const CONFIG_DIR = join(homedir(), ".config", "ai-commit");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 const MANAGED_PROJECTS_FILE = join(CONFIG_DIR, "managed-projects.json");
 const TEMPLATES_FILE = join(CONFIG_DIR, "templates.json");
-const ENV_FILE = join(CONFIG_DIR, ".env");
-
-ensureSecureKeyStorage();
-
-const SMART_TO_SIMPLE_MODELS = [
-  "deepseek-ai/DeepSeek-R1-0528",
-  "mistralai/Devstral-Small-2505",
-  "meta-llama/Llama-3.3-70B-Instruct",
-  "mistralai/Magistral-Small-2506",
-  "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
-  "Qwen3-235B-A22B-Thinking-2507",
-];
 
 const DEFAULT_CONFIG = {
   coauthor: true,
-  modelQueue: [...SMART_TO_SIMPLE_MODELS],
+  bumpVersion: false,
 };
 
 function ensureConfigDir() {
@@ -97,121 +85,6 @@ function loadConfig() {
 function saveConfig(config) {
   ensureConfigDir();
   writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf8");
-}
-
-function loadKeyFromEnvFile() {
-  try {
-    if (existsSync(ENV_FILE)) {
-      const content = readFileSync(ENV_FILE, "utf8");
-      const match = content.match(/^OPENAI_API_KEY\s*=\s*(.+)$/m);
-      if (match) {
-        return match[1].trim().replace(/^["']|["']$/g, "");
-      }
-    }
-  } catch (e) {
-    console.warn("⚠️ Failed to read .env file");
-  }
-  return null;
-}
-
-function migrateKeyFromShellToEnv() {
-  const home = homedir();
-  if (!home) return null;
-
-  const rcFile = (process.env.SHELL || "/bin/bash").includes("zsh")
-    ? join(home, ".zshrc")
-    : join(home, ".bashrc");
-
-  if (!existsSync(rcFile)) return null;
-
-  try {
-    let content = readFileSync(rcFile, "utf8");
-    const match = content.match(/export OPENAI_API_KEY=["']?(.+?)["']?$/m);
-    if (match) {
-      const key = match[1];
-      ensureConfigDir();
-      writeFileSync(ENV_FILE, `OPENAI_API_KEY="${key}"\n`, { mode: 0o600 });
-      content =
-        content
-          .replace(/export OPENAI_API_KEY=["']?.*?["']?\s*$/m, "")
-          .trimEnd() + "\n";
-      writeFileSync(rcFile, content);
-      console.log(`🔒 Migrated API key from ${rcFile} to ${ENV_FILE}`);
-      return key;
-    }
-  } catch (e) {
-    console.warn("⚠️ Failed to migrate API key from shell config");
-  }
-  return null;
-}
-
-function checkExistingKey() {
-  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
-
-  const fromEnvFile = loadKeyFromEnvFile();
-  if (fromEnvFile) return fromEnvFile;
-
-  const migrated = migrateKeyFromShellToEnv();
-  if (migrated) return migrated;
-
-  return null;
-}
-
-async function saveKeyToEnv(key) {
-  ensureConfigDir();
-  const envContent = `OPENAI_API_KEY="${key}"\n`;
-  writeFileSync(ENV_FILE, envContent, { mode: 0o600 });
-  process.env.OPENAI_API_KEY = key;
-
-  try {
-    const home = homedir();
-    if (home) {
-      const rcFile = (process.env.SHELL || "/bin/bash").includes("zsh")
-        ? join(home, ".zshrc")
-        : join(home, ".bashrc");
-      if (existsSync(rcFile)) {
-        let content = readFileSync(rcFile, "utf8");
-        const regex = /export OPENAI_API_KEY=["']?.*?["']?\s*$/m;
-        if (regex.test(content)) {
-          content = content.replace(regex, "").trimEnd() + "\n";
-          writeFileSync(rcFile, content);
-          console.log(`🧹 Removed API key from ${rcFile}`);
-        }
-      }
-    }
-  } catch (e) {}
-
-  console.log(`✅ API key saved securely to ${ENV_FILE}`);
-}
-
-function ensureSecureKeyStorage() {
-  if (existsSync(ENV_FILE)) return;
-
-  const key = process.env.OPENAI_API_KEY || migrateKeyFromShellToEnv();
-
-  if (key) {
-    ensureConfigDir();
-    const envContent = `OPENAI_API_KEY="${key}"\n`;
-    writeFileSync(ENV_FILE, envContent, { mode: 0o600 });
-    process.env.OPENAI_API_KEY = key;
-    console.log(`🔒 API key secured to ${ENV_FILE}`);
-  }
-}
-
-function loadTokenUsage() {
-  const usageFile = join(CONFIG_DIR, "token_usage.json");
-  try {
-    if (existsSync(usageFile)) {
-      const data = JSON.parse(readFileSync(usageFile, "utf8"));
-      const today = new Date().toISOString().split("T")[0];
-      if (data.date === today) {
-        return data.models || {};
-      }
-    }
-  } catch (e) {
-    console.warn("⚠️ Failed to load token usage");
-  }
-  return {};
 }
 
 function getManagedProjects() {
@@ -337,19 +210,6 @@ function setGitHooksPath() {
 function unsetGitHooksPath() {
   spawnSync("git", ["config", "--unset", "core.hooksPath"], {
     stdio: "ignore",
-  });
-}
-
-async function askForKey() {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise((resolve) => {
-    rl.question("Enter your OPENAI_API_KEY: ", (key) => {
-      rl.close();
-      resolve(key.trim());
-    });
   });
 }
 
@@ -672,12 +532,14 @@ async function configInteractive() {
   while (true) {
     const mainAction = await promptSelect(
       [
-        { name: "🔑 API Key", value: "key" },
-        { name: "🧠 Models", value: "models" },
         { name: "📂 Projects & Templates", value: "projects-templates" },
         {
           name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
           value: "coauthor",
+        },
+        {
+          name: `📈 Auto-bump version: ${config.bumpVersion ? "enabled" : "disabled"}`,
+          value: "bump",
         },
         { name: "✅ Save & exit", value: "exit" },
       ],
@@ -686,92 +548,6 @@ async function configInteractive() {
 
     if (mainAction === "exit") break;
 
-    if (mainAction === "key") {
-      const keyAction = await promptSelect(
-        [
-          { name: "👁️ View current key", value: "view" },
-          { name: "✏️ Edit key", value: "edit" },
-          { name: "⬅️ Back", value: "back" },
-        ],
-        "API Key",
-      );
-
-      if (keyAction === "view") {
-        const current = checkExistingKey();
-        if (current) {
-          console.log(
-            `\n🔑 Current: ${current.substring(0, 6)}...${current.slice(-4)}\n`,
-          );
-        } else {
-          console.log("\n❌ No API key found.\n");
-        }
-      } else if (keyAction === "edit") {
-        const key = await askForKey();
-        await saveKeyToEnv(key);
-        console.log("✅ Key updated.\n");
-      }
-    }
-
-    if (mainAction === "models") {
-      const modelAction = await promptSelect(
-        [
-          { name: "📊 Show models & token usage", value: "limits" },
-          { name: "⚙️ Set primary model", value: "set" },
-          { name: "📋 Show current queue", value: "queue" },
-          { name: "⬅️ Back", value: "back" },
-        ],
-        "Models",
-      );
-
-      if (modelAction === "limits") {
-        const usage = loadTokenUsage();
-        const today = new Date().toISOString().split("T")[0];
-        const DAILY_QUOTA = 500_000;
-
-        console.log(
-          `\n📊 Token usage for ${today} (quota: ${DAILY_QUOTA.toLocaleString()} tokens)\n`,
-        );
-
-        const allModels = [
-          ...new Set([...config.modelQueue, ...SMART_TO_SIMPLE_MODELS]),
-        ];
-        const rows = allModels.map((model) => {
-          const used = usage[model] || 0;
-          const remaining = Math.max(0, DAILY_QUOTA - used);
-          const pct = ((used / DAILY_QUOTA) * 100).toFixed(1);
-          return {
-            Model: model,
-            Used: used.toLocaleString(),
-            Remaining: remaining.toLocaleString(),
-            "%": pct,
-          };
-        });
-
-        rows.sort((a, b) => parseFloat(b["%"]) - parseFloat(a["%"]));
-        console.table(rows);
-        console.log("");
-      }
-
-      if (modelAction === "queue") {
-        console.log("\n📋 Current model queue:");
-        config.modelQueue.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
-        console.log("");
-      }
-
-      if (modelAction === "set") {
-        const primary = await promptSelect(
-          SMART_TO_SIMPLE_MODELS.map((m) => ({ name: m, value: m })),
-          "Select primary model:",
-        );
-        const idx = SMART_TO_SIMPLE_MODELS.indexOf(primary);
-        config.modelQueue = [primary, ...SMART_TO_SIMPLE_MODELS.slice(idx + 1)];
-        saveConfig(config);
-        console.log("\n✅ Queue updated. New order:");
-        config.modelQueue.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
-        console.log("");
-      }
-    }
-
     if (mainAction === "coauthor") {
       config.coauthor = !config.coauthor;
       saveConfig(config);
@@ -779,6 +555,16 @@ async function configInteractive() {
         config.coauthor
           ? "✅ Co-author enabled.\n"
           : "✅ Co-author disabled.\n",
+      );
+    }
+
+    if (mainAction === "bump") {
+      config.bumpVersion = !config.bumpVersion;
+      saveConfig(config);
+      console.log(
+        config.bumpVersion
+          ? "✅ Auto-bump enabled. The hook bumps package.json / Cargo.toml / pyproject.toml on each commit:\n   feat → minor, ! or BREAKING CHANGE → major, anything else → patch.\n"
+          : "✅ Auto-bump disabled.\n",
       );
     }
 
@@ -832,8 +618,6 @@ async function install() {
   }
 
   installPythonDeps();
-  const key = checkExistingKey() || (await askForKey());
-  await saveKeyToEnv(key);
 
   const githooksDir = join(process.cwd(), ".githooks");
   if (!existsSync(githooksDir)) mkdirSync(githooksDir, { recursive: true });
@@ -917,19 +701,7 @@ function showStatus() {
 
   const commitignoreExists = existsSync(commitignorePath);
 
-  const hasApiKey = !!checkExistingKey();
-
   const templateName = getTemplateForProject(root) || "—";
-
-  const config = loadConfig();
-  const firstModel = config.modelQueue[0] || "—";
-  let quotaInfo = "—";
-  if (firstModel !== "—") {
-    const usage = loadTokenUsage();
-    const used = usage[firstModel] || 0;
-    const remaining = Math.max(0, 500_000 - used);
-    quotaInfo = `${remaining.toLocaleString()} tokens`;
-  }
 
   console.log("\n🔍 NeuroCommit Status\n");
   console.log(`📁 Git root:       ${root}`);
@@ -942,9 +714,10 @@ function showStatus() {
   console.log(
     `📄 .commitignore:   ${commitignoreExists ? "✅ exists" : "⚠️ missing"}`,
   );
-  console.log(`🔑 API key:         ${hasApiKey ? "✅ found" : "❌ not found"}`);
+  console.log(`🌐 Provider:        apifreellm.com (no API key required)`);
+  const cfg = loadConfig();
+  console.log(`📈 Auto-bump:       ${cfg.bumpVersion ? "✅ enabled" : "— disabled"}`);
   console.log(`🎨 Template:        ${templateName}`);
-  console.log(`📊 Quota (next):    ${quotaInfo}`);
   console.log("");
 }
 
