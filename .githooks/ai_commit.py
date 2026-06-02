@@ -314,16 +314,21 @@ def _clean_llm_response(text: str) -> str:
 
 
 def _spinner(stop_event, prefix=""):
-    chars = ["▰▱▱▱▱▱▱", "▱▰▱▱▱▱▱", "▱▱▰▱▱▱▱", "▱▱▱▰▱▱▱", "▱▱▱▱▰▱▱", "▱▱▱▱▱▰▱", "▱▱▱▱▱▱▰", "▱▱▱▱▱▰▱", "▱▱▱▱▰▱▱", "▱▱▱▰▱▱▱", "▱▱▰▱▱▱▱", "▱▰▱▱▱▱▱"]
+    bar = ["[#.......]", "[##......]", "[###.....]", "[####....]",
+           "[#####...]", "[######..]", "[#######.]", "[########]",
+           "[.#######]", "[..######]", "[...#####]", "[....####]",
+           "[.....###]", "[......##]", "[.......#]", "[........]"]
     i = 0
-    sys.stdout.write(f"\r{prefix}")
+    term_width = 50
+    sys.stdout.write(f"\r{prefix.ljust(term_width - len(prefix))}")
     sys.stdout.flush()
     while not stop_event.is_set():
-        sys.stdout.write(f"\r{prefix}{chars[i % len(chars)]}")
+        out = f"\r{prefix}{bar[i % len(bar)]}".ljust(term_width)
+        sys.stdout.write(out)
         sys.stdout.flush()
         i += 1
-        time.sleep(0.08)
-    sys.stdout.write(f"\r{' ' * 40}\r")
+        time.sleep(0.07)
+    sys.stdout.write("\r" + " " * term_width + "\r")
     sys.stdout.flush()
 
 
