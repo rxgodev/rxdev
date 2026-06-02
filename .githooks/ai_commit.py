@@ -255,40 +255,50 @@ def call_apifreellm(messages):
 
 
 def _clean_llm_response(text: str) -> str:
+    text = re.sub(r"\*{1,2}", "", text)
+    text = re.sub(r"`{1,3}", "", text)
+    text = re.sub(r"#+\s*", "", text)
+
     lines = text.strip().split("\n")
-    result = []
+    skip_headers = {"commit message", "response", "output", "result", "explanation",
+                    "changes", "summary", "diff", "analysis"}
 
+    candidates = []
     for line in lines:
-        stripped = line.strip()
-        stripped = re.sub(r"^\*{1,2}\s*", "", stripped)
-        stripped = re.sub(r"\*{1,2}$", "", stripped)
-        stripped = stripped.strip()
+        stripped = line.strip().lower()
+        if not stripped:
+            continue
+        if any(stripped.startswith(h) and ":" in stripped for h in skip_headers):
+            continue
+        if stripped.startswith("- ") and ":" in stripped:
+            continue
+        candidates.append(line.strip())
 
-        if re.match(r"^[a-z]+(\([^)]*\))?!?:\s", stripped):
-            result.append(stripped)
-        elif stripped and result:
-            result.append(stripped)
+    full = "\n".join(candidates).strip()
+    full = re.sub(r"^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", lambda m: m.group(1), full, flags=re.IGNORECASE)
 
-    if result:
-        clean = "\n".join(result)
-        if re.match(r"^[a-z]+(\([^)]*\))?!?:\s", clean):
-            return clean
-
-    backtick_match = re.search(r"`([^`]+)`", text)
-    if backtick_match:
-        candidate = backtick_match.group(1).strip()
-        if re.match(r"^[a-z]+(\([^)]*\))?!?:\s", candidate):
-            return candidate
-
-    match = re.search(
-        r"(?:(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)"
-        r"(?:\([^)]*\))?!?:\s.+?)(?:\n|$)",
-        text,
+    cc_match = re.search(
+        r"([a-z]+(?:\([^)]*\))?!?:\s.+?)(?:\n\n|\n(?![a-z]+[:(])|$)",
+        full,
+        re.DOTALL,
     )
-    if match:
-        return match.group(0).strip()
+    if cc_match:
+        msg = cc_match.group(1).strip().split("\n")[0]
+        if len(msg) > 150:
+            msg = msg[:147] + "..."
+        return msg
 
-    return text
+    first = candidates[0] if candidates else text.strip()
+    first = re.sub(r"^[^a-z]*", "", first)
+    first = first.strip().rstrip(".")
+
+    if not re.match(r"^[a-z]+(?:\([^)]*\))?!?:\s", first):
+        first = f"chore: {first}"
+
+    if len(first) > 150:
+        first = first[:147] + "..."
+
+    return first
 
 
 def generate_commit_message(diff):
