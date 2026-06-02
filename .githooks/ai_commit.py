@@ -313,22 +313,18 @@ def _clean_llm_response(text: str) -> str:
     return first
 
 
-def _spinner(stop_event, prefix=""):
+def _spinner(stop_event, text=""):
     bar = ["[#.......]", "[##......]", "[###.....]", "[####....]",
            "[#####...]", "[######..]", "[#######.]", "[########]",
            "[.#######]", "[..######]", "[...#####]", "[....####]",
            "[.....###]", "[......##]", "[.......#]", "[........]"]
     i = 0
-    term_width = 50
-    sys.stdout.write(f"\r{prefix.ljust(term_width - len(prefix))}")
-    sys.stdout.flush()
     while not stop_event.is_set():
-        out = f"\r{prefix}{bar[i % len(bar)]}".ljust(term_width)
-        sys.stdout.write(out)
+        sys.stdout.write(f"\r\x1b[K{bar[i % len(bar)]} {text}")
         sys.stdout.flush()
         i += 1
         time.sleep(0.07)
-    sys.stdout.write("\r" + " " * term_width + "\r")
+    sys.stdout.write("\r" + " " * (len(text) + 20) + "\r")
     sys.stdout.flush()
 
 
@@ -344,7 +340,9 @@ def generate_commit_message(diff):
         try:
             log_message(f"Calling apifreellm.com (attempt {attempt}/{MAX_ATTEMPTS})")
             stop_spinner = threading.Event()
-            spinner_thread = threading.Thread(target=_spinner, args=(stop_spinner, "  generating  "))
+            spinner_thread = threading.Thread(
+                target=_spinner, args=(stop_spinner, "Comment generation started")
+            )
             spinner_thread.daemon = True
             spinner_thread.start()
             try:
@@ -364,6 +362,7 @@ def generate_commit_message(diff):
                 continue
 
             log_message(f"SUCCESS on attempt {attempt}")
+            print("[+] Comment generation started")
             return message
 
         except Exception as e:
@@ -371,6 +370,7 @@ def generate_commit_message(diff):
             log_message(f"FAILURE on attempt {attempt}: {e}")
 
     log_message(f"All {MAX_ATTEMPTS} attempts failed, using fallback generator")
+    print("[+] Comment generation started")
     return None
 
 
@@ -1113,11 +1113,9 @@ def main():
         sys.exit(0)
 
     log_message(f"Diff found (length: {len(diff)}).")
-    print("[+] Comment generation started")
     message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
 
     if message is None:
-        print("[+] AI unavailable, using fallback generator")
         message = generate_fallback_message(diff[:MAX_DIFF_LENGTH])
         log_message(f"Fallback message generated ({len(message)} chars)")
 
