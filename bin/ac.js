@@ -800,16 +800,18 @@ async function quickFlow() {
     return o;
   };
 
-  const contentBox = (content) => {
-    const rawLines = content.split("\n");
-    const maxContentW = Math.max(...rawLines.map((l) => stripAnsi(l).length));
+  const contentBox = (content, title) => {
+    const rawLines = content.trimEnd().split("\n");
+    const maxContentW = rawLines.length > 0
+      ? Math.max(...rawLines.map((l) => stripAnsi(l).length))
+      : 0;
     const cols = (process.stdout.columns || 100) - 4;
     const w = Math.max(Math.min(maxContentW + 4, Math.min(cols, 100)), 30);
     const innerW = w - 4;
 
     const lines = [];
     for (const line of rawLines) {
-      if (stripAnsi(line).length > innerW) {
+      if (stripAnsi(line).length > innerW && innerW > 20) {
         for (let i = 0; i < line.length; i += innerW) {
           lines.push(line.slice(i, i + innerW));
         }
@@ -820,7 +822,15 @@ async function quickFlow() {
 
     const tb = "─".repeat(w);
     const pad = "│" + " ".repeat(w) + "│";
-    let o = "╭" + tb + "╮\n" + pad + "\n";
+    let o;
+    if (title) {
+      const tLen = stripAnsi(title).length;
+      const dash = "─".repeat(Math.max(0, w - tLen - 3));
+      o = "╭─ " + title + " " + dash + "╮\n";
+    } else {
+      o = "╭" + tb + "╮\n";
+    }
+    o += pad + "\n";
     for (const l of lines) {
       const cl = stripAnsi(l).length;
       o += "│  " + l + " ".repeat(Math.max(0, w - cl - 2)) + "│\n";
@@ -832,7 +842,7 @@ async function quickFlow() {
   const showCommitReview = () => {
     process.stdout.write("\x1b[2J\x1b[H");
     console.log(clearAndHeader([`${bold}🚀 NeuroCommit QuickFlow®${reset}`]));
-    console.log(`\n${contentBox(currentMessage)}\n`);
+    console.log(`\n${contentBox(currentMessage, `${bold}📄 Commit Message${reset}`)}\n`);
   };
 
   const nextStep = () => {
@@ -880,11 +890,17 @@ async function quickFlow() {
   //  STEP 2 — Commit Message
   // ================================================================
 
+  let commitInterrupted = false;
+
   const makeCommit = () => {
-    return spawnSync("git", ["commit", "--quiet"], {
-      stdio: "inherit",
+    const result = spawnSync("git", ["commit", "--quiet"], {
+      stdio: ["inherit", "inherit", "pipe"],
       env: { ...process.env, GIT_EDITOR: "true" },
     });
+    if (result.status === null || result.error) {
+      commitInterrupted = true;
+    }
+    return result;
   };
 
   const makeSummary = () => {
@@ -909,6 +925,11 @@ async function quickFlow() {
   ])}`);
 
   let commitResult = makeCommit();
+
+  if (commitInterrupted) {
+    console.log(`\n  ↪️  Cancelled`);
+    process.exit(130);
+  }
 
   if (commitResult.status !== 0) {
     console.error(`\n  ❌ Failed to generate commit message`);
@@ -1013,7 +1034,12 @@ async function quickFlow() {
         `${dim}AI is re-analyzing your changes...${reset}`,
       ])}`);
 
+      commitInterrupted = false;
       commitResult = makeCommit();
+      if (commitInterrupted) {
+        console.log(`\n  ↪️  Cancelled`);
+        process.exit(130);
+      }
       if (commitResult.status !== 0) {
         console.error(`\n  ❌ Failed to regenerate`);
         process.exit(1);
@@ -1069,32 +1095,27 @@ async function selfUpdate() {
   const DIM = "\x1b[38;5;244m";
   const RST = "\x1b[0m";
 
-  const p = JSON.parse(
-    readFileSync(join(__dirname, "../package.json"), "utf8"),
-  );
-  const u = updateNotifier({ pkg: p, updateCheckInterval: 0 }).update;
-
-  if (!u || u.latest === p.version) {
-    console.log(`  ${GREEN}✅ Already up-to-date (v${p.version})${RST}`);
+  if (!update || update.latest === pkg.version) {
+    console.log(`  ${GREEN}✅ Already up-to-date (v${pkg.version})${RST}`);
     return;
   }
 
-  console.log(`\n  Updating ${DIM}v${p.version}${RST} → ${GREEN}v${u.latest}${RST}...\n`);
+  console.log(`\n  Updating ${DIM}v${pkg.version}${RST} → ${GREEN}v${update.latest}${RST}...\n`);
 
   const pm = process.env.npm_config_user_agent?.includes("pnpm")
     ? "pnpm"
     : "npm";
 
   const result = spawnSync(pm, [
-    "add", "-g", `@rxgodev/neuro-commit@${u.latest}`,
+    "add", "-g", `@rxgodev/neuro-commit@${update.latest}`,
   ], { stdio: "inherit" });
 
   if (result.status !== 0) {
-    console.error(`\n  ❌ Update failed. Try manually:\n     ${pm} add -g @rxgodev/neuro-commit@${u.latest}`);
+    console.error(`\n  ❌ Update failed. Try manually:\n     ${pm} add -g @rxgodev/neuro-commit@${update.latest}`);
     process.exit(1);
   }
 
-  console.log(`  ${GREEN}✅ Updated to v${u.latest}${RST}\n`);
+  console.log(`  ${GREEN}✅ Updated to v${update.latest}${RST}\n`);
 }
 
 function showHelp() {
@@ -1106,7 +1127,7 @@ ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
 ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}init${resetColor}          Install AI commit hook
   ${boldCyan}config${resetColor}        Configure key, models, co-author, projects & templates
-  ${boldCyan}go${resetColor}            Start quick flow for commiting
+  ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
   ${boldCyan}retry${resetColor}         Revert last commit and regenerate message
