@@ -764,7 +764,7 @@ const resetColor = "\x1b[0m";
 
 async function quickFlow() {
   const bold = "\x1b[1m";
-  const dim = "\x1b[38;5;16m";
+  const dim = "\x1b[38;5;244m";
   const reset = "\x1b[0m";
   const green = "\x1b[32m";
   const cyan = "\x1b[36m";
@@ -772,7 +772,7 @@ async function quickFlow() {
 
   const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
-  const centeredBox = (lines) => {
+  const clearAndHeader = (lines) => {
     const w = Math.max(...lines.map((l) => stripAnsi(l).length)) + 4;
     const t = "╭" + "─".repeat(w) + "╮";
     const b = "╰" + "─".repeat(w) + "╯";
@@ -790,18 +790,18 @@ async function quickFlow() {
   const sectionBox = (title, content) => {
     const tLen = stripAnsi(title).length;
     const innerW = Math.max(
-      50,
+      54,
       tLen + 6,
-      ...content.map((l) => stripAnsi(l).length + 2),
+      ...content.map((l) => stripAnsi(l).length + 4),
     );
-    const dash = "─".repeat(Math.max(0, innerW - tLen - 5));
+    const dash = "─".repeat(Math.max(0, innerW - tLen - 3));
     const top = "╭─ " + title + " " + dash + "╮";
     const bottom = "╰" + "─".repeat(innerW) + "╯";
     const pad = "│" + " ".repeat(innerW) + "│";
     let o = top + "\n" + pad + "\n";
     for (const l of content) {
       const cl = stripAnsi(l).length;
-      o += "│ " + l + " ".repeat(innerW - cl - 1) + "│\n";
+      o += "│  " + l + " ".repeat(Math.max(0, innerW - cl - 2)) + "│\n";
     }
     o += pad + "\n" + bottom;
     return o;
@@ -809,34 +809,44 @@ async function quickFlow() {
 
   const contentBox = (content) => {
     const lines = content.split("\n");
-    const maxW = Math.min(
-      76,
-      Math.max(...lines.map((l) => stripAnsi(l).length)),
-    );
-    const w = Math.max(maxW + 4, 4);
+    const maxW = lines.length > 0
+      ? Math.min(76, Math.max(...lines.map((l) => stripAnsi(l).length)))
+      : 0;
+    const w = Math.max(maxW + 4, 30);
     const tb = "─".repeat(w);
-    let o = "╭" + tb + "╮\n";
+    const pad = "│" + " ".repeat(w) + "│";
+    let o = "╭" + tb + "╮\n" + pad + "\n";
     for (const l of lines) {
       const cl = stripAnsi(l).length;
-      o += "│ " + l + " ".repeat(Math.max(0, w - cl - 2)) + "│\n";
+      o += "│  " + l + " ".repeat(Math.max(0, w - cl - 2)) + "│\n";
     }
-    o += "╰" + tb + "╯";
+    o += pad + "\n╰" + tb + "╯";
     return o;
   };
 
-  console.log(`\n${centeredBox([`${bold}🚀 NeuroCommit QuickFlow®${reset}`])}\n`);
+  const nextStep = () => {
+    process.stdout.write("\x1b[2J\x1b[H");
+    console.log(clearAndHeader([`${bold}🚀 NeuroCommit QuickFlow®${reset}`]));
+  };
+
+  // ================================================================
+  //  STEP 1 — Stage
+  // ================================================================
+  nextStep();
 
   installPythonDeps();
 
-  // === 1. git add ===
-  console.log(`\n${sectionBox(`${bold}📂 Stage Changes${reset}`, [`${dim}Specify path to add (default: .)${reset}`])}`);
+  console.log(`\n${sectionBox(`${bold}📂 Stage Changes${reset}`, [
+    `Specify path to stage  ${dim}(default: .)${reset}`,
+  ])}`);
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
   const addPath = await new Promise((resolve) => {
-    rl.question(`${dim}git add ${reset}`, (answer) => {
+    rl.question(`\n  ${dim}git add${reset} `, (answer) => {
       rl.close();
       resolve(answer.trim() || ".");
     });
@@ -844,12 +854,21 @@ async function quickFlow() {
 
   const addResult = spawnSync("git", ["add", addPath], { stdio: "pipe" });
   if (addResult.status !== 0) {
-    console.error(`❌ Failed to stage changes.`);
+    console.error(`\n  ❌ Failed to stage changes.`);
     process.exit(1);
   }
-  console.log(`  ${green}✅ Staged${reset}\n`);
 
-  // === Вспомогательная функция: сделать коммит через хук ===
+  const stagedCount = spawnSync(
+    "git", ["diff", "--cached", "--numstat"],
+    { encoding: "utf8" },
+  ).stdout.trim().split("\n").filter(Boolean).length;
+
+  console.log(`\n  ${green}✅ ${stagedCount} file(s) staged${reset}\n`);
+
+  // ================================================================
+  //  STEP 2 — Commit Message
+  // ================================================================
+
   const makeCommit = () => {
     return spawnSync("git", ["commit", "--quiet"], {
       stdio: "inherit",
@@ -872,18 +891,21 @@ async function quickFlow() {
     return `${cyan}${bold}[${branch}: ${hash}]${reset} ${stat}`;
   };
 
-  // === 2. Первый коммит ===
-  console.log(`\n${sectionBox(`${bold}💬 Generating Commit Message${reset}`, [`${dim}AI is analyzing your changes...${reset}`])}`);
+  nextStep();
+
+  console.log(`\n${sectionBox(`${bold}💬 Generating Commit Message${reset}`, [
+    `${dim}AI is analyzing your staged changes...${reset}`,
+  ])}`);
+
   let commitResult = makeCommit();
 
   if (commitResult.status !== 0) {
-    console.error(`\n❌ Failed to generate commit message`);
+    console.error(`\n  ❌ Failed to generate commit message`);
     process.exit(1);
   }
 
   console.log(`\n  ${makeSummary()}\n`);
 
-  // === Читаем сгенерированное сообщение ===
   const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
   let currentMessage = readFileSync(commitMsgFile, "utf8").trim();
 
@@ -894,13 +916,15 @@ async function quickFlow() {
     .trim();
 
   if (!currentMessage) {
-    console.error("\n❌ Empty commit message");
+    console.error("\n  ❌ Empty commit message");
     process.exit(1);
   }
 
-  // === Цикл: показ + выбор ===
+  // ================================================================
+  //  LOOP — Review / Edit / Regenerate / Cancel
+  // ================================================================
   while (true) {
-    console.log(`\n${contentBox(currentMessage)}`);
+    console.log(`\n${contentBox(currentMessage)}\n`);
 
     const inquirer = await import("inquirer");
     const { action } = await inquirer.default.prompt([
@@ -909,10 +933,10 @@ async function quickFlow() {
         name: "action",
         message: "What next?",
         choices: [
-          { name: `${green}✅ Push${reset}`, value: "push" },
-          { name: `${cyan}✏️  Edit message${reset}`, value: "edit" },
-          { name: `${yellow}🔄 Regenerate${reset}`, value: "regenerate" },
-          { name: `${bold}❌ Cancel${reset}`, value: "cancel" },
+          { name: `${green}✅  Push${reset}`, value: "push" },
+          { name: `${cyan}✏️   Edit message${reset}`, value: "edit" },
+          { name: `${yellow}🔄  Regenerate${reset}`, value: "regenerate" },
+          { name: `${bold}❌  Cancel${reset}`, value: "cancel" },
         ],
         default: "push",
       },
@@ -964,20 +988,26 @@ async function quickFlow() {
         },
       );
       if (amend.status !== 0) {
-        console.error(`\n❌ Amend failed`);
+        console.error(`\n  ❌ Amend failed`);
         process.exit(1);
       }
       currentMessage = edited;
-      console.log(`\n${green}✅ Message updated${reset}`);
+      console.log(`\n  ${green}✅ Message updated${reset}`);
       continue;
     }
 
     if (action === "regenerate") {
       spawnSync("git", ["reset", "--soft", "HEAD~1"], { stdio: "pipe" });
-      console.log(`\n${yellow}↩️  Regenerating...${reset}`);
+
+      nextStep();
+
+      console.log(`\n${sectionBox(`${bold}💬 Regenerating Commit Message${reset}`, [
+        `${dim}AI is re-analyzing your changes...${reset}`,
+      ])}`);
+
       commitResult = makeCommit();
       if (commitResult.status !== 0) {
-        console.error(`\n❌ Failed to regenerate`);
+        console.error(`\n  ❌ Failed to regenerate`);
         process.exit(1);
       }
       currentMessage = readFileSync(commitMsgFile, "utf8")
@@ -986,21 +1016,30 @@ async function quickFlow() {
         .join("\n")
         .trim();
       if (!currentMessage) {
-        console.error("\n❌ Empty message after regeneration");
+        console.error("\n  ❌ Empty message after regeneration");
         process.exit(1);
       }
+      console.log(`\n  ${makeSummary()}\n`);
       continue;
     }
   }
 
-  console.log(`\n${sectionBox(`${bold}⬆️  Push Changes${reset}`, [`${dim}Specify remote and branch (default: origin main)${reset}`])}`);
+  // ================================================================
+  //  STEP 3 — Push
+  // ================================================================
+  nextStep();
+
+  console.log(`\n${sectionBox(`${bold}⬆️  Push Changes${reset}`, [
+    `Specify remote and branch  ${dim}(default: origin main)${reset}`,
+  ])}`);
+
   const rl3 = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
   const pushPath = await new Promise((resolve) => {
-    rl3.question(`${dim}git push ${reset}`, (answer) => {
+    rl3.question(`\n  ${dim}git push${reset} `, (answer) => {
       rl3.close();
       resolve(answer.trim() || "origin main");
     });
@@ -1018,7 +1057,7 @@ async function quickFlow() {
 }
 
 function showHelp() {
-  console.log(`${boldCyan}NeuroCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;16m"}(v${pkg.version})${resetColor}
+  console.log(`${boldCyan}NeuroCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
 ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
   ${boldCyan}qq${resetColor} <command> [options]
