@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import textwrap
+import threading
 import time
 import traceback
 import urllib.error
@@ -223,16 +224,7 @@ def call_apifreellm(messages):
 
     try:
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as response:
-            raw = b""
-            while True:
-                chunk = response.read(4096)
-                if not chunk:
-                    break
-                raw += chunk
-                text_chunk = chunk.decode("utf-8", errors="replace")
-                sys.stdout.write(text_chunk)
-                sys.stdout.flush()
-            print()
+            raw = response.read()
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         if e.code == 429:
@@ -263,6 +255,15 @@ def call_apifreellm(messages):
     return text
 
 
+def _normalize_type(text: str) -> str:
+    return re.sub(
+        r"^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert):",
+        lambda m: m.group(1).lower() + ":",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+
 def _clean_llm_response(text: str) -> str:
     text = re.sub(r"\*{1,2}", "", text)
     text = re.sub(r"`{1,3}", "", text)
@@ -274,17 +275,17 @@ def _clean_llm_response(text: str) -> str:
 
     candidates = []
     for line in lines:
-        stripped = line.strip().lower()
-        if not stripped:
+        lowered = line.strip().lower()
+        if not lowered:
             continue
-        if any(stripped.startswith(h) and ":" in stripped for h in skip_headers):
+        if any(lowered.startswith(h) and ":" in lowered for h in skip_headers):
             continue
-        if stripped.startswith("- ") and ":" in stripped:
+        if lowered.startswith("- ") and ":" in lowered:
             continue
         candidates.append(line.strip())
 
     full = "\n".join(candidates).strip()
-    full = re.sub(r"^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", lambda m: m.group(1), full, flags=re.IGNORECASE)
+    full = _normalize_type(full)
 
     cc_match = re.search(
         r"((?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)"
@@ -299,16 +300,31 @@ def _clean_llm_response(text: str) -> str:
         return msg
 
     first = candidates[0] if candidates else text.strip()
-    first = re.sub(r"^[^a-z]*", "", first)
-    first = first.strip().rstrip(".")
+    first = first.strip()
+    first = _normalize_type(first)
+    first = first.rstrip(".")
 
-    if not re.match(r"^[a-z]+(?:\([^)]*\))?!?:\s", first):
+    if not re.match(r"^(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", first):
         first = f"chore: {first}"
 
     if len(first) > 150:
         first = first[:147] + "..."
 
     return first
+
+
+def _spinner(stop_event, prefix=""):
+    chars = ["▰▱▱▱▱▱▱", "▱▰▱▱▱▱▱", "▱▱▰▱▱▱▱", "▱▱▱▰▱▱▱", "▱▱▱▱▰▱▱", "▱▱▱▱▱▰▱", "▱▱▱▱▱▱▰", "▱▱▱▱▱▰▱", "▱▱▱▱▰▱▱", "▱▱▱▰▱▱▱", "▱▱▰▱▱▱▱", "▱▰▱▱▱▱▱"]
+    i = 0
+    sys.stdout.write(f"\r{prefix}")
+    sys.stdout.flush()
+    while not stop_event.is_set():
+        sys.stdout.write(f"\r{prefix}{chars[i % len(chars)]}")
+        sys.stdout.flush()
+        i += 1
+        time.sleep(0.08)
+    sys.stdout.write(f"\r{' ' * 40}\r")
+    sys.stdout.flush()
 
 
 def generate_commit_message(diff):
@@ -322,7 +338,15 @@ def generate_commit_message(diff):
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             log_message(f"Calling apifreellm.com (attempt {attempt}/{MAX_ATTEMPTS})")
-            message = call_apifreellm(messages)
+            stop_spinner = threading.Event()
+            spinner_thread = threading.Thread(target=_spinner, args=(stop_spinner, "  generating  "))
+            spinner_thread.daemon = True
+            spinner_thread.start()
+            try:
+                message = call_apifreellm(messages)
+            finally:
+                stop_spinner.set()
+                spinner_thread.join(timeout=2)
 
             if not message or message.startswith("#") or len(message) < 10:
                 log_message(f"Response too short or invalid: {repr(message)}")
