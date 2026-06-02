@@ -921,7 +921,7 @@ def bump_project_version(kind: str, message: str = "") -> list[tuple]:
     return bumps
 
 
-def _amend_bump(bumps: list[tuple], repo_root: Path) -> None:
+def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None:
     if not bumps or os.environ.get("NEURO_COMMIT_AMENDING") == "1":
         return
 
@@ -932,13 +932,16 @@ def _amend_bump(bumps: list[tuple], repo_root: Path) -> None:
         
         repo_root = {str(repo_root)!r}
         bumps = {json.dumps(bumps)}
+        old_head = {old_head!r}
         
-        old_head = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, encoding="utf-8", errors="ignore",
-            cwd=repo_root,
-        ).stdout.strip()
+        if not old_head:
+            old_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, encoding="utf-8", errors="ignore",
+                cwd=repo_root,
+            ).stdout.strip()
         
+        committed = False
         for _ in range(300):
             time.sleep(0.1)
             new_head = subprocess.run(
@@ -947,6 +950,7 @@ def _amend_bump(bumps: list[tuple], repo_root: Path) -> None:
                 cwd=repo_root,
             ).stdout.strip()
             if new_head and new_head != old_head:
+                committed = True
                 break
         
         for rel_path, _, new_version in bumps:
@@ -958,12 +962,15 @@ def _amend_bump(bumps: list[tuple], repo_root: Path) -> None:
             )
         
         env = {{**os.environ, "GIT_EDITOR": "true", "NEURO_COMMIT_AMENDING": "1"}}
-        subprocess.run(
+        amend = subprocess.run(
             ["git", "commit", "--amend", "--no-edit"],
             capture_output=True, text=True, encoding="utf-8", errors="ignore",
             cwd=repo_root,
             env=env,
         )
+        if amend.returncode == 0:
+            with open(r"{repo_root / 'ai_commit_debug.log'}", "a", encoding="utf-8") as f:
+                f.write("amend: commit amended with bumped version\\n")
     """)
 
     subprocess.Popen(
@@ -1050,7 +1057,11 @@ def main():
     if bumps:
         repo_root = find_repo_root()
         if repo_root:
-            _amend_bump(bumps, repo_root)
+            old_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, encoding="utf-8", errors="ignore",
+            ).stdout.strip()
+            _amend_bump(bumps, repo_root, old_head)
 
     log_message("--- HOOK FINISHED ---\n")
 
