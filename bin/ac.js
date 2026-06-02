@@ -794,10 +794,23 @@ async function quickFlow() {
 
   // === Вспомогательная функция: сделать коммит через хук ===
   const makeCommit = () => {
-    return spawnSync("git", ["commit"], {
+    return spawnSync("git", ["commit", "--quiet"], {
       stdio: "inherit",
       env: { ...process.env, GIT_EDITOR: "true" },
     });
+  };
+
+  const makeSummary = () => {
+    const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      encoding: "utf8",
+    }).stdout.trim();
+    const hash = spawnSync("git", ["rev-parse", "--short", "HEAD"], {
+      encoding: "utf8",
+    }).stdout.trim();
+    const stat = spawnSync("git", [
+      "diff-tree", "--no-commit-id", "-r", "--stat", "HEAD",
+    ], { encoding: "utf8" }).stdout.trim().replace(/\n/g, " ");
+    return `${cyan}${bold}[${branch}: ${hash}]${reset} ${stat}`;
   };
 
   // === 2. Первый коммит ===
@@ -808,6 +821,10 @@ async function quickFlow() {
     console.error(`\n❌ Failed to generate commit message`);
     process.exit(1);
   }
+
+  console.log();
+  console.log(makeSummary());
+  console.log();
 
   // === Читаем сгенерированное сообщение ===
   const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
