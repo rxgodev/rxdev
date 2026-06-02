@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import textwrap
+import time
 import traceback
 import urllib.error
 import urllib.request
@@ -234,6 +235,14 @@ def call_apifreellm(messages):
             print()
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
+        if e.code == 429:
+            try:
+                data = json.loads(body)
+                retry_after = int(data.get("retryAfter", 15))
+            except (json.JSONDecodeError, ValueError, TypeError):
+                retry_after = 15
+            log_message(f"Rate limited. Waiting {retry_after}s before retry...")
+            time.sleep(retry_after)
         raise Exception(f"HTTP {e.code}: {body}")
     except urllib.error.URLError as e:
         raise Exception(f"URL error: {e.reason}")
