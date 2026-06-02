@@ -268,7 +268,93 @@ def generate_commit_message(diff):
             last_error = str(e)
             log_message(f"FAILURE on attempt {attempt}: {e}")
 
-    return f"ERROR: apifreellm.com failed after {MAX_ATTEMPTS} attempts ({last_error})"
+    log_message(f"All {MAX_ATTEMPTS} attempts failed, using fallback generator")
+    return None
+
+
+# ============================================================
+#  FALLBACK COMMIT GENERATOR
+# ============================================================
+
+def generate_fallback_message(diff: str) -> str:
+    parsed_type = "chore"
+    parsed_scope = None
+    files = []
+    seen_scopes = set()
+
+    for line in diff.splitlines():
+        m = re.match(r"^# File: (.+)$", line)
+        if m:
+            path = m.group(1)
+            files.append(path)
+            ext = os.path.splitext(path)[1].lower()
+            ext_types = {
+                ".py": "feat" if any(kw in path.lower() for kw in ["feat", "add", "impl", "new"]) else "refactor",
+                ".js": "feat",
+                ".ts": "feat",
+                ".jsx": "feat",
+                ".tsx": "feat",
+                ".json": "config",
+                ".toml": "config",
+                ".yaml": "config",
+                ".yml": "config",
+                ".md": "docs",
+                ".css": "style",
+                ".scss": "style",
+                ".html": "feat",
+                ".test.": "test",
+                ".spec.": "test",
+                "_test": "test",
+            }
+            for pattern, ptype in ext_types.items():
+                if pattern in path.lower():
+                    if ptype not in ("config",) and (ptype != "docs" or parsed_type == "chore"):
+                        parsed_type = ptype
+                    break
+
+            dirs = path.split("/")
+            for d in dirs[:-1]:
+                if d not in ("src", "lib", "app", "tests", ".githooks") and not d.startswith("."):
+                    seen_scopes.add(d)
+
+    if seen_scopes:
+        sorted_scopes = sorted(seen_scopes, key=lambda s: -sum(1 for f in files if s in f))
+        parsed_scope = sorted_scopes[0]
+
+    type_map = {
+        "feat": "feat",
+        "fix": "fix",
+        "docs": "docs",
+        "style": "style",
+        "refactor": "refactor",
+        "test": "test",
+        "config": "chore",
+    }
+    commit_type = type_map.get(parsed_type, "chore")
+
+    short_files = [f.split("/")[-1] for f in files[:5]]
+    desc = ", ".join(short_files)
+    if len(files) > 5:
+        desc += f" and {len(files) - 5} more"
+
+    scope = f"({parsed_scope})" if parsed_scope else ""
+    subject = f"{commit_type}{scope}: update {desc}"
+
+    body_parts = []
+    dir_changes = {}
+    for f in files:
+        dir_name = os.path.dirname(f) or "."
+        dir_changes.setdefault(dir_name, []).append(f.split("/")[-1])
+
+    for directory, filenames in sorted(dir_changes.items()):
+        file_list = ", ".join(filenames[:3])
+        if len(filenames) > 3:
+            file_list += f" and {len(filenames) - 3} more"
+        body_parts.append(f"- {directory}: {file_list}")
+
+    body = "\n".join(body_parts)
+
+    return f"{subject}\n\n{body}"
 
 
 # ============================================================
@@ -912,28 +998,29 @@ def main():
     print("[+] Comment generation started")
     message = generate_commit_message(diff[:MAX_DIFF_LENGTH])
 
-    if message and not message.startswith("ERROR:"):
-        if BUMP_VERSION:
-            kind = determine_bump_kind(message)
-            bumps = bump_project_version(kind, message)
-            if bumps:
-                footer_lines = [
-                    f"Bump version ({kind}):",
-                    *(f"  {f}: {o} {n}" for f, o, n in bumps),
-                ]
-                for f, o, n in bumps:
-                    print(f"[+] Bumped {f}: {o} {n} ({kind})")
-                message += "\n\n" + "\n".join(footer_lines)
-        if ADD_COAUTHOR:
-            message += "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
-        with open(commit_msg_file, "w", encoding="utf-8") as f:
-            f.write(message)
-        log_message("Message written to commit file.")
-    else:
-        error_text = message.replace("ERROR: ", "", 1) if message else "Unknown error"
-        write_error_to_commit(commit_msg_file, error_text)
-        log_message(f"ERROR: {error_text}")
+    if message is None:
+        print("[+] AI unavailable, using fallback generator")
+        message = generate_fallback_message(diff[:MAX_DIFF_LENGTH])
+        log_message(f"Fallback message generated ({len(message)} chars)")
 
+    if BUMP_VERSION:
+        kind = determine_bump_kind(message)
+        bumps = bump_project_version(kind, message)
+        if bumps:
+            footer_lines = [
+                f"Bump version ({kind}):",
+                *(f"  {f}: {o} {n}" for f, o, n in bumps),
+            ]
+            for f, o, n in bumps:
+                print(f"[+] Bumped {f}: {o} {n} ({kind})")
+            message += "\n\n" + "\n".join(footer_lines)
+
+    if ADD_COAUTHOR:
+        message += "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
+
+    with open(commit_msg_file, "w", encoding="utf-8") as f:
+        f.write(message)
+    log_message("Message written to commit file.")
     log_message("--- HOOK FINISHED ---\n")
 
 
