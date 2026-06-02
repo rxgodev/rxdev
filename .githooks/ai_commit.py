@@ -320,7 +320,7 @@ def _spinner(stop_event, text=""):
            "[.....###]", "[......##]", "[.......#]", "[........]"]
     i = 0
     while not stop_event.is_set():
-        sys.stdout.write(f"\r\x1b[K{bar[i % len(bar)]} {text}")
+        sys.stdout.write(f"\r{bar[i % len(bar)]} {text}")
         sys.stdout.flush()
         i += 1
         time.sleep(0.07)
