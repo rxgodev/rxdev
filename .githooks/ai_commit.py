@@ -60,8 +60,17 @@ def is_valid_commit_message(msg: str) -> bool:
     description = match.group(2)
 
     valid_types = {
-        "feat", "fix", "chore", "docs", "style", "refactor",
-        "perf", "test", "build", "ci", "revert",
+        "feat",
+        "fix",
+        "chore",
+        "docs",
+        "style",
+        "refactor",
+        "perf",
+        "test",
+        "build",
+        "ci",
+        "revert",
     }
     if msg_type not in valid_types:
         return False
@@ -195,7 +204,9 @@ def get_staged_diff():
         log_message(f"Filtered diff length: {len(diff_text)}")
 
         if not diff_text and relevant_files:
-            log_message("No text diff (binary files or empty changes). Using file list.")
+            log_message(
+                "No text diff (binary files or empty changes). Using file list."
+            )
             file_list = "\n".join(f"  - {f}" for f in relevant_files)
             diff_text = f"Files changed (binary or no text diff):\n{file_list}"
 
@@ -271,8 +282,17 @@ def _clean_llm_response(text: str) -> str:
     text = re.sub(r"#+\s*", "", text)
 
     lines = text.strip().split("\n")
-    skip_headers = {"commit message", "response", "output", "result", "explanation",
-                    "changes", "summary", "diff", "analysis"}
+    skip_headers = {
+        "commit message",
+        "response",
+        "output",
+        "result",
+        "explanation",
+        "changes",
+        "summary",
+        "diff",
+        "analysis",
+    }
 
     candidates = []
     for line in lines:
@@ -305,7 +325,9 @@ def _clean_llm_response(text: str) -> str:
     first = _normalize_type(first)
     first = first.rstrip(".")
 
-    if not re.match(r"^(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", first):
+    if not re.match(
+        r"^(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", first
+    ):
         first = f"chore: {first}"
 
     if len(first) > 150:
@@ -324,10 +346,24 @@ def _write_console(msg):
 
 
 def _spinner(stop_event, text=""):
-    bar = ["[#.......]", "[##......]", "[###.....]", "[####....]",
-           "[#####...]", "[######..]", "[#######.]", "[########]",
-           "[.#######]", "[..######]", "[...#####]", "[....####]",
-           "[.....###]", "[......##]", "[.......#]", "[........]"]
+    bar = [
+        "[#.......]",
+        "[##......]",
+        "[###.....]",
+        "[####....]",
+        "[#####...]",
+        "[######..]",
+        "[#######.]",
+        "[########]",
+        "[.#######]",
+        "[..######]",
+        "[...#####]",
+        "[....####]",
+        "[.....###]",
+        "[......##]",
+        "[.......#]",
+        "[........]",
+    ]
     i = 0
     blank = " " * (len(text) + 20)
     while not stop_event.is_set():
@@ -366,7 +402,9 @@ def generate_commit_message(diff):
                 continue
 
             if not is_valid_commit_message(message):
-                log_message(f"Validation failed (attempt {attempt}): {repr(message[:120])}")
+                log_message(
+                    f"Validation failed (attempt {attempt}): {repr(message[:120])}"
+                )
                 last_error = "Response did not match Conventional Commits format"
                 continue
 
@@ -387,6 +425,7 @@ def generate_commit_message(diff):
 #  FALLBACK COMMIT GENERATOR
 # ============================================================
 
+
 def generate_fallback_message(diff: str) -> str:
     parsed_type = "chore"
     parsed_scope = None
@@ -400,7 +439,9 @@ def generate_fallback_message(diff: str) -> str:
             files.append(path)
             ext = os.path.splitext(path)[1].lower()
             ext_types = {
-                ".py": "feat" if any(kw in path.lower() for kw in ["feat", "add", "impl", "new"]) else "refactor",
+                ".py": "feat"
+                if any(kw in path.lower() for kw in ["feat", "add", "impl", "new"])
+                else "refactor",
                 ".js": "feat",
                 ".ts": "feat",
                 ".jsx": "feat",
@@ -419,17 +460,27 @@ def generate_fallback_message(diff: str) -> str:
             }
             for pattern, ptype in ext_types.items():
                 if pattern in path.lower():
-                    if ptype not in ("config",) and (ptype != "docs" or parsed_type == "chore"):
+                    if ptype not in ("config",) and (
+                        ptype != "docs" or parsed_type == "chore"
+                    ):
                         parsed_type = ptype
                     break
 
             dirs = path.split("/")
             for d in dirs[:-1]:
-                if d not in ("src", "lib", "app", "tests", ".githooks") and not d.startswith("."):
+                if d not in (
+                    "src",
+                    "lib",
+                    "app",
+                    "tests",
+                    ".githooks",
+                ) and not d.startswith("."):
                     seen_scopes.add(d)
 
     if seen_scopes:
-        sorted_scopes = sorted(seen_scopes, key=lambda s: -sum(1 for f in files if s in f))
+        sorted_scopes = sorted(
+            seen_scopes, key=lambda s: -sum(1 for f in files if s in f)
+        )
         parsed_scope = sorted_scopes[0]
 
     type_map = {
@@ -472,6 +523,7 @@ def generate_fallback_message(diff: str) -> str:
 #  SMART CONVENTIONAL COMMITS PARSER
 # ============================================================
 
+
 def parse_commit(message: str) -> dict:
     lines = message.strip().split("\n")
     subject = lines[0].strip()
@@ -498,7 +550,7 @@ def parse_commit(message: str) -> dict:
         result["breaking"] = match.group("breaking") == "!"
         result["description"] = match.group("description").strip()
 
-    body = message[len(subject):].strip()
+    body = message[len(subject) :].strip()
     if re.search(r"BREAKING[- ]CHANGE\s*:", body):
         result["footer_breaking"] = True
 
@@ -568,6 +620,7 @@ def bump_semver(version: str, kind: str) -> str | None:
 #  MANIFEST HANDLERS — intelligent file-type support
 # ============================================================
 
+
 def _json_handle(content: str, new_version: str):
     try:
         data = json.loads(content)
@@ -594,6 +647,7 @@ def _toml_handle(content: str, new_version: str, sections: list[str]):
 def _toml_extract(content: str, sections: list[str]) -> str | None:
     try:
         import tomllib
+
         data = tomllib.loads(content)
     except (ImportError, Exception):
         return _toml_regex_extract(content, sections)
@@ -631,7 +685,9 @@ def _toml_regex_extract(content: str, sections: list[str]) -> str | None:
     return None
 
 
-def _toml_replace(content: str, sections: list[str], new_version: str, old: str) -> tuple[str | None, str | None]:
+def _toml_replace(
+    content: str, sections: list[str], new_version: str, old: str
+) -> tuple[str | None, str | None]:
     section_re = re.compile(r"^\s*\[([^\]]+)\]\s*$")
     ver_re = re.compile(r'^(\s*version\s*=\s*")([^"]+)(".*)$')
     out_lines = []
@@ -640,7 +696,7 @@ def _toml_replace(content: str, sections: list[str], new_version: str, old: str)
 
     for line in content.splitlines(keepends=True):
         stripped = line.rstrip("\r\n")
-        eol = line[len(stripped):]
+        eol = line[len(stripped) :]
         sm = section_re.match(stripped)
         if sm:
             current_section = sm.group(1).strip()
@@ -660,14 +716,16 @@ def _toml_replace(content: str, sections: list[str], new_version: str, old: str)
 
 
 def _yaml_handle(content: str, new_version: str):
-    ver_re = re.compile(r'^(\s*version\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$', re.MULTILINE)
+    ver_re = re.compile(
+        r'^(\s*version\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$', re.MULTILINE
+    )
     match = ver_re.search(content)
     if not match:
         return None, None
     old = match.group(2)
     if new_version == "__PEEK__":
         return None, old
-    new_content = content[:match.start(2)] + new_version + content[match.end(2):]
+    new_content = content[: match.start(2)] + new_version + content[match.end(2) :]
     return new_content, old
 
 
@@ -691,7 +749,7 @@ def _gradle_handle(content: str, new_version: str):
     old = match.group(1)
     if new_version == "__PEEK__":
         return None, old
-    return content[:match.start(1)] + new_version + content[match.end(1):], old
+    return content[: match.start(1)] + new_version + content[match.end(1) :], old
 
 
 def _csproj_handle(content: str, new_version: str):
@@ -705,7 +763,7 @@ def _csproj_handle(content: str, new_version: str):
     old = match.group(1)
     if new_version == "__PEEK__":
         return None, old
-    return content[:match.start(1)] + new_version + content[match.end(1):], old
+    return content[: match.start(1)] + new_version + content[match.end(1) :], old
 
 
 def _gemspec_handle(content: str, new_version: str):
@@ -716,7 +774,7 @@ def _gemspec_handle(content: str, new_version: str):
     old = match.group(1)
     if new_version == "__PEEK__":
         return None, old
-    return content[:match.start(1)] + new_version + content[match.end(1):], old
+    return content[: match.start(1)] + new_version + content[match.end(1) :], old
 
 
 def _setupcfg_handle(content: str, new_version: str):
@@ -727,19 +785,23 @@ def _setupcfg_handle(content: str, new_version: str):
     old = match.group(1).strip()
     if new_version == "__PEEK__":
         return None, old
-    return content[:match.start(1)] + new_version + content[match.end(1):], old
+    return content[: match.start(1)] + new_version + content[match.end(1) :], old
 
 
 def _helm_handle(content: str, new_version: str):
-    ver_re = re.compile(r'^(\s*version\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$', re.MULTILINE)
-    app_re = re.compile(r'^(\s*appVersion\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$', re.MULTILINE)
+    ver_re = re.compile(
+        r'^(\s*version\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$', re.MULTILINE
+    )
+    app_re = re.compile(
+        r'^(\s*appVersion\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$', re.MULTILINE
+    )
     match = ver_re.search(content)
     if not match:
         return None, None
     old = match.group(2)
     if new_version == "__PEEK__":
         return None, old
-    new_content = content[:match.start(2)] + new_version + content[match.end(2):]
+    new_content = content[: match.start(2)] + new_version + content[match.end(2) :]
     if app_re.search(new_content):
         new_content = re.sub(
             r'^(\s*appVersion\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$',
@@ -754,6 +816,7 @@ def _helm_handle(content: str, new_version: str):
 # ============================================================
 #  MANIFEST REGISTRY — intelligent discovery
 # ============================================================
+
 
 class ManifestDef:
     def __init__(self, name: str, patterns: list[str], handler, **kwargs):
@@ -873,6 +936,7 @@ def discover_manifests(repo_root: Path) -> list[tuple[Path, ManifestDef]]:
 #  GIT TAG INTEGRATION
 # ============================================================
 
+
 def get_latest_tag_version(repo_root: Path) -> str | None:
     try:
         result = subprocess.run(
@@ -898,6 +962,7 @@ def get_latest_tag_version(repo_root: Path) -> str | None:
 # ============================================================
 #  CHANGE-AWARE DIFF ANALYSIS
 # ============================================================
+
 
 def get_changed_files_in_scope(repo_root: Path, manifest_path: Path) -> set[str]:
     try:
@@ -936,11 +1001,15 @@ def should_bump_manifest(manifest_path: Path, repo_root: Path, message: str) -> 
 #  Bump Helpers
 # ============================================================
 
+
 def find_repo_root():
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, encoding="utf-8", errors="ignore",
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
         )
         if result.returncode == 0:
             return Path(result.stdout.strip())
@@ -953,7 +1022,10 @@ def staged_files() -> set:
     try:
         result = subprocess.run(
             ["git", "diff", "--cached", "--name-only"],
-            capture_output=True, text=True, encoding="utf-8", errors="ignore",
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
         )
         if result.returncode != 0:
             return set()
@@ -965,6 +1037,7 @@ def staged_files() -> set:
 # ============================================================
 #  MAIN BUMP ORCHESTRATOR
 # ============================================================
+
 
 def bump_project_version(kind: str, message: str = "") -> list[tuple]:
     repo_root = find_repo_root()
@@ -999,7 +1072,9 @@ def bump_project_version(kind: str, message: str = "") -> list[tuple]:
 
         new_version = bump_semver(old_version, kind)
         if new_version is None:
-            log_message(f"bump: cannot parse version '{old_version}' in {rel_path} as semver")
+            log_message(
+                f"bump: cannot parse version '{old_version}' in {rel_path} as semver"
+            )
             continue
 
         new_content, _ = mdef.set_version(content, new_version)
@@ -1022,22 +1097,25 @@ def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None
     if not bumps or os.environ.get("NEURO_COMMIT_AMENDING") == "1":
         return
 
-    import subprocess, sys, json, time
+    import json
+    import subprocess
+    import sys
+    import time
 
     amend_script = textwrap.dedent(f"""\
         import subprocess, os, time, sys
-        
+
         repo_root = {str(repo_root)!r}
         bumps = {json.dumps(bumps)}
         old_head = {old_head!r}
-        
+
         if not old_head:
             old_head = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
                 capture_output=True, text=True, encoding="utf-8", errors="ignore",
                 cwd=repo_root,
             ).stdout.strip()
-        
+
         committed = False
         for _ in range(300):
             time.sleep(0.1)
@@ -1049,7 +1127,7 @@ def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None
             if new_head and new_head != old_head:
                 committed = True
                 break
-        
+
         for rel_path, _, new_version in bumps:
             path = os.path.join(repo_root, rel_path)
             subprocess.run(
@@ -1057,7 +1135,7 @@ def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None
                 capture_output=True, text=True, encoding="utf-8", errors="ignore",
                 cwd=repo_root,
             )
-        
+
         env = {{**os.environ, "GIT_EDITOR": "true", "NEURO_COMMIT_AMENDING": "1"}}
         amend = subprocess.run(
             ["git", "commit", "--amend", "--no-edit"],
@@ -1066,13 +1144,14 @@ def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None
             env=env,
         )
         if amend.returncode == 0:
-            with open(r"{repo_root / 'ai_commit_debug.log'}", "a", encoding="utf-8") as f:
+            with open(r"{repo_root / "ai_commit_debug.log"}", "a", encoding="utf-8") as f:
                 f.write("amend: commit amended with bumped version\\n")
     """)
 
     subprocess.Popen(
         [sys.executable, "-c", amend_script],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         cwd=repo_root,
     )
 
@@ -1081,12 +1160,15 @@ def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None
 #  MAIN
 # ============================================================
 
+
 def main():
     log_message("\n--- HOOK STARTED ---")
 
     if len(sys.argv) < 2:
         commit_msg_file = ".git/COMMIT_EDITMSG"
-        log_message("WARNING: No commit file provided, using default .git/COMMIT_EDITMSG")
+        log_message(
+            "WARNING: No commit file provided, using default .git/COMMIT_EDITMSG"
+        )
     else:
         commit_msg_file = sys.argv[1]
 
@@ -1101,7 +1183,7 @@ def main():
         log_message("User-provided commit message detected. Skipping AI generation.")
         sys.exit(0)
 
-    print("[+] Auto Commit started")
+    print("[+] NeuroCommit started")
     log_message(f"Commit file path: {commit_msg_file}")
 
     log_message("\nCHECKING FOR .husky")
@@ -1143,7 +1225,7 @@ def main():
             message += "\n\n" + "\n".join(footer_lines)
 
     if ADD_COAUTHOR:
-        message += "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"
+        message += "\n\nCo-authored-by: NeuroCommit <autocommitrxgo@gmail.com>"
 
     with open(commit_msg_file, "w", encoding="utf-8") as f:
         f.write(message)
@@ -1154,7 +1236,10 @@ def main():
         if repo_root:
             old_head = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
-                capture_output=True, text=True, encoding="utf-8", errors="ignore",
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
             ).stdout.strip()
             _amend_bump(bumps, repo_root, old_head)
 
