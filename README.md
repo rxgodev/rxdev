@@ -22,11 +22,18 @@ NeuroCommit is a command-line tool that writes [Conventional Commits](https://ww
 ## Features
 
 - 🤖 **AI-generated messages** — Conventional Commits subject in English + body in Russian explaining *why*, derived from your staged diff.
-- 📈 **Auto-bump version** (opt-in) — detects semver level from the commit type and bumps `package.json`, `Cargo.toml` (`[package]`) and/or `pyproject.toml` (`[project]` or `[tool.poetry]`). Bumps every manifest found in the repo root.
-  - `feat:` → minor
-  - `!` or `BREAKING CHANGE` → major
-  - everything else → patch
-  - If a manifest is already in the staging area, it's left alone (assumed manual bump).
+- 📈 **Smart Auto-bump version** (opt-in) — intelligently discovers manifests across the entire repo, not just the root. Supports 15+ manifest types:
+  - `package.json`, `composer.json` (JSON parser)
+  - `Cargo.toml`, `pyproject.toml` (TOML parser)
+  - `pubspec.yaml`, `Chart.yaml`, `*.gemspec`, `setup.cfg`
+  - `build.gradle`, `*.csproj`, `VERSION`, `version.txt`
+  - And more — auto-detected by file name.
+  - `feat:` → minor, `!` or `BREAKING CHANGE` → major, everything else → patch
+  - **Monorepo support** — finds manifests in subdirectories automatically
+  - **Pre-release safe** — preserves `-alpha.1`, `+build` suffixes
+  - **Merge-safe** — if a manifest is already staged, reads it from the index and bumps on top
+  - **Change-aware** — skips bump if changed files are unrelated to the package (e.g., docs-only changes in a different directory)
+  - **Git tag aware** — falls back to latest semver tag if manifest has no version
 - ✏️ **Edit before commit** — `qq go` lets you review, regenerate, or open `$EDITOR` to tweak the message before pushing.
 - 📂 **Multi-project** — manage hooks and shared templates across several repos from one place.
 - 🚫 **Ignore list** — `.commitignore` works like `.gitignore`; matching files are excluded from the diff sent to the model.
@@ -59,7 +66,7 @@ qq config
 
 In the menu:
 - **👥 Co-author** — toggle the `Co-authored-by` trailer in commit messages.
-- **📈 Auto-bump version** — toggle automatic version bumps for `package.json` / `Cargo.toml` / `pyproject.toml`. Off by default.
+- **📈 Auto-bump version** — toggle smart automatic version bumps for 15+ manifest types (JSON, TOML, YAML, XML, Gradle, plain text). Off by default.
 - **📂 Projects & Templates** — list integrated projects and manage shared `prepare-commit-msg` templates.
 
 #### .commitignore

@@ -27,7 +27,7 @@ def load_user_config():
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"⚠️ Failed to load config: {e}", file=sys.stderr)
+            print(f"Failed to load config: {e}", file=sys.stderr)
     return {"coauthor": True, "bumpVersion": False}
 
 
@@ -86,14 +86,14 @@ SYSTEM_PROMPT = (
     "- BODY: In Russian. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.\n"
     "- NEVER describe merge commits, version bumps, or generic 'update' without context.\n"
     "- NEVER invent details not present in the diff.\n"
-    "- If changes are ONLY in README/docs — use type 'docs'.\n"
+    "- If changes are ONLY in README/docs use type 'docs'.\n"
     "- Output ONLY raw commit message. NO markdown, NO explanations, NO extra text.\n\n"
     "- Before you can updated code style by linters. DO NOT describe this in comment, ONLY IF this is only update\n\n"
     "BAD EXAMPLES (NEVER do this):\n"
-    "  'update README.md' → too vague\n"
-    "  'Добавлено много документации' → not specific\n"
-    "  'Merge branch ...' → ignore merge-related changes\n\n"
-    "  'Изменён стиль: добавлены кавычки' → изменение было не единственным, а комментарий описывает это\n\n"
+    "  'update README.md' too vague\n"
+    "  'Добавлено много документации' not specific\n"
+    "  'Merge branch ...' ignore merge-related changes\n\n"
+    "  'Изменён стиль: добавлены кавычки' изменение было не единственным, а комментарий описывает это\n\n"
     "GOOD EXAMPLES:\n"
     "docs(readme): add installation and release steps\n"
     "\n"
@@ -108,7 +108,7 @@ SYSTEM_PROMPT = (
 
 def write_error_to_commit(msg_file, err_msg):
     with open(msg_file, "w", encoding="utf-8") as f:
-        f.write("# ❌ AI COMMIT HOOK FAILED\n")
+        f.write("# AI COMMIT HOOK FAILED\n")
         f.write(f"# Reason: {err_msg}\n")
 
 
@@ -225,7 +225,6 @@ def call_apifreellm(messages):
 
     text = raw.strip()
 
-    # If the server happens to return JSON instead of plain text, unwrap common fields.
     if text.startswith("{"):
         try:
             data = json.loads(text)
@@ -272,33 +271,473 @@ def generate_commit_message(diff):
     return f"ERROR: apifreellm.com failed after {MAX_ATTEMPTS} attempts ({last_error})"
 
 
-# === VERSION BUMP ===
+# ============================================================
+#  SMART CONVENTIONAL COMMITS PARSER
+# ============================================================
+
+def parse_commit(message: str) -> dict:
+    lines = message.strip().split("\n")
+    subject = lines[0].strip()
+
+    match = re.match(
+        r"^(?P<type>[a-z]+)"
+        r"(?:\((?P<scope>[^)]*)\))?"
+        r"(?P<breaking>!)?"
+        r":\s*(?P<description>.+)$",
+        subject,
+    )
+
+    result = {
+        "type": None,
+        "scope": None,
+        "breaking": False,
+        "description": None,
+        "footer_breaking": False,
+    }
+
+    if match:
+        result["type"] = match.group("type")
+        result["scope"] = match.group("scope")
+        result["breaking"] = match.group("breaking") == "!"
+        result["description"] = match.group("description").strip()
+
+    body = message[len(subject):].strip()
+    if re.search(r"BREAKING[- ]CHANGE\s*:", body):
+        result["footer_breaking"] = True
+
+    return result
+
 
 def determine_bump_kind(message: str) -> str:
-    subject = message.strip().split("\n", 1)[0]
-    match = re.match(r"^([a-z]+)(\([^)]*\))?(!)?:\s*", subject)
-    if not match:
-        return "patch"
-    msg_type, _scope, breaking = match.groups()
-    if breaking or "BREAKING CHANGE" in message:
+    parsed = parse_commit(message)
+    if parsed["breaking"] or parsed["footer_breaking"]:
         return "major"
-    if msg_type == "feat":
+    if parsed["type"] == "feat":
         return "minor"
     return "patch"
 
 
-def bump_semver(version: str, kind: str):
-    match = re.match(r"^(\d+)\.(\d+)\.(\d+)(.*)$", version.strip())
+# ============================================================
+#  PROPER SEMVER HANDLING
+# ============================================================
+
+SEMVER_RE = re.compile(
+    r"^(?P<major>0|[1-9]\d*)"
+    r"\.(?P<minor>0|[1-9]\d*)"
+    r"\.(?P<patch>0|[1-9]\d*)"
+    r"(?:-(?P<prerelease>[0-9a-zA-Z.-]+))?"
+    r"(?:\+(?P<build>[0-9a-zA-Z.-]+))?$"
+)
+
+
+def parse_semver(version: str) -> dict | None:
+    match = SEMVER_RE.match(version.strip())
     if not match:
         return None
-    major, minor, patch, suffix = match.groups()
-    major, minor, patch = int(major), int(minor), int(patch)
-    if kind == "major":
-        return f"{major + 1}.0.0"
-    if kind == "minor":
-        return f"{major}.{minor + 1}.0"
-    return f"{major}.{minor}.{patch + 1}"
+    return {
+        "major": int(match.group("major")),
+        "minor": int(match.group("minor")),
+        "patch": int(match.group("patch")),
+        "prerelease": match.group("prerelease"),
+        "build": match.group("build"),
+    }
 
+
+def bump_semver(version: str, kind: str) -> str | None:
+    parsed = parse_semver(version)
+    if not parsed:
+        return None
+
+    if kind == "major":
+        parsed["major"] += 1
+        parsed["minor"] = 0
+        parsed["patch"] = 0
+    elif kind == "minor":
+        parsed["minor"] += 1
+        parsed["patch"] = 0
+    elif kind == "patch":
+        parsed["patch"] += 1
+
+    result = f"{parsed['major']}.{parsed['minor']}.{parsed['patch']}"
+    if parsed["prerelease"]:
+        result += f"-{parsed['prerelease']}"
+    if parsed["build"]:
+        result += f"+{parsed['build']}"
+
+    return result
+
+
+# ============================================================
+#  MANIFEST HANDLERS — intelligent file-type support
+# ============================================================
+
+def _json_handle(content: str, new_version: str):
+    try:
+        data = json.loads(content)
+        old = data.get("version")
+        if old is None:
+            return None, None
+        if new_version == "__PEEK__":
+            return None, old
+        data["version"] = new_version
+        return json.dumps(data, indent=2) + "\n", old
+    except Exception:
+        return None, None
+
+
+def _toml_handle(content: str, new_version: str, sections: list[str]):
+    old = _toml_extract(content, sections)
+    if old is None:
+        return None, None
+    if new_version == "__PEEK__":
+        return None, old
+    return _toml_replace(content, sections, new_version, old)
+
+
+def _toml_extract(content: str, sections: list[str]) -> str | None:
+    try:
+        import tomllib
+        data = tomllib.loads(content)
+    except (ImportError, Exception):
+        return _toml_regex_extract(content, sections)
+
+    for section_path in sections:
+        keys = section_path.split(".")
+        d = data
+        try:
+            for k in keys:
+                d = d[k]
+            if isinstance(d, dict):
+                v = d.get("version")
+                if v and isinstance(v, str):
+                    return v
+            elif isinstance(d, str):
+                return d
+        except (KeyError, TypeError):
+            continue
+    return None
+
+
+def _toml_regex_extract(content: str, sections: list[str]) -> str | None:
+    section_re = re.compile(r"^\s*\[([^\]]+)\]\s*$")
+    ver_re = re.compile(r'^\s*version\s*=\s*"([^"]+)"')
+    current_section = None
+    for line in content.splitlines():
+        sm = section_re.match(line)
+        if sm:
+            current_section = sm.group(1).strip()
+            continue
+        if current_section in sections:
+            vm = ver_re.match(line)
+            if vm:
+                return vm.group(1)
+    return None
+
+
+def _toml_replace(content: str, sections: list[str], new_version: str, old: str) -> tuple[str | None, str | None]:
+    section_re = re.compile(r"^\s*\[([^\]]+)\]\s*$")
+    ver_re = re.compile(r'^(\s*version\s*=\s*")([^"]+)(".*)$')
+    out_lines = []
+    current_section = None
+    replaced = False
+
+    for line in content.splitlines(keepends=True):
+        stripped = line.rstrip("\r\n")
+        eol = line[len(stripped):]
+        sm = section_re.match(stripped)
+        if sm:
+            current_section = sm.group(1).strip()
+            out_lines.append(line)
+            continue
+        if not replaced and current_section in sections:
+            vm = ver_re.match(stripped)
+            if vm and vm.group(2) == old:
+                out_lines.append(vm.group(1) + new_version + vm.group(3) + eol)
+                replaced = True
+                continue
+        out_lines.append(line)
+
+    if not replaced:
+        return None, None
+    return "".join(out_lines), old
+
+
+def _yaml_handle(content: str, new_version: str):
+    ver_re = re.compile(r'^(\s*version\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$', re.MULTILINE)
+    match = ver_re.search(content)
+    if not match:
+        return None, None
+    old = match.group(2)
+    if new_version == "__PEEK__":
+        return None, old
+    new_content = content[:match.start(2)] + new_version + content[match.end(2):]
+    return new_content, old
+
+
+def _plain_handle(content: str, new_version: str):
+    lines = content.strip().split("\n")
+    if not lines:
+        return None, None
+    old = lines[0].strip()
+    if not re.match(r"^\d+\.\d+\.\d+", old):
+        return None, None
+    if new_version == "__PEEK__":
+        return None, old
+    return new_version + "\n", old
+
+
+def _gradle_handle(content: str, new_version: str):
+    ver_re = re.compile(r"""^\s*version\s*=\s*["']([^"']+)["']\s*$""", re.MULTILINE)
+    match = ver_re.search(content)
+    if not match:
+        return None, None
+    old = match.group(1)
+    if new_version == "__PEEK__":
+        return None, old
+    return content[:match.start(1)] + new_version + content[match.end(1):], old
+
+
+def _csproj_handle(content: str, new_version: str):
+    ver_re = re.compile(r"<Version>([^<]+)</Version>")
+    match = ver_re.search(content)
+    if not match:
+        ver_re = re.compile(r"<PackageVersion>([^<]+)</PackageVersion>")
+        match = ver_re.search(content)
+    if not match:
+        return None, None
+    old = match.group(1)
+    if new_version == "__PEEK__":
+        return None, old
+    return content[:match.start(1)] + new_version + content[match.end(1):], old
+
+
+def _gemspec_handle(content: str, new_version: str):
+    ver_re = re.compile(r"""\.version\s*=\s*["']([^"']+)["']""")
+    match = ver_re.search(content)
+    if not match:
+        return None, None
+    old = match.group(1)
+    if new_version == "__PEEK__":
+        return None, old
+    return content[:match.start(1)] + new_version + content[match.end(1):], old
+
+
+def _setupcfg_handle(content: str, new_version: str):
+    ver_re = re.compile(r"^\s*version\s*=\s*(.+)$", re.MULTILINE)
+    match = ver_re.search(content)
+    if not match:
+        return None, None
+    old = match.group(1).strip()
+    if new_version == "__PEEK__":
+        return None, old
+    return content[:match.start(1)] + new_version + content[match.end(1):], old
+
+
+def _helm_handle(content: str, new_version: str):
+    ver_re = re.compile(r'^(\s*version\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$', re.MULTILINE)
+    app_re = re.compile(r'^(\s*appVersion\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$', re.MULTILINE)
+    match = ver_re.search(content)
+    if not match:
+        return None, None
+    old = match.group(2)
+    if new_version == "__PEEK__":
+        return None, old
+    new_content = content[:match.start(2)] + new_version + content[match.end(2):]
+    if app_re.search(new_content):
+        new_content = re.sub(
+            r'^(\s*appVersion\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$',
+            lambda m: m.group(1) + new_version + (m.group(3) or ""),
+            new_content,
+            count=1,
+            flags=re.MULTILINE,
+        )
+    return new_content, old
+
+
+# ============================================================
+#  MANIFEST REGISTRY — intelligent discovery
+# ============================================================
+
+class ManifestDef:
+    def __init__(self, name: str, patterns: list[str], handler, **kwargs):
+        self.name = name
+        self.patterns = patterns
+        self.handler = handler
+        self.kwargs = kwargs
+
+    def get_version(self, content: str) -> str | None:
+        _, old = self.handler(content, "__PEEK__", **self.kwargs)
+        return old
+
+    def set_version(self, content: str, new_version: str):
+        return self.handler(content, new_version, **self.kwargs)
+
+
+MANIFEST_DEFINITIONS: list[ManifestDef] = [
+    ManifestDef(
+        "package.json",
+        ["**/package.json"],
+        _json_handle,
+    ),
+    ManifestDef(
+        "composer.json",
+        ["**/composer.json"],
+        _json_handle,
+    ),
+    ManifestDef(
+        "Cargo.toml",
+        ["**/Cargo.toml"],
+        _toml_handle,
+        sections=["package"],
+    ),
+    ManifestDef(
+        "pyproject.toml",
+        ["**/pyproject.toml"],
+        _toml_handle,
+        sections=["project", "tool.poetry"],
+    ),
+    ManifestDef(
+        "Chart.yaml",
+        ["**/Chart.yaml"],
+        _helm_handle,
+    ),
+    ManifestDef(
+        "pubspec.yaml",
+        ["**/pubspec.yaml"],
+        _yaml_handle,
+    ),
+    ManifestDef(
+        "build.gradle",
+        ["**/build.gradle"],
+        _gradle_handle,
+    ),
+    ManifestDef(
+        "build.gradle.kts",
+        ["**/build.gradle.kts"],
+        _gradle_handle,
+    ),
+    ManifestDef(
+        "Version.props",
+        ["**/Version.props", "**/Directory.Build.props"],
+        _csproj_handle,
+    ),
+    ManifestDef(
+        "csproj",
+        ["**/*.csproj"],
+        _csproj_handle,
+    ),
+    ManifestDef(
+        "gemspec",
+        ["**/*.gemspec"],
+        _gemspec_handle,
+    ),
+    ManifestDef(
+        "setup.cfg",
+        ["**/setup.cfg"],
+        _setupcfg_handle,
+    ),
+    ManifestDef(
+        "VERSION",
+        ["**/VERSION"],
+        _plain_handle,
+    ),
+    ManifestDef(
+        "version.txt",
+        ["**/version.txt"],
+        _plain_handle,
+    ),
+    ManifestDef(
+        ".bumpversion.cfg",
+        ["**/.bumpversion.cfg"],
+        _setupcfg_handle,
+    ),
+]
+
+
+def discover_manifests(repo_root: Path) -> list[tuple[Path, ManifestDef]]:
+    found: list[tuple[Path, ManifestDef]] = []
+    seen = set()
+
+    for mdef in MANIFEST_DEFINITIONS:
+        for pattern in mdef.patterns:
+            glob_part = pattern.replace("**/", "")
+            matches = sorted(Path(repo_root).rglob(glob_part))
+            for path in matches:
+                if path.is_file():
+                    normalized = str(path.resolve())
+                    if normalized not in seen:
+                        seen.add(normalized)
+                        found.append((path, mdef))
+
+    return found
+
+
+# ============================================================
+#  GIT TAG INTEGRATION
+# ============================================================
+
+def get_latest_tag_version(repo_root: Path) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "tag", "--sort=-version:refname"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            cwd=repo_root,
+        )
+        if result.returncode != 0:
+            return None
+        tags = result.stdout.strip().splitlines()
+        for tag in tags:
+            tag = tag.strip().lstrip("v")
+            if SEMVER_RE.match(tag):
+                return tag
+    except Exception as e:
+        log_message(f"get_latest_tag_version failed: {e}")
+    return None
+
+
+# ============================================================
+#  CHANGE-AWARE DIFF ANALYSIS
+# ============================================================
+
+def get_changed_files_in_scope(repo_root: Path, manifest_path: Path) -> set[str]:
+    try:
+        rel = manifest_path.relative_to(repo_root)
+        prefix = os.path.dirname(str(rel).replace("\\", "/"))
+        if prefix == ".":
+            return set()
+
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            cwd=repo_root,
+        )
+        if result.returncode != 0:
+            return set()
+
+        changed = result.stdout.strip().splitlines()
+        return {f for f in changed if f.startswith(prefix + "/") or (prefix == ".")}
+    except Exception:
+        return set()
+
+
+def should_bump_manifest(manifest_path: Path, repo_root: Path, message: str) -> bool:
+    parsed = parse_commit(message)
+    if parsed["type"] in ("docs", "style", "test"):
+        changed = get_changed_files_in_scope(repo_root, manifest_path)
+        if not changed:
+            return False
+    return True
+
+
+# ============================================================
+#  Bump Helpers
+# ============================================================
 
 def find_repo_root():
     try:
@@ -326,102 +765,108 @@ def staged_files() -> set:
         return set()
 
 
-def replace_package_json_version(content: str, new_version: str):
-    match = re.search(r'^(\s*"version"\s*:\s*")([^"]+)(")', content, re.MULTILINE)
-    if not match:
-        return None, None
-    old = match.group(2)
-    return content[: match.start(2)] + new_version + content[match.end(2):], old
+# ============================================================
+#  MAIN BUMP ORCHESTRATOR
+# ============================================================
 
-
-def replace_toml_version(content: str, sections: list, new_version: str):
-    section_re = re.compile(r"^\s*\[([^\]]+)\]\s*$")
-    ver_re = re.compile(r'^(\s*version\s*=\s*")([^"]+)(".*)$')
-    out_lines = []
-    current_section = None
-    old = None
-    for line in content.splitlines(keepends=True):
-        stripped = line.rstrip("\r\n")
-        eol = line[len(stripped):]
-        sm = section_re.match(stripped)
-        if sm:
-            current_section = sm.group(1).strip()
-            out_lines.append(line)
-            continue
-        if old is None and current_section in sections:
-            vm = ver_re.match(stripped)
-            if vm:
-                old = vm.group(2)
-                out_lines.append(vm.group(1) + new_version + vm.group(3) + eol)
-                continue
-        out_lines.append(line)
-    if old is None:
-        return None, None
-    return "".join(out_lines), old
-
-
-MANIFESTS = [
-    ("package.json", lambda c, v: replace_package_json_version(c, v)),
-    ("Cargo.toml", lambda c, v: replace_toml_version(c, ["package"], v)),
-    ("pyproject.toml", lambda c, v: replace_toml_version(c, ["project", "tool.poetry"], v)),
-]
-
-
-def bump_project_version(kind: str):
+def bump_project_version(kind: str, message: str = "") -> list[tuple]:
     repo_root = find_repo_root()
     if repo_root is None:
         return []
 
     already_staged = staged_files()
+    manifests = discover_manifests(repo_root)
+
+    if not manifests:
+        log_message("bump: no manifests found in repo")
+        return []
+
     bumps = []
 
-    for filename, replacer in MANIFESTS:
-        path = repo_root / filename
-        if not path.exists():
-            continue
-        if filename in already_staged:
-            log_message(f"bump: {filename} already staged — assuming manual bump, skipping")
-            continue
-        try:
-            content = path.read_text(encoding="utf-8")
-        except Exception as e:
-            log_message(f"bump: cannot read {filename}: {e}")
-            continue
+    for path, mdef in manifests:
+        rel_path = str(path.relative_to(repo_root)).replace("\\", "/")
 
-        peek = replacer(content, "__PEEK__")
-        old_version = peek[1] if peek else None
-        if old_version is None:
-            log_message(f"bump: no version field in {filename}")
+        if rel_path in already_staged:
+            log_message(f"bump: {rel_path} already staged, reading staged version")
+            staged_content = subprocess.run(
+                ["git", "show", f":{rel_path}"],
+                capture_output=True, text=True, encoding="utf-8", errors="ignore",
+                cwd=repo_root,
+            ).stdout
+            old_version = mdef.get_version(staged_content)
+            if old_version is None:
+                log_message(f"bump: cannot extract version from staged {rel_path}")
+                continue
+        else:
+            try:
+                content = path.read_text(encoding="utf-8")
+            except Exception as e:
+                log_message(f"bump: cannot read {rel_path}: {e}")
+                continue
+
+            old_version = mdef.get_version(content)
+            if old_version is None:
+                log_message(f"bump: no version field in {rel_path}")
+                continue
+
+        if not should_bump_manifest(path, repo_root, message):
+            log_message(f"bump: skipping {rel_path} changes unrelated to this package")
             continue
 
         new_version = bump_semver(old_version, kind)
         if new_version is None:
-            log_message(f"bump: cannot parse version '{old_version}' in {filename} as semver")
+            log_message(f"bump: cannot parse version '{old_version}' in {rel_path} as semver")
             continue
 
-        new_content, _ = replacer(content, new_version)
-        if new_content is None:
-            continue
+        if rel_path in already_staged:
+            try:
+                staged_content = subprocess.run(
+                    ["git", "show", f":{rel_path}"],
+                    capture_output=True, text=True, encoding="utf-8", errors="ignore",
+                    cwd=repo_root,
+                ).stdout
+                new_content, _ = mdef.set_version(staged_content, new_version)
+                if new_content is None:
+                    continue
+                path.write_text(new_content, encoding="utf-8")
+            except Exception as e:
+                log_message(f"bump: merge-safe write failed for {rel_path}: {e}")
+                continue
+        else:
+            try:
+                content = path.read_text(encoding="utf-8")
+            except Exception as e:
+                log_message(f"bump: cannot read {rel_path}: {e}")
+                continue
 
-        try:
-            path.write_text(new_content, encoding="utf-8")
-        except Exception as e:
-            log_message(f"bump: cannot write {filename}: {e}")
-            continue
+            new_content, _ = mdef.set_version(content, new_version)
+            if new_content is None:
+                continue
+
+            try:
+                path.write_text(new_content, encoding="utf-8")
+            except Exception as e:
+                log_message(f"bump: cannot write {rel_path}: {e}")
+                continue
 
         add = subprocess.run(
             ["git", "add", str(path)],
             capture_output=True, text=True, encoding="utf-8", errors="ignore",
+            cwd=repo_root,
         )
         if add.returncode != 0:
-            log_message(f"bump: git add {filename} failed: {add.stderr}")
+            log_message(f"bump: git add {rel_path} failed: {add.stderr}")
             continue
 
-        log_message(f"bump: {filename} {old_version} → {new_version} ({kind})")
-        bumps.append((filename, old_version, new_version))
+        log_message(f"bump: {rel_path} {old_version} {new_version} ({kind})")
+        bumps.append((rel_path, old_version, new_version))
 
     return bumps
 
+
+# ============================================================
+#  MAIN
+# ============================================================
 
 def main():
     log_message("\n--- HOOK STARTED ---")
@@ -470,14 +915,14 @@ def main():
     if message and not message.startswith("ERROR:"):
         if BUMP_VERSION:
             kind = determine_bump_kind(message)
-            bumps = bump_project_version(kind)
+            bumps = bump_project_version(kind, message)
             if bumps:
                 footer_lines = [
                     f"Bump version ({kind}):",
-                    *(f"  {f}: {o} → {n}" for f, o, n in bumps),
+                    *(f"  {f}: {o} {n}" for f, o, n in bumps),
                 ]
                 for f, o, n in bumps:
-                    print(f"[+] Bumped {f}: {o} → {n} ({kind})")
+                    print(f"[+] Bumped {f}: {o} {n} ({kind})")
                 message += "\n\n" + "\n".join(footer_lines)
         if ADD_COAUTHOR:
             message += "\n\nCo-authored-by: autocommit-rxgo <autocommitrxgo@gmail.com>"

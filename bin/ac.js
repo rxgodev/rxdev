@@ -563,7 +563,7 @@ async function configInteractive() {
       saveConfig(config);
       console.log(
         config.bumpVersion
-          ? "✅ Auto-bump enabled. The hook bumps package.json / Cargo.toml / pyproject.toml on each commit:\n   feat → minor, ! or BREAKING CHANGE → major, anything else → patch.\n"
+          ? "✅ Auto-bump enabled. Smart system auto-discovers manifests across the whole repo\n   (package.json, Cargo.toml, pyproject.toml, pubspec.yaml, Chart.yaml, composer.json,\n   build.gradle, *.csproj, *.gemspec, setup.cfg, VERSION, and more).\n   Preserves pre-release tags, handles monorepos, merges safely with staged files.\n   feat → minor, ! or BREAKING CHANGE → major, anything else → patch.\n"
           : "✅ Auto-bump disabled.\n",
       );
     }
