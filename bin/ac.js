@@ -808,8 +808,8 @@ async function quickFlow() {
       encoding: "utf8",
     }).stdout.trim();
     const stat = spawnSync("git", [
-      "diff-tree", "--no-commit-id", "-r", "--stat", "HEAD",
-    ], { encoding: "utf8" }).stdout.trim().replace(/\n/g, " ");
+      "diff-tree", "--no-commit-id", "-r", "--shortstat", "HEAD",
+    ], { encoding: "utf8" }).stdout.trim();
     return `${cyan}${bold}[${branch}: ${hash}]${reset} ${stat}`;
   };
 
