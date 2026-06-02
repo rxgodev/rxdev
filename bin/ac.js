@@ -125,25 +125,35 @@ function unregisterProject() {
   } catch {}
 }
 
+function getHookVersion(content) {
+  const m = content.match(/^# NEURO_COMMIT_VERSION:\s*(\S+)/m);
+  return m ? m[1] : null;
+}
+
 function updateProjectHooks(projectPath) {
   const githooksDir = join(projectPath, ".githooks");
   if (!existsSync(githooksDir)) return false;
 
-  const filesToUpdate = ["ai_commit.py"];
-  let updated = false;
-  for (const file of filesToUpdate) {
-    const src = join(SOURCE_GITHOOKS_DIR, file);
-    const dst = join(githooksDir, file);
-    if (existsSync(src)) {
-      const current = existsSync(dst) ? readFileSync(dst, "utf8") : "";
-      const latest = readFileSync(src, "utf8");
-      if (current !== latest) {
-        writeFileSync(dst, latest);
-        updated = true;
-      }
-    }
+  const src = join(SOURCE_GITHOOKS_DIR, "ai_commit.py");
+  const dst = join(githooksDir, "ai_commit.py");
+  if (!existsSync(src)) return false;
+
+  const latest = readFileSync(src, "utf8");
+  if (!existsSync(dst)) {
+    writeFileSync(dst, latest);
+    return true;
   }
-  return updated;
+
+  const current = readFileSync(dst, "utf8");
+  const currentVer = getHookVersion(current);
+  const latestVer = getHookVersion(latest);
+
+  if (currentVer && latestVer && currentVer !== latestVer) {
+    writeFileSync(dst, latest);
+    return true;
+  }
+
+  return false;
 }
 
 // === UTILS ===
