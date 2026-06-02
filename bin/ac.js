@@ -805,6 +805,7 @@ async function quickFlow() {
         message: "What next?",
         choices: [
           { name: `${green}✅ Push${reset}`, value: "push" },
+          { name: `${cyan}✏️  Edit message${reset}`, value: "edit" },
           { name: `${yellow}🔄 Regenerate${reset}`, value: "regenerate" },
           { name: `${bold}❌ Cancel${reset}`, value: "cancel" },
         ],
@@ -820,6 +821,44 @@ async function quickFlow() {
       spawnSync("git", ["reset", "--soft", "HEAD~1"], { stdio: "pipe" });
       console.log(`\n${bold}↩️  Commit cancelled${reset}`);
       return;
+    }
+
+    if (action === "edit") {
+      writeFileSync(commitMsgFile, currentMessage, "utf8");
+      const editor =
+        process.env.GIT_EDITOR ||
+        process.env.VISUAL ||
+        process.env.EDITOR ||
+        "vi";
+      const editRes = spawnSync(`${editor} "${commitMsgFile}"`, {
+        stdio: "inherit",
+        shell: true,
+      });
+      if (editRes.status !== 0) {
+        console.log(`\n${yellow}↩️  Edit cancelled, keeping previous message${reset}`);
+        continue;
+      }
+      const edited = readFileSync(commitMsgFile, "utf8")
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("#"))
+        .join("\n")
+        .trim();
+      if (!edited) {
+        console.log(`\n${yellow}❌ Empty message, keeping previous${reset}`);
+        continue;
+      }
+      writeFileSync(commitMsgFile, edited, "utf8");
+      const amend = spawnSync("git", ["commit", "--amend", "-F", commitMsgFile], {
+        stdio: "inherit",
+        env: { ...process.env, GIT_EDITOR: "true" },
+      });
+      if (amend.status !== 0) {
+        console.error(`\n❌ Amend failed`);
+        process.exit(1);
+      }
+      currentMessage = edited;
+      console.log(`\n${green}✅ Message updated${reset}`);
+      continue;
     }
 
     if (action === "regenerate") {

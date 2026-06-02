@@ -388,16 +388,15 @@ def bump_project_version(kind: str):
             log_message(f"bump: cannot read {filename}: {e}")
             continue
 
-        # Read current version to compute new value, then replace
-        peek_old = None
-        peek_new_content, peek_old = replacer(content, "__PLACEHOLDER__")
-        if peek_old is None:
+        peek = replacer(content, "__PEEK__")
+        old_version = peek[1] if peek else None
+        if old_version is None:
             log_message(f"bump: no version field in {filename}")
             continue
 
-        new_version = bump_semver(peek_old, kind)
+        new_version = bump_semver(old_version, kind)
         if new_version is None:
-            log_message(f"bump: cannot parse version '{peek_old}' in {filename} as semver")
+            log_message(f"bump: cannot parse version '{old_version}' in {filename} as semver")
             continue
 
         new_content, _ = replacer(content, new_version)
@@ -418,8 +417,8 @@ def bump_project_version(kind: str):
             log_message(f"bump: git add {filename} failed: {add.stderr}")
             continue
 
-        log_message(f"bump: {filename} {peek_old} → {new_version} ({kind})")
-        bumps.append((filename, peek_old, new_version))
+        log_message(f"bump: {filename} {old_version} → {new_version} ({kind})")
+        bumps.append((filename, old_version, new_version))
 
     return bumps
 
