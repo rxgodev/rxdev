@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 import traceback
 import urllib.error
 import urllib.request
@@ -15,8 +16,8 @@ CONFIG_DIR = Path.home() / ".config" / "ai-commit"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-API_URL = "https://apifreellm.com/api/chatAPI"
-REQUEST_TIMEOUT = 30
+API_URL = "https://apifreellm.com/api/v1/chat"
+REQUEST_TIMEOUT = 60
 MAX_ATTEMPTS = 3
 MAX_DIFF_LENGTH = 3000
 
@@ -34,6 +35,7 @@ def load_user_config():
 USER_CONFIG = load_user_config()
 ADD_COAUTHOR = USER_CONFIG.get("coauthor", True)
 BUMP_VERSION = USER_CONFIG.get("bumpVersion", False)
+API_KEY = USER_CONFIG.get("apiKey", "")
 
 
 def is_valid_commit_message(msg: str) -> bool:
@@ -201,29 +203,41 @@ def get_staged_diff():
 
 
 def call_apifreellm(messages):
-    payload = {"inputCode": messages}
+    prompt = messages[-1]["content"] if messages else ""
+    payload = {"message": prompt}
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "neuro-commit/3.0",
+    }
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
+
     req = urllib.request.Request(
         API_URL,
         data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Origin": "https://apifreellm.com",
-            "Referer": "https://apifreellm.com/",
-            "User-Agent": "neuro-commit/3.0",
-        },
+        headers=headers,
         method="POST",
     )
 
     try:
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as response:
-            raw = response.read().decode("utf-8", errors="replace")
+            raw = b""
+            while True:
+                chunk = response.read(4096)
+                if not chunk:
+                    break
+                raw += chunk
+                text_chunk = chunk.decode("utf-8", errors="replace")
+                sys.stdout.write(text_chunk)
+                sys.stdout.flush()
+            print()
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         raise Exception(f"HTTP {e.code}: {body}")
     except urllib.error.URLError as e:
         raise Exception(f"URL error: {e.reason}")
 
-    text = raw.strip()
+    text = raw.decode("utf-8", errors="replace").strip()
 
     if text.startswith("{"):
         try:
@@ -860,7 +874,6 @@ def bump_project_version(kind: str, message: str = "") -> list[tuple]:
     if repo_root is None:
         return []
 
-    already_staged = staged_files()
     manifests = discover_manifests(repo_root)
 
     if not manifests:
@@ -872,28 +885,16 @@ def bump_project_version(kind: str, message: str = "") -> list[tuple]:
     for path, mdef in manifests:
         rel_path = str(path.relative_to(repo_root)).replace("\\", "/")
 
-        if rel_path in already_staged:
-            log_message(f"bump: {rel_path} already staged, reading staged version")
-            staged_content = subprocess.run(
-                ["git", "show", f":{rel_path}"],
-                capture_output=True, text=True, encoding="utf-8", errors="ignore",
-                cwd=repo_root,
-            ).stdout
-            old_version = mdef.get_version(staged_content)
-            if old_version is None:
-                log_message(f"bump: cannot extract version from staged {rel_path}")
-                continue
-        else:
-            try:
-                content = path.read_text(encoding="utf-8")
-            except Exception as e:
-                log_message(f"bump: cannot read {rel_path}: {e}")
-                continue
+        try:
+            content = path.read_text(encoding="utf-8")
+        except Exception as e:
+            log_message(f"bump: cannot read {rel_path}: {e}")
+            continue
 
-            old_version = mdef.get_version(content)
-            if old_version is None:
-                log_message(f"bump: no version field in {rel_path}")
-                continue
+        old_version = mdef.get_version(content)
+        if old_version is None:
+            log_message(f"bump: no version field in {rel_path}")
+            continue
 
         if not should_bump_manifest(path, repo_root, message):
             log_message(f"bump: skipping {rel_path} changes unrelated to this package")
@@ -904,50 +905,72 @@ def bump_project_version(kind: str, message: str = "") -> list[tuple]:
             log_message(f"bump: cannot parse version '{old_version}' in {rel_path} as semver")
             continue
 
-        if rel_path in already_staged:
-            try:
-                staged_content = subprocess.run(
-                    ["git", "show", f":{rel_path}"],
-                    capture_output=True, text=True, encoding="utf-8", errors="ignore",
-                    cwd=repo_root,
-                ).stdout
-                new_content, _ = mdef.set_version(staged_content, new_version)
-                if new_content is None:
-                    continue
-                path.write_text(new_content, encoding="utf-8")
-            except Exception as e:
-                log_message(f"bump: merge-safe write failed for {rel_path}: {e}")
-                continue
-        else:
-            try:
-                content = path.read_text(encoding="utf-8")
-            except Exception as e:
-                log_message(f"bump: cannot read {rel_path}: {e}")
-                continue
+        new_content, _ = mdef.set_version(content, new_version)
+        if new_content is None:
+            continue
 
-            new_content, _ = mdef.set_version(content, new_version)
-            if new_content is None:
-                continue
-
-            try:
-                path.write_text(new_content, encoding="utf-8")
-            except Exception as e:
-                log_message(f"bump: cannot write {rel_path}: {e}")
-                continue
-
-        add = subprocess.run(
-            ["git", "add", str(path)],
-            capture_output=True, text=True, encoding="utf-8", errors="ignore",
-            cwd=repo_root,
-        )
-        if add.returncode != 0:
-            log_message(f"bump: git add {rel_path} failed: {add.stderr}")
+        try:
+            path.write_text(new_content, encoding="utf-8")
+        except Exception as e:
+            log_message(f"bump: cannot write {rel_path}: {e}")
             continue
 
         log_message(f"bump: {rel_path} {old_version} {new_version} ({kind})")
         bumps.append((rel_path, old_version, new_version))
 
     return bumps
+
+
+def _amend_bump(bumps: list[tuple], repo_root: Path) -> None:
+    if not bumps or os.environ.get("NEURO_COMMIT_AMENDING") == "1":
+        return
+
+    import subprocess, sys, json, time
+
+    amend_script = textwrap.dedent(f"""\
+        import subprocess, os, time, sys
+        
+        repo_root = {str(repo_root)!r}
+        bumps = {json.dumps(bumps)}
+        
+        old_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore",
+            cwd=repo_root,
+        ).stdout.strip()
+        
+        for _ in range(300):
+            time.sleep(0.1)
+            new_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, encoding="utf-8", errors="ignore",
+                cwd=repo_root,
+            ).stdout.strip()
+            if new_head and new_head != old_head:
+                break
+        
+        for rel_path, _, new_version in bumps:
+            path = os.path.join(repo_root, rel_path)
+            subprocess.run(
+                ["git", "add", str(path)],
+                capture_output=True, text=True, encoding="utf-8", errors="ignore",
+                cwd=repo_root,
+            )
+        
+        env = {{**os.environ, "GIT_EDITOR": "true", "NEURO_COMMIT_AMENDING": "1"}}
+        subprocess.run(
+            ["git", "commit", "--amend", "--no-edit"],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore",
+            cwd=repo_root,
+            env=env,
+        )
+    """)
+
+    subprocess.Popen(
+        [sys.executable, "-c", amend_script],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cwd=repo_root,
+    )
 
 
 # ============================================================
@@ -1003,6 +1026,8 @@ def main():
         message = generate_fallback_message(diff[:MAX_DIFF_LENGTH])
         log_message(f"Fallback message generated ({len(message)} chars)")
 
+    bumps = []
+
     if BUMP_VERSION:
         kind = determine_bump_kind(message)
         bumps = bump_project_version(kind, message)
@@ -1021,6 +1046,12 @@ def main():
     with open(commit_msg_file, "w", encoding="utf-8") as f:
         f.write(message)
     log_message("Message written to commit file.")
+
+    if bumps:
+        repo_root = find_repo_root()
+        if repo_root:
+            _amend_bump(bumps, repo_root)
+
     log_message("--- HOOK FINISHED ---\n")
 
 
