@@ -90,7 +90,7 @@ SYSTEM_PROMPT = (
     "- NEVER describe merge commits, version bumps, or generic 'update' without context.\n"
     "- NEVER invent details not present in the diff.\n"
     "- If changes are ONLY in README/docs use type 'docs'.\n"
-    "- Output ONLY raw commit message. NO markdown, NO explanations, NO extra text.\n\n"
+    "- Output ONLY the raw commit message. NO markdown (no **, no `, no ```), NO explanations, NO prefixes like 'Commit Message:' or 'Response:'. Just the message itself.\n\n"
     "- Before you can updated code style by linters. DO NOT describe this in comment, ONLY IF this is only update\n\n"
     "BAD EXAMPLES (NEVER do this):\n"
     "  'update README.md' too vague\n"
@@ -249,6 +249,44 @@ def call_apifreellm(messages):
                     break
         except json.JSONDecodeError:
             pass
+
+    text = _clean_llm_response(text)
+    return text
+
+
+def _clean_llm_response(text: str) -> str:
+    lines = text.strip().split("\n")
+    result = []
+
+    for line in lines:
+        stripped = line.strip()
+        stripped = re.sub(r"^\*{1,2}\s*", "", stripped)
+        stripped = re.sub(r"\*{1,2}$", "", stripped)
+        stripped = stripped.strip()
+
+        if re.match(r"^[a-z]+(\([^)]*\))?!?:\s", stripped):
+            result.append(stripped)
+        elif stripped and result:
+            result.append(stripped)
+
+    if result:
+        clean = "\n".join(result)
+        if re.match(r"^[a-z]+(\([^)]*\))?!?:\s", clean):
+            return clean
+
+    backtick_match = re.search(r"`([^`]+)`", text)
+    if backtick_match:
+        candidate = backtick_match.group(1).strip()
+        if re.match(r"^[a-z]+(\([^)]*\))?!?:\s", candidate):
+            return candidate
+
+    match = re.search(
+        r"(?:(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)"
+        r"(?:\([^)]*\))?!?:\s.+?)(?:\n|$)",
+        text,
+    )
+    if match:
+        return match.group(0).strip()
 
     return text
 
