@@ -541,6 +541,10 @@ async function configInteractive() {
           name: `📈 Auto-bump version: ${config.bumpVersion ? "enabled" : "disabled"}`,
           value: "bump",
         },
+        {
+          name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
+          value: "apikey",
+        },
         { name: "✅ Save & exit", value: "exit" },
       ],
       "Configuration",
@@ -565,6 +569,25 @@ async function configInteractive() {
         config.bumpVersion
           ? "✅ Auto-bump enabled. Smart system auto-discovers manifests across the whole repo\n   (package.json, Cargo.toml, pyproject.toml, pubspec.yaml, Chart.yaml, composer.json,\n   build.gradle, *.csproj, *.gemspec, setup.cfg, VERSION, and more).\n   Preserves pre-release tags, handles monorepos, merges safely with staged files.\n   feat → minor, ! or BREAKING CHANGE → major, anything else → patch.\n"
           : "✅ Auto-bump disabled.\n",
+      );
+    }
+
+    if (mainAction === "apikey") {
+      const inquirer = await import("inquirer");
+      const { key } = await inquirer.default.prompt([
+        {
+          type: "input",
+          name: "key",
+          message: "Enter your API key from https://apifreellm.com/en/api-access:",
+          default: config.apiKey || "",
+        },
+      ]);
+      config.apiKey = key.trim();
+      saveConfig(config);
+      console.log(
+        config.apiKey
+          ? "✅ API key saved.\n"
+          : "ℹ️ API key cleared. Fallback generator will be used.\n",
       );
     }
 
