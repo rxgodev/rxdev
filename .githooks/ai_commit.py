@@ -1,4 +1,4 @@
-# NEURO_COMMIT_VERSION: 2.11.0
+# NEURO_COMMIT_VERSION: 2.12.0
 import ctypes
 import json
 import os

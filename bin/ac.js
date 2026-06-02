@@ -765,14 +765,34 @@ async function quickFlow() {
 
   const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
+  const dispWidth = (s) => {
+    const c = s.replace(/\x1b\[[0-9;]*m/g, "");
+    let w = 0;
+    for (const ch of c) {
+      const cp = ch.codePointAt(0);
+      if (cp > 0xffff) w += 2;
+      else if (cp >= 0x1100 && cp <= 0x115f) w += 2;
+      else if (cp >= 0x2e80 && cp <= 0x9fff) w += 2;
+      else if (cp >= 0xa000 && cp <= 0xa4cf) w += 2;
+      else if (cp >= 0xac00 && cp <= 0xd7af) w += 2;
+      else if (cp >= 0xfe30 && cp <= 0xfe6f) w += 2;
+      else if (cp >= 0xff01 && cp <= 0xff60) w += 2;
+      else if (cp >= 0x1f000 && cp <= 0x1ffff) w += 2;
+      else if (cp >= 0x20000 && cp <= 0x2ffff) w += 2;
+      else if (cp >= 0x30000 && cp <= 0x3ffff) w += 2;
+      else w += 1;
+    }
+    return w;
+  };
+
   const clearAndHeader = (lines) => {
-    const w = Math.max(...lines.map((l) => stripAnsi(l).length)) + 4;
+    const w = Math.max(...lines.map(dispWidth)) + 4;
     const t = "╭" + "─".repeat(w) + "╮";
     const b = "╰" + "─".repeat(w) + "╯";
     const p = "│" + " ".repeat(w) + "│";
     let o = t + "\n" + p + "\n";
     for (const l of lines) {
-      const c = stripAnsi(l).length;
+      const c = dispWidth(l);
       const L = Math.floor((w - c) / 2);
       o += "│" + " ".repeat(L) + l + " ".repeat(w - c - L) + "│\n";
     }
@@ -781,11 +801,11 @@ async function quickFlow() {
   };
 
   const sectionBox = (title, content) => {
-    const tLen = stripAnsi(title).length;
+    const tLen = dispWidth(title);
     const innerW = Math.max(
       54,
       tLen + 6,
-      ...content.map((l) => stripAnsi(l).length + 4),
+      ...content.map((l) => dispWidth(l) + 4),
     );
     const dash = "─".repeat(Math.max(0, innerW - tLen - 3));
     const top = "╭─ " + title + " " + dash + "╮";
@@ -793,7 +813,7 @@ async function quickFlow() {
     const pad = "│" + " ".repeat(innerW) + "│";
     let o = top + "\n" + pad + "\n";
     for (const l of content) {
-      const cl = stripAnsi(l).length;
+      const cl = dispWidth(l);
       o += "│  " + l + " ".repeat(Math.max(0, innerW - cl - 2)) + "│\n";
     }
     o += pad + "\n" + bottom;
@@ -803,15 +823,15 @@ async function quickFlow() {
   const contentBox = (content, title) => {
     const rawLines = content.trimEnd().split("\n");
     const maxContentW = rawLines.length > 0
-      ? Math.max(...rawLines.map((l) => stripAnsi(l).length))
+      ? Math.max(...rawLines.map(dispWidth))
       : 0;
-    const cols = (process.stdout.columns || 100) - 4;
+    const cols = (process.stdout.columns || 100) - 6;
     const w = Math.max(Math.min(maxContentW + 4, Math.min(cols, 100)), 30);
     const innerW = w - 4;
 
     const lines = [];
     for (const line of rawLines) {
-      if (stripAnsi(line).length > innerW && innerW > 20) {
+      if (dispWidth(line) > innerW && innerW > 20) {
         for (let i = 0; i < line.length; i += innerW) {
           lines.push(line.slice(i, i + innerW));
         }
@@ -824,7 +844,7 @@ async function quickFlow() {
     const pad = "│" + " ".repeat(w) + "│";
     let o;
     if (title) {
-      const tLen = stripAnsi(title).length;
+      const tLen = dispWidth(title);
       const dash = "─".repeat(Math.max(0, w - tLen - 3));
       o = "╭─ " + title + " " + dash + "╮\n";
     } else {
@@ -832,7 +852,7 @@ async function quickFlow() {
     }
     o += pad + "\n";
     for (const l of lines) {
-      const cl = stripAnsi(l).length;
+      const cl = dispWidth(l);
       o += "│  " + l + " ".repeat(Math.max(0, w - cl - 2)) + "│\n";
     }
     o += pad + "\n╰" + tb + "╯";
@@ -854,28 +874,26 @@ async function quickFlow() {
   //  STEP 1 — Stage
   // ================================================================
   nextStep();
-
   installPythonDeps();
 
-  console.log(`\n${sectionBox(`${bold}📂 Stage Changes${reset}`, [
-    `Specify path to stage  ${dim}(default: .)${reset}`,
-  ])}`);
+  const inq = await import("inquirer");
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+  const stageHeading = `  ${bold}📂 Stage Changes${reset}\n  ${dim}What files to stage?${reset}\n`;
 
-  const addPath = await new Promise((resolve) => {
-    rl.question(`\n  ${dim}git add${reset} `, (answer) => {
-      rl.close();
-      resolve(answer.trim() || ".");
-    });
-  });
+  process.stdout.write(`\n${stageHeading}`);
+
+  const { addPath } = await inq.default.prompt([{
+    type: "input",
+    name: "addPath",
+    message: "git add",
+    default: ".",
+    prefix: "",
+    transformer: (i) => dim + i + reset,
+  }]);
 
   const addResult = spawnSync("git", ["add", addPath], { stdio: "pipe" });
   if (addResult.status !== 0) {
-    console.error(`\n  ❌ Failed to stage changes.`);
+    console.error(`  ❌ Failed to stage changes.`);
     process.exit(1);
   }
 
@@ -884,23 +902,25 @@ async function quickFlow() {
     { encoding: "utf8" },
   ).stdout.trim().split("\n").filter(Boolean).length;
 
-  console.log(`\n  ${green}✅ ${stagedCount} file(s) staged${reset}\n`);
+  console.log(`  ${green}✅ ${stagedCount} file(s) staged${reset}\n`);
 
   // ================================================================
   //  STEP 2 — Commit Message
   // ================================================================
 
-  let commitInterrupted = false;
-
   const makeCommit = () => {
-    const result = spawnSync("git", ["commit", "--quiet"], {
-      stdio: ["inherit", "inherit", "pipe"],
-      env: { ...process.env, GIT_EDITOR: "true" },
+    return new Promise((resolve) => {
+      const child = spawn("git", ["commit", "--quiet"], {
+        stdio: "inherit",
+        env: { ...process.env, GIT_EDITOR: "true" },
+      });
+      const onInt = () => { child.kill(); };
+      process.on("SIGINT", onInt);
+      child.on("close", (code) => {
+        process.removeListener("SIGINT", onInt);
+        resolve(code);
+      });
     });
-    if (result.status === null || result.error) {
-      commitInterrupted = true;
-    }
-    return result;
   };
 
   const makeSummary = () => {
@@ -924,14 +944,14 @@ async function quickFlow() {
     `${dim}AI is analyzing your staged changes...${reset}`,
   ])}`);
 
-  let commitResult = makeCommit();
+  let commitResultCode = await makeCommit();
 
-  if (commitInterrupted) {
+  if (commitResultCode === null) {
     console.log(`\n  ↪️  Cancelled`);
     process.exit(130);
   }
 
-  if (commitResult.status !== 0) {
+  if (commitResultCode !== 0) {
     console.error(`\n  ❌ Failed to generate commit message`);
     process.exit(1);
   }
@@ -956,8 +976,7 @@ async function quickFlow() {
   showCommitReview();
 
   while (true) {
-    const inquirer = await import("inquirer");
-    const { action } = await inquirer.default.prompt([
+    const { action } = await inq.default.prompt([
       {
         type: "list",
         name: "action",
@@ -1034,13 +1053,12 @@ async function quickFlow() {
         `${dim}AI is re-analyzing your changes...${reset}`,
       ])}`);
 
-      commitInterrupted = false;
-      commitResult = makeCommit();
-      if (commitInterrupted) {
+      commitResultCode = await makeCommit();
+      if (commitResultCode === null) {
         console.log(`\n  ↪️  Cancelled`);
         process.exit(130);
       }
-      if (commitResult.status !== 0) {
+      if (commitResultCode !== 0) {
         console.error(`\n  ❌ Failed to regenerate`);
         process.exit(1);
       }
@@ -1062,24 +1080,19 @@ async function quickFlow() {
   // ================================================================
   nextStep();
 
-  console.log(`\n${sectionBox(`${bold}⬆️  Push Changes${reset}`, [
-    `Specify remote and branch  ${dim}(default: origin main)${reset}`,
-  ])}`);
+  process.stdout.write(`\n  ${bold}⬆️  Push Changes${reset}\n  ${dim}Specify remote and branch${reset}\n\n`);
 
-  const rl3 = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  const pushPath = await new Promise((resolve) => {
-    rl3.question(`\n  ${dim}git push${reset} `, (answer) => {
-      rl3.close();
-      resolve(answer.trim() || "origin main");
-    });
-  });
+  const { pushDest } = await inq.default.prompt([{
+    type: "input",
+    name: "pushDest",
+    message: "git push",
+    default: "origin main",
+    prefix: "",
+    transformer: (i) => dim + i + reset,
+  }]);
 
   console.log(`\n  ⬆️  Pushing...`);
-  const pushArgs = ["push", ...pushPath.split(/\s+/)];
+  const pushArgs = ["push", ...pushDest.split(/\s+/)];
   const push = spawnSync("git", pushArgs, { stdio: "inherit" });
 
   if (push.status !== 0) {
