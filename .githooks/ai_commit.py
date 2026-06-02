@@ -278,7 +278,8 @@ def _clean_llm_response(text: str) -> str:
     full = re.sub(r"^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", lambda m: m.group(1), full, flags=re.IGNORECASE)
 
     cc_match = re.search(
-        r"([a-z]+(?:\([^)]*\))?!?:\s.+?)(?:\n\n|\n(?![a-z]+[:(])|$)",
+        r"((?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)"
+        r"(?:\([^)]*\))?!?:\s.+?)(?:\n\n|\n(?![a-z]+[:(])|$)",
         full,
         re.DOTALL,
     )
