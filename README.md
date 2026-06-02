@@ -1,13 +1,10 @@
 # 🧠 NeuroCommit
 
-# ARCHIVED NOW
-## Do not install this!
-
 <div align="center">
 
-**AI-powered generator comments for your commits**
+**AI-powered conventional commit message generator**
 
-[Installation](#installation) • [Configuration](#configuration) •  [Quick Start](#quick-start)
+[Installation](#installation) • [Features](#features) • [Configuration](#configuration) •  [Quick Start](#quick-start)
 
 </div>
 
@@ -17,10 +14,22 @@
 
 </div>
 
-NeuroCommit is a powerful AI command-line CLI for creating comments on your commits. This allows you not to think about changes in your code, not to study the rules of writing comments, but just to enjoy.
+NeuroCommit is a command-line tool that writes [Conventional Commits](https://www.conventionalcommits.org/)-style messages for you from your staged diff, so you can stop thinking about commit wording and just commit.
 
 > [!NOTE]
 > Commit messages are generated via the free [apifreellm.com](https://apifreellm.com) endpoint. No API key, no registration, no token quotas.
+
+## Features
+
+- 🤖 **AI-generated messages** — Conventional Commits subject in English + body in Russian explaining *why*, derived from your staged diff.
+- 📈 **Auto-bump version** (opt-in) — detects semver level from the commit type and bumps `package.json`, `Cargo.toml` (`[package]`) and/or `pyproject.toml` (`[project]` or `[tool.poetry]`). Bumps every manifest found in the repo root.
+  - `feat:` → minor
+  - `!` or `BREAKING CHANGE` → major
+  - everything else → patch
+  - If a manifest is already in the staging area, it's left alone (assumed manual bump).
+- ✏️ **Edit before commit** — `qq go` lets you review, regenerate, or open `$EDITOR` to tweak the message before pushing.
+- 📂 **Multi-project** — manage hooks and shared templates across several repos from one place.
+- 🚫 **Ignore list** — `.commitignore` works like `.gitignore`; matching files are excluded from the diff sent to the model.
 
 ## Installation
 
@@ -44,30 +53,49 @@ NeuroCommit was successfully installed 🎉
 
 ## Configuration
 
-#### Optional settings (co-author signature, project list, templates)
-
 ```bash
 qq config
 ```
 
-#### You can set up files that should not be described by AI
+In the menu:
+- **👥 Co-author** — toggle the `Co-authored-by` trailer in commit messages.
+- **📈 Auto-bump version** — toggle automatic version bumps for `package.json` / `Cargo.toml` / `pyproject.toml`. Off by default.
+- **📂 Projects & Templates** — list integrated projects and manage shared `prepare-commit-msg` templates.
 
-Edit `.commitignore` like `.gitignore`. By default, files related to `.githooks` are embedded there.
+#### .commitignore
+
+Edit `.commitignore` like `.gitignore` to exclude files from the diff sent to the model. By default, files related to `.githooks` are listed there.
 
 ## Quick Start
 
 ```bash
-# Initialization git hooks in directory
+# Install the hook in this repo
 qq init
 
-# No key needed — just commit:
+# Stage and commit — message is generated automatically
 git add .
 git commit
 
-# Read the comment, add or change your points if necessary
-:wq # Command for Save + Exit from file
-git push
+# Or use the guided flow (stage + commit + review + push)
+qq go
 ```
+
+In `qq go`, after the message is generated you can:
+- ✅ **Push** — accept and push
+- ✏️ **Edit message** — open `$EDITOR` and amend
+- 🔄 **Regenerate** — ask the model again
+- ❌ **Cancel** — soft-reset and abort
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `qq init` | Install the AI commit hook in the current repo |
+| `qq go` | Guided flow: stage → commit → review → push |
+| `qq config` | Configure co-author, auto-bump, projects, templates |
+| `qq status` | Show integration status for this repo |
+| `qq retry` | Revert the last commit and regenerate its message |
+| `qq uninstall` | Remove the hook from this repo |
 
 ## License
 
