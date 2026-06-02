@@ -126,11 +126,6 @@ function unregisterProject() {
   } catch {}
 }
 
-function getHookVersion(content) {
-  const m = content.match(/^# NEURO_COMMIT_VERSION:\s*(\S+)/m);
-  return m ? m[1] : null;
-}
-
 function updateProjectHooks(projectPath) {
   const githooksDir = join(projectPath, ".githooks");
   if (!existsSync(githooksDir)) return false;
@@ -146,10 +141,7 @@ function updateProjectHooks(projectPath) {
   }
 
   const current = readFileSync(dst, "utf8");
-  const currentVer = getHookVersion(current);
-  const latestVer = getHookVersion(latest);
-
-  if (currentVer && latestVer && currentVer !== latestVer) {
+  if (current !== latest) {
     writeFileSync(dst, latest);
     return true;
   }
@@ -809,11 +801,23 @@ async function quickFlow() {
   };
 
   const contentBox = (content) => {
-    const lines = content.split("\n");
-    const maxW = lines.length > 0
-      ? Math.min(76, Math.max(...lines.map((l) => stripAnsi(l).length)))
-      : 0;
-    const w = Math.max(maxW + 4, 30);
+    const rawLines = content.split("\n");
+    const maxContentW = Math.max(...rawLines.map((l) => stripAnsi(l).length));
+    const cols = (process.stdout.columns || 100) - 4;
+    const w = Math.max(Math.min(maxContentW + 4, Math.min(cols, 100)), 30);
+    const innerW = w - 4;
+
+    const lines = [];
+    for (const line of rawLines) {
+      if (stripAnsi(line).length > innerW) {
+        for (let i = 0; i < line.length; i += innerW) {
+          lines.push(line.slice(i, i + innerW));
+        }
+      } else {
+        lines.push(line);
+      }
+    }
+
     const tb = "─".repeat(w);
     const pad = "│" + " ".repeat(w) + "│";
     let o = "╭" + tb + "╮\n" + pad + "\n";
@@ -823,6 +827,12 @@ async function quickFlow() {
     }
     o += pad + "\n╰" + tb + "╯";
     return o;
+  };
+
+  const showCommitReview = () => {
+    process.stdout.write("\x1b[2J\x1b[H");
+    console.log(clearAndHeader([`${bold}🚀 NeuroCommit QuickFlow®${reset}`]));
+    console.log(`\n${contentBox(currentMessage)}\n`);
   };
 
   const nextStep = () => {
@@ -905,8 +915,6 @@ async function quickFlow() {
     process.exit(1);
   }
 
-  console.log(`\n  ${makeSummary()}\n`);
-
   const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
   let currentMessage = readFileSync(commitMsgFile, "utf8").trim();
 
@@ -924,9 +932,9 @@ async function quickFlow() {
   // ================================================================
   //  LOOP — Review / Edit / Regenerate / Cancel
   // ================================================================
-  while (true) {
-    console.log(`\n${contentBox(currentMessage)}\n`);
+  showCommitReview();
 
+  while (true) {
     const inquirer = await import("inquirer");
     const { action } = await inquirer.default.prompt([
       {
@@ -993,8 +1001,7 @@ async function quickFlow() {
         process.exit(1);
       }
       currentMessage = edited;
-      console.log(`\n  ${green}✅ Message updated${reset}`);
-      continue;
+      showCommitReview();
     }
 
     if (action === "regenerate") {
@@ -1020,8 +1027,7 @@ async function quickFlow() {
         console.error("\n  ❌ Empty message after regeneration");
         process.exit(1);
       }
-      console.log(`\n  ${makeSummary()}\n`);
-      continue;
+      showCommitReview();
     }
   }
 
