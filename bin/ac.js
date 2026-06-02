@@ -22,26 +22,27 @@ const update = updateNotifier({
 }).update;
 
 if (update?.latest && update.latest !== pkg.version) {
-  const stripAnsi = (str) => str.replace(/\x1b\[[0-9;]*m/g, "");
+  const s = (str) => str.replace(/\x1b\[[0-9;]*m/g, "");
+  const RED = "\x1b[31m", GREEN = "\x1b[32m", CYAN = "\x1b[36m", DIM = "\x1b[38;5;244m", RST = "\x1b[0m";
 
   const lines = [
-    `Update available! ${"\x1b[31m"}${pkg.version}${"\x1b[0m"} → ${"\x1b[32m"}${update.latest}${"\x1b[0m"}.`,
-    `To update, run: ${"\x1b[36m"}pnpm add -g @rxgodev/neuro-commit@${update.latest}${"\x1b[0m"}`,
+    `Update available: ${RED}${pkg.version}${RST} → ${GREEN}${update.latest}${RST}`,
+    `Run: ${CYAN}qq self-update${RST}`,
+    `${DIM}Or: pnpm add -g @rxgodev/neuro-commit@${update.latest}${RST}`,
   ];
 
-  const maxWidth = Math.max(...lines.map((l) => stripAnsi(l).length)) + 8;
+  const maxWidth = Math.max(...lines.map((l) => s(l).length)) + 8;
   const top = "   ╭" + "─".repeat(maxWidth) + "╮";
   const bottom = "   ╰" + "─".repeat(maxWidth) + "╯";
-  const padding = "   │" + " ".repeat(maxWidth) + "│";
+  const pad = "   │" + " ".repeat(maxWidth) + "│";
 
-  let output = `\n${top}\n${padding}\n`;
+  let out = `\n${top}\n${pad}\n`;
   for (const line of lines) {
-    const cleanLen = stripAnsi(line).length;
-    const left = Math.floor((maxWidth - cleanLen) / 2);
-    const right = maxWidth - cleanLen - left;
-    output += `   │${" ".repeat(left)}${line}${" ".repeat(right)}│\n`;
+    const cl = s(line).length;
+    const L = Math.floor((maxWidth - cl) / 2);
+    out += `   │${" ".repeat(L)}${line}${" ".repeat(maxWidth - cl - L)}│\n`;
   }
-  console.log(`${output}${padding}\n${bottom}\n`);
+  console.log(`${out}${pad}\n${bottom}\n`);
 }
 
 const DEFAULT_COMMITIGNORE = `# Auto-commit configuration files
@@ -1056,6 +1057,40 @@ async function quickFlow() {
   console.log(`  ${green}✅ Pushed successfully${reset}\n`);
 }
 
+async function selfUpdate() {
+  const GREEN = "\x1b[32m";
+  const CYAN = "\x1b[36m";
+  const DIM = "\x1b[38;5;244m";
+  const RST = "\x1b[0m";
+
+  const p = JSON.parse(
+    readFileSync(join(__dirname, "../package.json"), "utf8"),
+  );
+  const u = updateNotifier({ pkg: p, updateCheckInterval: 0 }).update;
+
+  if (!u || u.latest === p.version) {
+    console.log(`  ${GREEN}✅ Already up-to-date (v${p.version})${RST}`);
+    return;
+  }
+
+  console.log(`\n  Updating ${DIM}v${p.version}${RST} → ${GREEN}v${u.latest}${RST}...\n`);
+
+  const pm = process.env.npm_config_user_agent?.includes("pnpm")
+    ? "pnpm"
+    : "npm";
+
+  const result = spawnSync(pm, [
+    "add", "-g", `@rxgodev/neuro-commit@${u.latest}`,
+  ], { stdio: "inherit" });
+
+  if (result.status !== 0) {
+    console.error(`\n  ❌ Update failed. Try manually:\n     ${pm} add -g @rxgodev/neuro-commit@${u.latest}`);
+    process.exit(1);
+  }
+
+  console.log(`  ${GREEN}✅ Updated to v${u.latest}${RST}\n`);
+}
+
 function showHelp() {
   console.log(`${boldCyan}NeuroCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
@@ -1069,6 +1104,7 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
   ${boldCyan}retry${resetColor}         Revert last commit and regenerate message
+  ${boldCyan}self-update${resetColor}   Update NeuroCommit to the latest version
 
 ${"\x1b[1m\x1b[37m"}Options:${resetColor}
   ${boldCyan}-v, --version${resetColor}   Show version
@@ -1121,6 +1157,9 @@ switch (cmd) {
     break;
   case "go":
     quickFlow();
+    break;
+  case "self-update":
+    selfUpdate();
     break;
   default:
     showHelp();
