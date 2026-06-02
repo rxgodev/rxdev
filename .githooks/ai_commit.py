@@ -1,4 +1,5 @@
 # NEURO_COMMIT_VERSION: 2.4.1
+import ctypes
 import json
 import os
 import re
@@ -313,19 +314,27 @@ def _clean_llm_response(text: str) -> str:
     return first
 
 
+def _write_console(msg):
+    try:
+        ctypes.windll.kernel32.WriteConsoleW(
+            ctypes.windll.kernel32.GetStdHandle(-11), msg, len(msg), None, None
+        )
+    except Exception:
+        pass
+
+
 def _spinner(stop_event, text=""):
     bar = ["[#.......]", "[##......]", "[###.....]", "[####....]",
            "[#####...]", "[######..]", "[#######.]", "[########]",
            "[.#######]", "[..######]", "[...#####]", "[....####]",
            "[.....###]", "[......##]", "[.......#]", "[........]"]
     i = 0
+    blank = " " * (len(text) + 20)
     while not stop_event.is_set():
-        sys.stdout.write(f"\r{bar[i % len(bar)]} {text}")
-        sys.stdout.flush()
+        _write_console(f"\r{bar[i % len(bar)]} {text}")
         i += 1
         time.sleep(0.07)
-    sys.stdout.write("\r" + " " * (len(text) + 20) + "\r")
-    sys.stdout.flush()
+    _write_console(f"\r{blank}\r")
 
 
 def generate_commit_message(diff):
