@@ -17,7 +17,8 @@
 NeuroCommit is a command-line tool that writes [Conventional Commits](https://www.conventionalcommits.org/)-style messages for you from your staged diff, so you can stop thinking about commit wording and just commit.
 
 > [!NOTE]
-> Commit messages are generated via the free [apifreellm.com](https://apifreellm.com) endpoint. No API key, no registration, no token quotas.
+> Commit messages are generated via the free [apifreellm.com](https://apifreellm.com) endpoint out of the box — no API key, no registration, no token quotas.  
+> Optionally you can set your own API key via `qq config` for higher rate limits.
 
 ## Features
 
@@ -65,6 +66,8 @@ qq config
 ```
 
 In the menu:
+- **🔑 API key** — set or clear your API key from [apifreellm.com/en/api-access](https://apifreellm.com/en/api-access).  
+  Leaving it empty uses the free anonymous endpoint. Setting a key gives access to higher rate limits.
 - **👥 Co-author** — toggle the `Co-authored-by` trailer in commit messages.
 - **📈 Auto-bump version** — toggle smart automatic version bumps for 15+ manifest types (JSON, TOML, YAML, XML, Gradle, plain text). Off by default.
 - **📂 Projects & Templates** — list integrated projects and manage shared `prepare-commit-msg` templates.
@@ -99,7 +102,7 @@ In `qq go`, after the message is generated you can:
 |---|---|
 | `qq init` | Install the AI commit hook in the current repo |
 | `qq go` | Guided flow: stage → commit → review → push |
-| `qq config` | Configure co-author, auto-bump, projects, templates |
+| `qq config` | Configure API key, co-author, auto-bump, projects, templates |
 | `qq status` | Show integration status for this repo |
 | `qq retry` | Revert the last commit and regenerate its message |
 | `qq uninstall` | Remove the hook from this repo |
