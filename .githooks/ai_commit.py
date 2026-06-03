@@ -259,8 +259,8 @@ def call_groq(messages):
                         if "content" in delta:
                             content = delta["content"]
                             response_text += content
-                            sys.stdout.write(content)
-                            sys.stdout.flush()
+                            sys.stdout.buffer.write(content.encode("utf-8"))
+                            sys.stdout.buffer.flush()
                     except (json.JSONDecodeError, KeyError, IndexError):
                         pass
             print()
@@ -290,7 +290,7 @@ def _clean_llm_response(text: str) -> str:
     text = re.sub(r"#+\s*", "", text)
 
     lines = text.strip().split("\n")
-    skip_headers = {
+    skip_prefixes = [
         "commit message",
         "response",
         "output",
@@ -300,48 +300,44 @@ def _clean_llm_response(text: str) -> str:
         "summary",
         "diff",
         "analysis",
-    }
+        "here is",
+        "here's",
+    ]
 
-    candidates = []
-    for line in lines:
+    start = 0
+    for i, line in enumerate(lines):
         lowered = line.strip().lower()
-        if not lowered:
+        if any(lowered.startswith(p) for p in skip_prefixes):
+            start = i + 1
+        elif lowered.startswith("- ") and ":" in lowered:
+            start = i + 1
+        elif not line.strip():
             continue
-        if any(lowered.startswith(h) and ":" in lowered for h in skip_headers):
-            continue
-        if lowered.startswith("- ") and ":" in lowered:
-            continue
-        candidates.append(line.strip())
+        elif re.match(r"^(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", lowered):
+            break
+        else:
+            start = i + 1
 
-    full = "\n".join(candidates).strip()
+    relevant = lines[start:]
+
+    clean_lines = [l.rstrip() for l in relevant]
+    full = "\n".join(clean_lines).strip()
     full = _normalize_type(full)
 
-    cc_match = re.search(
-        r"((?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)"
-        r"(?:\([^)]*\))?!?:\s.+?)(?:\n\n|\n(?![a-z]+[:(])|$)",
-        full,
-        re.DOTALL,
-    )
-    if cc_match:
-        msg = cc_match.group(1).strip().split("\n")[0]
-        if len(msg) > 150:
-            msg = msg[:147] + "..."
-        return msg
+    parts = full.split("\n", 1)
+    subject = parts[0].rstrip(".")
+    if len(subject) > 150:
+        subject = subject[:147] + "..."
 
-    first = candidates[0] if candidates else text.strip()
-    first = first.strip()
-    first = _normalize_type(first)
-    first = first.rstrip(".")
+    if len(parts) > 1 and parts[1].strip():
+        return f"{subject}\n\n{parts[1].strip()}"
 
     if not re.match(
-        r"^(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", first
+        r"^(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", subject
     ):
-        first = f"chore: {first}"
+        subject = f"chore: {subject}"
 
-    if len(first) > 150:
-        first = first[:147] + "..."
-
-    return first
+    return subject
 
 
 def generate_commit_message(diff):
