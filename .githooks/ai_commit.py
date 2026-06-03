@@ -1,12 +1,10 @@
-# NEURO_COMMIT_VERSION: 2.12.0
-import ctypes
+# NEURO_COMMIT_VERSION: 2.13.0
 import json
 import os
 import re
 import subprocess
 import sys
 import textwrap
-import threading
 import time
 import traceback
 import urllib.error
@@ -20,7 +18,8 @@ CONFIG_DIR = Path.home() / ".config" / "ai-commit"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-API_URL = "https://apifreellm.com/api/v1/chat"
+API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.1-8b-instant"
 REQUEST_TIMEOUT = 60
 MAX_ATTEMPTS = 3
 MAX_DIFF_LENGTH = 3000
@@ -217,15 +216,23 @@ def get_staged_diff():
         return "", False
 
 
-def call_apifreellm(messages):
-    prompt = messages[-1]["content"] if messages else ""
-    payload = {"message": prompt}
+def call_groq(messages):
+    if not API_KEY:
+        raise Exception(
+            "Groq API key is not set. Run 'qq config' to set your key "
+            "(get one free at https://console.groq.com)"
+        )
+
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": messages,
+        "stream": True,
+        "temperature": 0.1,
+    }
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "neuro-commit/3.0",
+        "Authorization": f"Bearer {API_KEY}",
     }
-    if API_KEY:
-        headers["Authorization"] = f"Bearer {API_KEY}"
 
     req = urllib.request.Request(
         API_URL,
@@ -236,35 +243,35 @@ def call_apifreellm(messages):
 
     try:
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as response:
-            raw = response.read()
+            response_text = ""
+            for line_bytes in response:
+                line = line_bytes.decode("utf-8", errors="replace").strip()
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    data_str = line[6:]
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                        delta = chunk["choices"][0]["delta"]
+                        if "content" in delta:
+                            content = delta["content"]
+                            response_text += content
+                            sys.stdout.write(content)
+                            sys.stdout.flush()
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        pass
+            print()
+            return _clean_llm_response(response_text.strip())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         if e.code == 429:
-            try:
-                data = json.loads(body)
-                retry_after = int(data.get("retryAfter", 15))
-            except (json.JSONDecodeError, ValueError, TypeError):
-                retry_after = 15
-            log_message(f"Rate limited. Waiting {retry_after}s before retry...")
-            time.sleep(retry_after)
-        raise Exception(f"HTTP {e.code}: {body}")
+            log_message(f"Groq rate limited: {body}")
+            raise Exception("Groq API rate limit exceeded. Wait a moment and retry.")
+        raise Exception(f"Groq API HTTP {e.code}: {body}")
     except urllib.error.URLError as e:
-        raise Exception(f"URL error: {e.reason}")
-
-    text = raw.decode("utf-8", errors="replace").strip()
-
-    if text.startswith("{"):
-        try:
-            data = json.loads(text)
-            for key in ("response", "message", "content", "output", "result"):
-                if isinstance(data.get(key), str):
-                    text = data[key].strip()
-                    break
-        except json.JSONDecodeError:
-            pass
-
-    text = _clean_llm_response(text)
-    return text
+        raise Exception(f"Groq API URL error: {e.reason}")
 
 
 def _normalize_type(text: str) -> str:
@@ -336,43 +343,6 @@ def _clean_llm_response(text: str) -> str:
     return first
 
 
-def _write_console(msg):
-    try:
-        ctypes.windll.kernel32.WriteConsoleW(
-            ctypes.windll.kernel32.GetStdHandle(-11), msg, len(msg), None, None
-        )
-    except Exception:
-        pass
-
-
-def _spinner(stop_event, text=""):
-    bar = [
-        "[#.......]",
-        "[##......]",
-        "[###.....]",
-        "[####....]",
-        "[#####...]",
-        "[######..]",
-        "[#######.]",
-        "[########]",
-        "[.#######]",
-        "[..######]",
-        "[...#####]",
-        "[....####]",
-        "[.....###]",
-        "[......##]",
-        "[.......#]",
-        "[........]",
-    ]
-    i = 0
-    blank = " " * (len(text) + 20)
-    while not stop_event.is_set():
-        _write_console(f"\r{bar[i % len(bar)]} {text}")
-        i += 1
-        time.sleep(0.07)
-    _write_console(f"\r{blank}\r")
-
-
 def generate_commit_message(diff):
     user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
     messages = [
@@ -383,18 +353,9 @@ def generate_commit_message(diff):
     last_error = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            log_message(f"Calling apifreellm.com (attempt {attempt}/{MAX_ATTEMPTS})")
-            stop_spinner = threading.Event()
-            spinner_thread = threading.Thread(
-                target=_spinner, args=(stop_spinner, "Comment generation started")
-            )
-            spinner_thread.daemon = True
-            spinner_thread.start()
-            try:
-                message = call_apifreellm(messages)
-            finally:
-                stop_spinner.set()
-                spinner_thread.join(timeout=2)
+            log_message(f"Calling Groq (attempt {attempt}/{MAX_ATTEMPTS})")
+            print(f"[{attempt}/{MAX_ATTEMPTS}] Generating commit message...")
+            message = call_groq(messages)
 
             if not message or message.startswith("#") or len(message) < 10:
                 log_message(f"Response too short or invalid: {repr(message)}")
@@ -409,15 +370,15 @@ def generate_commit_message(diff):
                 continue
 
             log_message(f"SUCCESS on attempt {attempt}")
-            print("[+] Comment generation started")
             return message
 
         except Exception as e:
             last_error = str(e)
             log_message(f"FAILURE on attempt {attempt}: {e}")
+            if attempt < MAX_ATTEMPTS:
+                print(f"  Retry: {e}")
 
     log_message(f"All {MAX_ATTEMPTS} attempts failed, using fallback generator")
-    print("[+] Comment generation started")
     return None
 
 

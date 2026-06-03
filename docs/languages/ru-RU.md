@@ -17,8 +17,8 @@
 NeuroCommit — CLI, который сам пишет сообщения коммитов в стиле [Conventional Commits](https://www.conventionalcommits.org/) на основе staged-диффа. Не думай о формулировках — просто коммить.
 
 > [!NOTE]
-> Сообщения коммитов генерируются через бесплатный эндпоинт [apifreellm.com](https://apifreellm.com) — не нужен ни API-ключ, ни регистрация, ни квоты на токены.  
-> Опционально можно указать свой API-ключ через `qq config` для более высоких лимитов запросов.
+> Сообщения коммитов генерируются через [Groq API](https://console.groq.com) — быстрый инференс на Llama 3.1 8B со стримингом.  
+> Нужен бесплатный API-ключ от [console.groq.com](https://console.groq.com). Укажи его через `qq config`.
 
 ## Возможности
 
@@ -66,8 +66,8 @@ qq config
 ```
 
 В меню:
-- **🔑 API key** — указать или удалить API-ключ с [apifreellm.com/en/api-access](https://apifreellm.com/en/api-access).  
-  Если оставить пустым, используется бесплатный анонимный эндпоинт. С ключом — более высокие лимиты запросов.
+- **🔑 API key** — указать или удалить Groq API-ключ с [console.groq.com](https://console.groq.com).  
+  API-ключ обязателен для Groq (получить бесплатно).
 - **👥 Co-author** — добавлять ли строку `Co-authored-by` в сообщение коммита.
 - **📈 Auto-bump version** — умный автоматический бамп версии для 15+ типов манифестов (JSON, TOML, YAML, XML, Gradle, plain text). По умолчанию выключено.
 - **📂 Projects & Templates** — список подключённых проектов и общие шаблоны `prepare-commit-msg`.

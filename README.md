@@ -17,8 +17,8 @@
 NeuroCommit is a command-line tool that writes [Conventional Commits](https://www.conventionalcommits.org/)-style messages for you from your staged diff, so you can stop thinking about commit wording and just commit.
 
 > [!NOTE]
-> Commit messages are generated via the free [apifreellm.com](https://apifreellm.com) endpoint out of the box — no API key, no registration, no token quotas.  
-> Optionally you can set your own API key via `qq config` for higher rate limits.
+> Commit messages are generated via the [Groq API](https://console.groq.com) — fast inference on Llama 3.1 8B with streaming.  
+> You need a free API key from [console.groq.com](https://console.groq.com). Set it via `qq config`.
 
 ## Features
 
@@ -66,8 +66,8 @@ qq config
 ```
 
 In the menu:
-- **🔑 API key** — set or clear your API key from [apifreellm.com/en/api-access](https://apifreellm.com/en/api-access).  
-  Leaving it empty uses the free anonymous endpoint. Setting a key gives access to higher rate limits.
+- **🔑 API key** — set or clear your Groq API key from [console.groq.com](https://console.groq.com).  
+  API key is required for Groq (get one free).
 - **👥 Co-author** — toggle the `Co-authored-by` trailer in commit messages.
 - **📈 Auto-bump version** — toggle smart automatic version bumps for 15+ manifest types (JSON, TOML, YAML, XML, Gradle, plain text). Off by default.
 - **📂 Projects & Templates** — list integrated projects and manage shared `prepare-commit-msg` templates.

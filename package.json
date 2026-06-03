@@ -1,6 +1,6 @@
 {
   "name": "@rxgodev/neuro-commit",
-  "version": "2.12.14",
+  "version": "2.13.0",
   "description": "AI-powered commit message generator",
   "keywords": [
     "git",

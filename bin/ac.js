@@ -581,7 +581,7 @@ async function configInteractive() {
           type: "input",
           name: "key",
           message:
-            "Enter your API key from https://apifreellm.com/en/api-access:",
+            "Enter your Groq API key (get one free at https://console.groq.com):",
           default: config.apiKey || "",
         },
       ]);
@@ -728,6 +728,7 @@ function showStatus() {
   const commitignoreExists = existsSync(commitignorePath);
 
   const templateName = getTemplateForProject(root) || "—";
+  const cfg = loadConfig();
 
   console.log("\n🔍 NeuroCommit Status\n");
   console.log(`📁 Git root:       ${root}`);
@@ -740,8 +741,7 @@ function showStatus() {
   console.log(
     `📄 .commitignore:   ${commitignoreExists ? "✅ exists" : "⚠️ missing"}`,
   );
-  console.log(`🌐 Provider:        apifreellm.com (no API key required)`);
-  const cfg = loadConfig();
+  console.log(`🌐 Provider:        Groq (${cfg.apiKey ? "API key configured" : "API key needed — run 'qq config'"})`);
   console.log(
     `📈 Auto-bump:       ${cfg.bumpVersion ? "✅ enabled" : "— disabled"}`,
   );
