@@ -633,28 +633,26 @@ async function configInteractive() {
       saveConfig(config);
       console.log(
         config.bumpVersion
-          ? "✅ Auto-bump enabled. Smart system auto-discovers manifests across the whole repo\n   (package.json, Cargo.toml, pyproject.toml, pubspec.yaml, Chart.yaml, composer.json,\n   build.gradle, *.csproj, *.gemspec, setup.cfg, VERSION, and more).\n   Preserves pre-release tags, handles monorepos, merges safely with staged files.\n   feat → minor, ! or BREAKING CHANGE → major, anything else → patch.\n"
+          ? "✅ Auto-bump enabled.\n"
           : "✅ Auto-bump disabled.\n",
       );
     }
 
     if (mainAction === "apikey") {
-      const inquirer = await import("inquirer");
-      const { key } = await inquirer.default.prompt([
-        {
-          type: "input",
-          name: "key",
-          message:
-            "Enter your Groq API key (get one free at https://console.groq.com):",
-          default: config.apiKey || "",
-        },
-      ]);
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const masked = config.apiKey
+        ? config.apiKey.slice(0, 8) + "..." + config.apiKey.slice(-4)
+        : "not set";
+      const key = await new Promise((resolve) => {
+        rl.question(`🔑 API key (current: ${masked})\n   Enter new key (or empty to clear): `, resolve);
+      });
+      rl.close();
       config.apiKey = key.trim();
       saveConfig(config);
       console.log(
         config.apiKey
           ? "✅ API key saved.\n"
-          : "ℹ️ API key cleared. Fallback generator will be used.\n",
+          : "ℹ️  API key cleared. Fallback generator will be used.\n",
       );
     }
 
@@ -732,6 +730,21 @@ async function configInteractive() {
         await manageTemplates();
       }
     }
+
+    // After any change, offer quick exit without scrolling the main menu
+    const inquirer = await import("inquirer");
+    const { next } = await inquirer.default.prompt([
+      {
+        type: "list",
+        name: "next",
+        message: "What next?",
+        choices: [
+          { name: "⬅️  Continue configuring", value: "continue" },
+          { name: "✅ Save & exit", value: "exit" },
+        ],
+      },
+    ]);
+    if (next === "exit") break;
   }
 }
 
