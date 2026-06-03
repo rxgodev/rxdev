@@ -749,18 +749,6 @@ function showStatus() {
   console.log("");
 }
 
-async function updateSelf() {
-  console.log("🚀 Updating NeuroCommit to the latest version...");
-  const manager = spawnSync("pnpm", ["--version"]).status === 0 ? "pnpm" : "npm";
-  const args = manager === "pnpm" ? ["add", "-g"] : ["install", "-g"];
-  const result = spawnSync(manager, [...args, `${pkg.name}@latest`], { stdio: "inherit" });
-  if (result.status === 0) {
-    console.log("✅ Update complete.");
-  } else {
-    console.error(`\n❌ Update failed. Try manually:\n   ${manager} ${args.join(" ")} ${pkg.name}@latest\n`);
-  }
-}
-
 // === HELP & VERSION ===
 
 const boldCyan = "\x1b[1m\x1b[38;2;57;186;229m";
@@ -988,7 +976,6 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
   ${boldCyan}retry${resetColor}         Revert last commit and regenerate message
-  ${boldCyan}update${resetColor}        Update NeuroCommit to the latest version
 
   ${"\x1b[1m\x1b[37m"}Options:${resetColor}
 
@@ -1039,9 +1026,6 @@ switch (cmd) {
     break;
   case "retry":
     retryLastCommit();
-    break;
-  case "update":
-    updateSelf();
     break;
   case "go":
     quickFlow();
