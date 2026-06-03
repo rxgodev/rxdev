@@ -825,7 +825,13 @@ async function quickFlow() {
       env: { ...process.env, GIT_EDITOR: "true" },
     });
 
-    child.stdout.pipe(process.stdout);
+    let isFirst = true;
+    child.stdout.on("data", (d) => {
+      let s = d.toString();
+      if (isFirst) { s = "  " + s; isFirst = false; }
+      s = s.replace(/(\r\n?|\n)/g, "$1  ");
+      process.stdout.write(s);
+    });
 
     process.on("SIGINT", () => child.kill());
 
