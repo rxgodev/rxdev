@@ -783,11 +783,8 @@ async function quickFlow() {
   const sa = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
   const clearScreen = () => {
-    if (process.platform === "win32") {
-      spawnSync("cls", { stdio: "inherit", shell: true });
-    } else {
-      process.stdout.write("\x1b[2J\x1b[H");
-    }
+    // Перемещаем курсор в начало экрана, не очищая историю терминала
+    process.stdout.write("\x1b[H");
   };
 
   // ── Header box (only boxed element) ──
