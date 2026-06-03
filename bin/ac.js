@@ -820,13 +820,35 @@ async function quickFlow() {
 
   const makeCommit = () => new Promise((resolve) => {
     const child = spawn("git", ["commit", "--quiet"], {
-      stdio: "inherit",
+      stdio: ["inherit", "pipe", "pipe"],
       env: { ...process.env, GIT_EDITOR: "true" },
+      detached: true,
     });
 
     let cancelled = false;
-    const onSig = () => { cancelled = true; child.kill(); };
+    const onSig = () => {
+      cancelled = true;
+      try {
+        if (process.platform === "win32") {
+          spawnSync("taskkill", ["/f", "/t", "/pid", String(child.pid)], { stdio: "ignore" });
+        } else {
+          child.kill("SIGTERM");
+        }
+      } catch {}
+    };
     process.on("SIGINT", onSig);
+
+    let firstOut = true;
+    child.stdout.on("data", (d) => {
+      let s = d.toString();
+      if (firstOut) { s = "  " + s; firstOut = false; }
+      s = s.replace(/(\r\n?|\n)/g, "$1  ");
+      process.stdout.write(s);
+    });
+
+    child.stderr.on("data", (d) => {
+      if (!cancelled) process.stderr.write(d);
+    });
 
     child.on("close", (code) => {
       process.removeListener("SIGINT", onSig);
