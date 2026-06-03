@@ -27,8 +27,7 @@ if (update?.latest && update.latest !== pkg.version) {
 
   const lines = [
     `Update available: ${RED}${pkg.version}${RST} → ${GREEN}${update.latest}${RST}`,
-    `Run: ${CYAN}qq self-update${RST}`,
-    `${DIM}Or: pnpm add -g @rxgodev/neuro-commit@${update.latest}${RST}`,
+    `${DIM}pnpm add -g @rxgodev/neuro-commit@${update.latest}${RST}`,
   ];
 
   const maxWidth = Math.max(...lines.map((l) => s(l).length)) + 8;
@@ -821,22 +820,17 @@ async function quickFlow() {
 
   const makeCommit = () => new Promise((resolve) => {
     const child = spawn("git", ["commit", "--quiet"], {
-      stdio: ["inherit", "pipe", "inherit"],
+      stdio: "inherit",
       env: { ...process.env, GIT_EDITOR: "true" },
     });
 
-    let isFirst = true;
-    child.stdout.on("data", (d) => {
-      let s = d.toString();
-      if (isFirst) { s = "  " + s; isFirst = false; }
-      s = s.replace(/(\r\n?|\n)/g, "$1  ");
-      process.stdout.write(s);
-    });
-
-    process.on("SIGINT", () => child.kill());
+    let cancelled = false;
+    const onSig = () => { cancelled = true; child.kill(); };
+    process.on("SIGINT", onSig);
 
     child.on("close", (code) => {
-      resolve(code);
+      process.removeListener("SIGINT", onSig);
+      resolve(cancelled ? null : code);
     });
   });
 
@@ -946,60 +940,6 @@ async function quickFlow() {
   console.log(`  ${green}✅ Pushed successfully${reset}\n`);
 }
 
-async function selfUpdate() {
-  const GREEN = "\x1b[32m";
-  const DIM = "\x1b[38;5;244m";
-  const RST = "\x1b[0m";
-
-  if (!update || update.latest === pkg.version) {
-    console.log(`  ${GREEN}✅ Already up-to-date (v${pkg.version})${RST}`);
-    return;
-  }
-
-  const registry = "https://npm.pkg.github.com/";
-  const pkgSpec = `@rxgodev/neuro-commit@${update.latest}`;
-
-  console.log(`\n  Updating ${DIM}v${pkg.version}${RST} → ${GREEN}v${update.latest}${RST}...\n`);
-
-  const pmList = [
-    { cmd: "pnpm", args: ["add", "-g", pkgSpec, "--registry", registry] },
-    { cmd: "npm", args: ["install", "-g", pkgSpec, "--registry", registry] },
-  ];
-
-  const ua = process.env.npm_config_user_agent || "";
-  if (ua.includes("pnpm")) pmList.unshift(pmList.splice(pmList.findIndex((p) => p.cmd === "pnpm"), 1)[0]);
-
-  for (const pm of pmList) {
-    const which = spawnSync(
-      process.platform === "win32" ? "where" : "which",
-      [pm.cmd],
-      { stdio: "pipe" },
-    );
-    if (which.status !== 0) continue;
-
-    const result = spawnSync(pm.cmd, pm.args, { stdio: "inherit" });
-    if (result.status === 0) {
-      console.log(`  ${GREEN}✅ Updated to v${update.latest}${RST}\n`);
-      return;
-    }
-  }
-
-  console.error(`\n  ❌ Update failed. Try manually:\n`);
-  for (const pm of pmList) {
-    const which = spawnSync(
-      process.platform === "win32" ? "where" : "which",
-      [pm.cmd],
-      { stdio: "pipe" },
-    );
-    if (which.status === 0) {
-      console.error(`     ${pm.cmd} ${pm.args.slice(0, -2).join(" ")} ${pkgSpec}`);
-    }
-  }
-  console.error("");
-  process.exit(1);
-}
-
-
 function showHelp() {
   console.log(`${boldCyan}NeuroCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
@@ -1013,7 +953,6 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
   ${boldCyan}retry${resetColor}         Revert last commit and regenerate message
-  ${boldCyan}self-update${resetColor}   Update NeuroCommit to the latest version
 
 ${"\x1b[1m\x1b[37m"}Options:${resetColor}
   ${boldCyan}-v, --version${resetColor}   Show version
@@ -1066,9 +1005,6 @@ switch (cmd) {
     break;
   case "go":
     quickFlow();
-    break;
-  case "self-update":
-    selfUpdate();
     break;
   default:
     showHelp();
