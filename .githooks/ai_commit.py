@@ -296,47 +296,32 @@ def _clean_llm_response(text: str) -> str:
     text = re.sub(r"#+\s*", "", text)
 
     lines = text.strip().split("\n")
-    skip_prefixes = [
-        "commit message",
-        "response",
-        "output",
-        "result",
-        "explanation",
-        "changes",
-        "summary",
-        "diff",
-        "analysis",
-        "here is",
-        "here's",
-    ]
+    skip_prefixes = (
+        "commit message", "response", "output", "result",
+        "explanation", "changes", "summary", "diff", "analysis",
+        "here is", "here's",
+    )
 
     start = 0
     for i, line in enumerate(lines):
         lowered = line.strip().lower()
         if any(lowered.startswith(p) for p in skip_prefixes):
             start = i + 1
-        elif lowered.startswith("- ") and ":" in lowered:
-            start = i + 1
         elif not line.strip():
             continue
-        elif re.match(r"^(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", lowered):
-            break
         else:
-            start = i + 1
+            break
 
-    relevant = lines[start:]
+    body = "\n".join(lines[start:]).strip()
+    body = _normalize_type(body)
 
-    clean_lines = [l.rstrip() for l in relevant]
-    full = "\n".join(clean_lines).strip()
-    full = _normalize_type(full)
-
-    parts = full.split("\n", 1)
+    parts = body.split("\n", 1)
     subject = parts[0].rstrip(".")
     if len(subject) > 150:
         subject = subject[:147] + "..."
 
     if len(parts) > 1 and parts[1].strip():
-        return f"{subject}\n\n{parts[1].strip()}"
+        return f"{subject}\n\n{parts[1]}"
 
     if not re.match(
         r"^(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", subject
@@ -357,7 +342,7 @@ def generate_commit_message(diff):
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             log_message(f"Calling Groq (attempt {attempt}/{MAX_ATTEMPTS})")
-            print(f"[{attempt}/{MAX_ATTEMPTS}] Generating commit message...", flush=True)
+            print(f"[{attempt}/{MAX_ATTEMPTS}] Generating commit message...\n", flush=True)
             message = call_groq(messages)
 
             if not message or message.startswith("#") or len(message) < 10:
