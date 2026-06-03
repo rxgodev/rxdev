@@ -785,7 +785,7 @@ async function quickFlow() {
     const tw = sa(title).length;
     const cols = Math.min(process.stdout.columns || 80, 72);
     const dash = Math.max(cols - tw - 2, 4);
-    return `  ${title}  ${cyan}${"─".repeat(dash)}${reset}`;
+    return `${title}  ${cyan}${"─".repeat(dash)}${reset}`;
   };
 
   // ================================================================
@@ -795,20 +795,20 @@ async function quickFlow() {
   installPythonDeps();
 
   console.log(`\n${sep(`${bold}📂  Stage Changes${reset}`)}\n`);
-  console.log(`  ${dim}What files to stage?  (default: .)${reset}\n`);
+  console.log(`${dim}What files to stage?  (default: .)${reset}\n`);
 
   const rl1 = readline.createInterface({ input: process.stdin, output: process.stdout });
   const addPath = await new Promise((r) =>
-    rl1.question(`  ${dim}git add${reset} `, (a) => { rl1.close(); r(a.trim() || "."); })
+    rl1.question(`${dim}git add${reset} `, (a) => { rl1.close(); r(a.trim() || "."); })
   );
 
   const addResult = spawnSync("git", ["add", addPath], { stdio: "pipe" });
-  if (addResult.status !== 0) { console.error("  ❌ Failed to stage changes."); process.exit(1); }
+  if (addResult.status !== 0) { console.error("❌ Failed to stage changes."); process.exit(1); }
 
   const stagedCount = spawnSync("git", ["diff", "--cached", "--numstat"], { encoding: "utf8" })
     .stdout.trim().split("\n").filter(Boolean).length;
 
-  console.log(`  ${green}✅ ${stagedCount} file(s) staged${reset}\n`);
+  console.log(`${green}✅ ${stagedCount} file(s) staged${reset}\n`);
 
   // ================================================================
   //  STEP 2 — Generate
@@ -816,7 +816,7 @@ async function quickFlow() {
   showHeader();
 
   console.log(`\n${sep(`${bold}💬  Generating Commit Message${reset}`)}\n`);
-  console.log(`  ${dim}AI is analyzing your staged changes...${reset}\n`);
+  console.log(`${dim}AI is analyzing your staged changes...${reset}\n`);
 
   const makeCommit = () => new Promise((resolve) => {
     const child = spawn("git", ["commit", "--quiet"], {
@@ -838,12 +838,8 @@ async function quickFlow() {
     };
     process.on("SIGINT", onSig);
 
-    let firstOut = true;
     child.stdout.on("data", (d) => {
-      let s = d.toString();
-      if (firstOut) { s = "  " + s; firstOut = false; }
-      s = s.replace(/(\r\n?|\n)/g, "$1  ");
-      process.stdout.write(s);
+      process.stdout.write(d.toString());
     });
 
     child.stderr.on("data", (d) => {
@@ -859,13 +855,13 @@ async function quickFlow() {
   const commitCode = await makeCommit();
   console.log("");
   if (commitCode === null) { process.exit(130); }
-  if (commitCode !== 0) { console.error("  ❌ Failed to generate commit message"); process.exit(1); }
+  if (commitCode !== 0) { console.error("❌ Failed to generate commit message"); process.exit(1); }
 
   const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
   let currentMessage = readFileSync(commitMsgFile, "utf8").trim()
     .split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").trim();
 
-  if (!currentMessage) { console.error("  ❌ Empty commit message"); process.exit(1); }
+  if (!currentMessage) { console.error("❌ Empty commit message"); process.exit(1); }
 
   // ================================================================
   //  REVIEW LOOP
@@ -885,7 +881,7 @@ async function quickFlow() {
         for (let i = 0; i < line.length; i += innerW) wrapped.push(line.slice(i, i + innerW));
       } else wrapped.push(line);
     }
-    for (const l of wrapped) console.log(`  ${l}`);
+    for (const l of wrapped) console.log(l);
     console.log("");
   };
 
@@ -923,7 +919,7 @@ async function quickFlow() {
       const amend = spawnSync("git", ["commit", "--amend", "-F", commitMsgFile], {
         stdio: "inherit", env: { ...process.env, GIT_EDITOR: "true" },
       });
-      if (amend.status !== 0) { console.error("  ❌ Amend failed"); process.exit(1); }
+      if (amend.status !== 0) { console.error("❌ Amend failed"); process.exit(1); }
       currentMessage = edited;
       showReview();
     }
@@ -932,14 +928,14 @@ async function quickFlow() {
       spawnSync("git", ["reset", "--soft", "HEAD~1"], { stdio: "pipe" });
       showHeader();
       console.log(`\n${sep(`${bold}💬  Regenerating Commit Message${reset}`)}\n`);
-      console.log(`  ${dim}AI is re-analyzing your changes...${reset}\n`);
+      console.log(`${dim}AI is re-analyzing your changes...${reset}\n`);
       const c = await makeCommit();
       console.log("");
       if (c === null) { process.exit(130); }
-      if (c !== 0) { console.error("  ❌ Failed to regenerate"); process.exit(1); }
+      if (c !== 0) { console.error("❌ Failed to regenerate"); process.exit(1); }
       currentMessage = readFileSync(commitMsgFile, "utf8").trim()
         .split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").trim();
-      if (!currentMessage) { console.error("  ❌ Empty message"); process.exit(1); }
+      if (!currentMessage) { console.error("❌ Empty message"); process.exit(1); }
       showReview();
     }
   }
@@ -950,17 +946,17 @@ async function quickFlow() {
   showHeader();
 
   console.log(`\n${sep(`${bold}⬆️  Push Changes${reset}`)}\n`);
-  console.log(`  ${dim}Specify remote and branch  (default: origin main)${reset}\n`);
+  console.log(`${dim}Specify remote and branch  (default: origin main)${reset}\n`);
 
   const rl3 = readline.createInterface({ input: process.stdin, output: process.stdout });
   const pushDest = await new Promise((r) =>
-    rl3.question(`  ${dim}git push${reset} `, (a) => { rl3.close(); r(a.trim() || "origin main"); })
+    rl3.question(`${dim}git push${reset} `, (a) => { rl3.close(); r(a.trim() || "origin main"); })
   );
 
-  console.log(`\n  ⬆️  Pushing...`);
+  console.log(`\n⬆️  Pushing...`);
   const push = spawnSync("git", ["push", ...pushDest.split(/\s+/)], { stdio: "inherit" });
-  if (push.status !== 0) { console.error("\n  ❌ Push failed"); process.exit(1); }
-  console.log(`  ${green}✅ Pushed successfully${reset}\n`);
+  if (push.status !== 0) { console.error("\n❌ Push failed"); process.exit(1); }
+  console.log(`${green}✅ Pushed successfully${reset}\n`);
 }
 
 function showHelp() {
