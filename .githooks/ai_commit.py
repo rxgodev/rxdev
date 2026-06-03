@@ -232,6 +232,7 @@ def call_groq(messages):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {API_KEY}",
+        "User-Agent": "neuro-commit/3.0",
     }
 
     req = urllib.request.Request(
