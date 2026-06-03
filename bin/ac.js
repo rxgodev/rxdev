@@ -781,7 +781,7 @@ async function quickFlow() {
       const L = Math.floor((w - c) / 2);
       o += "│" + " ".repeat(L) + l + " ".repeat(w - c - L) + "│\n";
     }
-    o += p + "\n" + b;
+    o += p + "\n" + b + "\n";
     _boxH = lines.length + 4;
     process.stdout.write(o);
   };
@@ -789,13 +789,41 @@ async function quickFlow() {
   const showHeader = () => {
     clearScreen();
     box([`${bold}🚀 NeuroCommit QuickFlow®${reset}`]);
+    console.log("");
     _boxH = 0;
   };
 
-  // ── Single-line raw input via readline ──
+  // ── Manual raw-mode single-line input ──
   const readRaw = () => new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    rl.question("", (ans) => { rl.close(); resolve(ans); });
+    const wasRaw = process.stdin.isRaw;
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    let input = "";
+    const handler = (data) => {
+      const str = data.toString();
+      for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (ch === "\r" || ch === "\n") {
+          process.stdin.removeListener("data", handler);
+          process.stdin.setRawMode(wasRaw || false);
+          process.stdin.pause();
+          resolve(input);
+          return;
+        }
+        if (ch === "\x7f" || ch === "\b") {
+          if (input.length) { input = input.slice(0, -1); process.stdout.write("\b \b"); }
+          continue;
+        }
+        if (ch === "\x03") {
+          process.stdin.removeListener("data", handler);
+          process.stdin.setRawMode(wasRaw || false);
+          process.stdin.pause();
+          process.exit(130);
+        }
+        if (ch >= " ") { input += ch; process.stdout.write(ch); }
+      }
+    };
+    process.stdin.on("data", handler);
   });
 
   // ── Helper: draw a "live box" up to the input line, read, then close ──
@@ -813,11 +841,10 @@ async function quickFlow() {
     }
     process.stdout.write(pad + "\n");
 
-    // Input line (readline adds \n after Enter, so move back up)
+    // Input line
     const prefix = `  ${dim}${promptLabel}${reset} `;
     process.stdout.write(`│${prefix}`);
     const ans = await readRaw();
-    process.stdout.write("\x1b[1A"); // move up — readline advanced one line
     const used = 1 + sa(prefix + ans).length;
     process.stdout.write(" ".repeat(Math.max(0, w + 2 - used - 1)) + "│\n");
 
