@@ -750,25 +750,15 @@ function showStatus() {
 }
 
 async function updateSelf() {
-  console.log("🔍 Checking for updates...");
+  console.log("🚀 Updating NeuroCommit to the latest version...");
   const manager = spawnSync("pnpm", ["--version"]).status === 0 ? "pnpm" : "npm";
-  const registry = "https://npm.pkg.github.com/rxgodev";
-
-  const latest = spawnSync(manager, ["view", pkg.name, "version", "--registry", registry], { encoding: "utf8" }).stdout.trim();
-
-  if (!latest) {
-    console.error("❌ Failed to fetch latest version from registry.");
-    return;
-  }
-
-  if (latest === pkg.version) {
-    console.log("✅ You are already up to date.");
-    return;
-  }
-
-  console.log(`🚀 Updating to ${latest}...`);
   const args = manager === "pnpm" ? ["add", "-g"] : ["install", "-g"];
-  spawnSync(manager, [...args, `${pkg.name}@${latest}`, "--registry", registry], { stdio: "inherit" });
+  const result = spawnSync(manager, [...args, `${pkg.name}@latest`], { stdio: "inherit" });
+  if (result.status === 0) {
+    console.log("✅ Update complete.");
+  } else {
+    console.error(`\n❌ Update failed. Try manually:\n   ${manager} ${args.join(" ")} ${pkg.name}@latest\n`);
+  }
 }
 
 // === HELP & VERSION ===
