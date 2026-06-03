@@ -259,11 +259,11 @@ def call_groq(messages):
                         if "content" in delta:
                             content = delta["content"]
                             response_text += content
-                            sys.stdout.buffer.write(content.encode("utf-8"))
-                            sys.stdout.buffer.flush()
+                            print(content, end="", flush=True)
+                            time.sleep(0.03)
                     except (json.JSONDecodeError, KeyError, IndexError):
                         pass
-            print()
+            print(flush=True)
             return _clean_llm_response(response_text.strip())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
@@ -351,7 +351,7 @@ def generate_commit_message(diff):
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             log_message(f"Calling Groq (attempt {attempt}/{MAX_ATTEMPTS})")
-            print(f"[{attempt}/{MAX_ATTEMPTS}] Generating commit message...")
+            print(f"[{attempt}/{MAX_ATTEMPTS}] Generating commit message...", flush=True)
             message = call_groq(messages)
 
             if not message or message.startswith("#") or len(message) < 10:
@@ -1141,7 +1141,7 @@ def main():
         log_message("User-provided commit message detected. Skipping AI generation.")
         sys.exit(0)
 
-    print("[+] NeuroCommit started")
+    print("[+] NeuroCommit started", flush=True)
     log_message(f"Commit file path: {commit_msg_file}")
 
     log_message("\nCHECKING FOR .husky")
