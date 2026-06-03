@@ -1144,6 +1144,9 @@ switch (cmd) {
   case "status":
     showStatus();
     break;
+  case "go":
+    quickFlow();
+    break;
   default:
     showHelp();
 }
