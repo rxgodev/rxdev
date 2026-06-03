@@ -781,7 +781,7 @@ async function quickFlow() {
   // ── Header box (only boxed element) ──
   const showHeader = () => {
     clearScreen();
-    const lines = [`  ${bold}🚀  NeuroCommit QuickFlow®${reset}`];
+    const lines = [`${bold}🚀  NeuroCommit QuickFlow®${reset}`];
     const w = Math.max(...lines.map((l) => sa(l).length)) + 4;
     const o = "╭" + "─".repeat(w) + "╮\n" +
       "│" + " ".repeat(w) + "│\n" +
