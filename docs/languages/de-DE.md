@@ -9,6 +9,8 @@
 
 # NeuroCommit
 
+> **QuickFlow** — der schnellste Weg von `git add` zum perfekten Commit. Stage, generieren, prüfen, pushen. In einem Befehl.
+
 **KI-gestützter Generator für Conventional Commit Nachrichten** — analysiert Ihren staged Diff und erzeugt aussagekräftige, standardisierte Commit-Nachrichten über [Groq](https://console.groq.com) (basiert auf Meta Llama 3.1/3.3). Funktioniert als Git-Hook, interaktive CLI oder eigenständiger Generator.
 
 <p align="center">
@@ -28,11 +30,31 @@
 - [Schnellstart](#schnellstart)
 - [Befehle](#befehle)
 - [Konfiguration](#konfiguration)
+- [Dokumentation](#dokumentation)
 - [Lizenz](#lizenz)
 
 ---
 
 ## Funktionen
+
+### 🚀 QuickFlow (`qq go`)
+
+Der Flaggschiff-Workflow. Ein einziger Befehl vom schmutzigen Arbeitsverzeichnis zum gepushten Commit:
+
+```
+$ qq go
+```
+
+1. **Stage** — wählen Sie interaktiv Dateien zum Commit aus
+2. **Generieren** — KI analysiert den Diff und streamt eine Conventional Commit Nachricht in Echtzeit
+3. **Prüfen** — sehen Sie die Nachricht und wählen Sie die nächste Aktion
+4. **Pushen** — akzeptieren und pushen, oder bearbeiten, neu generieren, abbrechen
+
+QuickFlow eliminiert Kontextwechsel. Kein `git add → git commit → warten → git push` mehr. Alles in einer nahtlosen Sitzung.
+
+---
+
+### Kernfunktionen
 
 - **KI-generierte Commit-Nachrichten** — ein Conventional Commits Betreff auf Englisch plus ein deutscher Body, der das *Warum* erklärt, basierend auf Ihrem staged Diff.
 - **Auto-Bump Version (optional)** — erkennt intelligente Versionsmanifeste im gesamten Repository (Monorepo-tauglich). Unterstützt 15+ Formate:
@@ -46,7 +68,7 @@
   - Merge-sicher — liest bereits gestagte Manifeste aus dem Index.
   - Änderungsbewusst — überspringt den Bump, wenn geänderte Dateien nichts mit dem Paket zu tun haben.
   - Git-Tag-bewusst — fällt auf den letzten semver-Tag zurück, wenn kein Manifest existiert.
-- **Bearbeiten vor dem Commit** — `qq go` ermöglicht das Prüfen, Neugenerieren oder Öffnen von `$EDITOR` zum Anpassen der Nachricht.
+- **Bearbeiten vor dem Commit** — prüfen, neu generieren oder `$EDITOR` öffnen zum Anpassen der Nachricht.
 - **Multi-Projekt** — verwalten Sie Hooks und gemeinsame `prepare-commit-msg` Vorlagen für mehrere Repositories von einem Ort aus.
 - **Ignorierliste** — `.commitignore` funktioniert wie `.gitignore`; passende Dateien werden vom Diff ausgeschlossen, der an das Modell gesendet wird.
 
@@ -86,35 +108,37 @@ Navigieren Sie im Menü zu **API key** und fügen Sie Ihren Groq-Schlüssel ein.
 ## Schnellstart
 
 ```bash
-# Installieren Sie den AI-Hook im aktuellen Repository
+# Hook installieren (einmal pro Repository)
 qq init
 
-# Stagen Sie Dateien und committen Sie — die Nachricht wird automatisch generiert
-git add .
-git commit
-
-# Oder nutzen Sie den geführten Ablauf
+# QuickFlow — stage, generieren, prüfen, pushen
 qq go
 ```
 
-Der Befehl `qq go` führt Sie durch: Stage → Commit → Review → Push. Nach der Generierung der Nachricht haben Sie folgende Optionen:
+Das ist alles. `qq go` führt Sie durch jeden Schritt:
 
-- **Push** — akzeptieren und sofort pushen
-- **Edit message** — `$EDITOR` öffnen und anpassen
-- **Regenerate** — das Modell um einen neuen Vorschlag bitten
-- **Cancel** — Soft-Reset und abbrechen
+1. **Dateien zum Stagen auswählen** — oder Enter drücken, um alle zu stagen
+2. **KI generiert die Nachricht** — live in Ihr Terminal gestreamt
+3. **Prüfschleife** — entscheiden Sie:
+   - **Push** — akzeptieren und sofort pushen
+   - **Edit message** — `$EDITOR` öffnen und anpassen
+   - **Regenerate** — das Modell um einen neuen Vorschlag bitten
+   - **Cancel** — Soft-Reset und abbrechen
+4. **Pushen** — Remote/Branch angeben oder Standardwerte akzeptieren
+
+> QuickFlow ist der empfohlene Workflow. Für die Git-Hook-Integration (automatische Generierung via `git commit`) verwenden Sie `qq init`.
 
 ---
 
 ## Befehle
 
-| Befehl         | Beschreibung |
-|----------------|--------------|
-| `qq init`      | Installiert den AI-Hook im aktuellen Repository |
-| `qq go`        | Geführter Ablauf: Stage → Commit → Review → Push |
-| `qq config`    | Konfiguriert API-Schlüssel, Modell, Co-Author, Auto-Bump, Projekte und Vorlagen |
-| `qq status`    | Zeigt den Integrationsstatus des aktuellen Repositorys |
-| `qq uninstall` | Entfernt den Hook aus dem Repository |
+| Befehl           | Beschreibung |
+|------------------|--------------|
+| `qq go`          | **QuickFlow** — Stage → Generieren → Prüfen → Pushen (empfohlen) |
+| `qq init`        | Installiert den AI-Hook im aktuellen Repository |
+| `qq config`      | Konfiguriert API-Schlüssel, Modell, Co-Author, Auto-Bump, Projekte und Vorlagen |
+| `qq status`      | Zeigt den Integrationsstatus des aktuellen Repositorys |
+| `qq uninstall`   | Entfernt den Hook aus dem Repository |
 
 ---
 
@@ -139,6 +163,16 @@ qq config
 ### .commitignore
 
 Bearbeiten Sie `.commitignore` (Syntax wie `.gitignore`), um Dateien vom an das Modell gesendeten Diff auszuschließen. Standardmäßig sind dort `.githooks`-Einträge aufgeführt.
+
+---
+
+## Dokumentation
+
+| Dokument | Beschreibung |
+|----------|--------------|
+| [Architektur](./architecture.md) | Überblick über die Node.js CLI + Python-Hook-Architektur |
+| [Auto-Bump](./auto-bump.md) | Intelligente Versionserhöhung für 15+ Manifestformate |
+| [Vorlagen und Projekte](./templates.md) | Multi-Repository-Verwaltung und gemeinsame Hook-Vorlagen |
 
 ---
 
