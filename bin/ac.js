@@ -767,89 +767,26 @@ async function quickFlow() {
 
   const clearScreen = () => process.stdout.write("\x1b[2J\x1b[H");
 
-  // ── Box renderer with live-update support ──
-  let _boxH = 0;
-  const box = (lines) => {
-    if (_boxH) process.stdout.write(`\x1b[${_boxH}A`);
+  // ── Header box (only boxed element) ──
+  const showHeader = () => {
+    clearScreen();
+    const lines = [`  ${bold}🚀  NeuroCommit QuickFlow®${reset}`];
     const w = Math.max(...lines.map((l) => sa(l).length)) + 4;
-    const t = "╭" + "─".repeat(w) + "╮";
-    const b = "╰" + "─".repeat(w) + "╯";
-    const p = "│" + " ".repeat(w) + "│";
-    let o = t + "\n" + p + "\n";
-    for (const l of lines) {
-      const c = sa(l).length;
-      const L = Math.floor((w - c) / 2);
-      o += "│" + " ".repeat(L) + l + " ".repeat(w - c - L) + "│\n";
-    }
-    o += p + "\n" + b + "\n";
-    _boxH = lines.length + 4;
+    const o = "╭" + "─".repeat(w) + "╮\n" +
+      "│" + " ".repeat(w) + "│\n" +
+      "│" + " ".repeat(Math.floor((w - sa(lines[0]).length) / 2)) + lines[0] +
+      " ".repeat(w - sa(lines[0]).length - Math.floor((w - sa(lines[0]).length) / 2)) + "│\n" +
+      "│" + " ".repeat(w) + "│\n" +
+      "╰" + "─".repeat(w) + "╯\n";
     process.stdout.write(o);
   };
 
-  const showHeader = () => {
-    clearScreen();
-    box([`${bold}🚀 NeuroCommit QuickFlow®${reset}`]);
-    console.log("");
-    _boxH = 0;
-  };
-
-  // ── Manual raw-mode single-line input ──
-  const readRaw = () => new Promise((resolve) => {
-    const wasRaw = process.stdin.isRaw;
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    let input = "";
-    const handler = (data) => {
-      const str = data.toString();
-      for (let i = 0; i < str.length; i++) {
-        const ch = str[i];
-        if (ch === "\r" || ch === "\n") {
-          process.stdin.removeListener("data", handler);
-          process.stdin.setRawMode(wasRaw || false);
-          process.stdin.pause();
-          resolve(input);
-          return;
-        }
-        if (ch === "\x7f" || ch === "\b") {
-          if (input.length) { input = input.slice(0, -1); process.stdout.write("\b \b"); }
-          continue;
-        }
-        if (ch === "\x03") {
-          process.stdin.removeListener("data", handler);
-          process.stdin.setRawMode(wasRaw || false);
-          process.stdin.pause();
-          process.exit(130);
-        }
-        if (ch >= " ") { input += ch; process.stdout.write(ch); }
-      }
-    };
-    process.stdin.on("data", handler);
-  });
-
-  // ── Helper: draw a "live box" up to the input line, read, then close ──
-  const boxWithInput = async (content, promptLabel, defaultValue) => {
-    const w = Math.max(...content.map((l) => sa(l).length)) + 4;
-    const top = "╭" + "─".repeat(w) + "╮";
-    const bot = "╰" + "─".repeat(w) + "╯";
-    const pad = "│" + " ".repeat(w) + "│";
-
-    process.stdout.write(top + "\n" + pad + "\n");
-    for (const l of content) {
-      const c = sa(l).length;
-      const L = Math.floor((w - c) / 2);
-      process.stdout.write("│" + " ".repeat(L) + l + " ".repeat(w - c - L) + "│\n");
-    }
-    process.stdout.write(pad + "\n");
-
-    // Input line
-    const prefix = `  ${dim}${promptLabel}${reset} `;
-    process.stdout.write(`│${prefix}`);
-    const ans = await readRaw();
-    const used = 1 + sa(prefix + ans).length;
-    process.stdout.write(" ".repeat(Math.max(0, w + 2 - used - 1)) + "│\n");
-
-    process.stdout.write(pad + "\n" + bot + "\n");
-    return ans.trim() || defaultValue;
+  // ── Pretty section separator ──
+  const sep = (title) => {
+    const tw = sa(title).length;
+    const cols = Math.min(process.stdout.columns || 80, 72);
+    const dash = Math.max(cols - tw - 2, 4);
+    return `  ${title}  ${cyan}${"─".repeat(dash)}${reset}`;
   };
 
   // ================================================================
@@ -858,15 +795,12 @@ async function quickFlow() {
   showHeader();
   installPythonDeps();
 
-  const addPath = await boxWithInput(
-    [
-      `  ${bold}📂 Stage Changes${reset}`,
-      "",
-      `  ${dim}What files to stage?${reset}`,
-      "",
-    ],
-    "git add",
-    ".",
+  console.log(`\n${sep(`${bold}📂  Stage Changes${reset}`)}\n`);
+  console.log(`  ${dim}What files to stage?  (default: .)${reset}\n`);
+
+  const rl1 = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const addPath = await new Promise((r) =>
+    rl1.question(`  ${dim}git add${reset} `, (a) => { rl1.close(); r(a.trim() || "."); })
   );
 
   const addResult = spawnSync("git", ["add", addPath], { stdio: "pipe" });
@@ -882,48 +816,20 @@ async function quickFlow() {
   // ================================================================
   showHeader();
 
-  const genStatic = [
-    `  ${bold}💬 Generating Commit Message${reset}`,
-    "",
-    `  ${dim}AI is analyzing your staged changes...${reset}`,
-  ];
+  console.log(`\n${sep(`${bold}💬  Generating Commit Message${reset}`)}\n`);
+  console.log(`  ${dim}AI is analyzing your staged changes...${reset}\n`);
 
-  // Capture child output live inside the box
   const makeCommit = () => new Promise((resolve) => {
     const child = spawn("git", ["commit", "--quiet"], {
       stdio: ["inherit", "pipe", "inherit"],
       env: { ...process.env, GIT_EDITOR: "true" },
     });
 
-    let outBuf = "";
-    let tick = null;
-
-    const render = () => {
-      const cleaned = outBuf.replace(/\r$/, "").split("\n").map((l) => {
-        const idx = l.lastIndexOf("\r");
-        return idx >= 0 ? l.slice(idx + 1) : l;
-      }).filter(Boolean);
-
-      const maxLog = 6;
-      if (cleaned.length > maxLog) cleaned.splice(0, cleaned.length - maxLog);
-
-      const all = [...genStatic, "", ...cleaned.map((l) => `  ${dim}${l}${reset}`)];
-      box(all);
-    };
-
-    child.stdout.on("data", (d) => {
-      outBuf += d.toString();
-      if (outBuf.length > 20000) { const p = outBuf.split("\n"); outBuf = p.slice(-30).join("\n"); }
-      if (tick) clearTimeout(tick);
-      tick = setTimeout(render, 60);
-    });
+    child.stdout.pipe(process.stdout);
 
     process.on("SIGINT", () => child.kill());
 
     child.on("close", (code) => {
-      if (tick) clearTimeout(tick);
-      render();
-      _boxH = 0;
       resolve(code);
     });
   });
@@ -946,34 +852,18 @@ async function quickFlow() {
 
   const showReview = () => {
     clearScreen();
-    box([`${bold}🚀 NeuroCommit QuickFlow®${reset}`]);
-    _boxH = 0;
-    console.log("");
+    showHeader();
+    console.log(`\n${sep(`${bold}📄  Commit Message${reset}`)}\n`);
 
     const raw = currentMessage.trimEnd().split("\n");
-    const maxW = Math.max(...raw.map((l) => sa(l).length));
-    const cols = (process.stdout.columns || 100) - 6;
-    const innerW = Math.max(Math.min(maxW, Math.min(cols - 4, 96)), 26);
+    const innerW = Math.min(process.stdout.columns || 80, 72) - 4;
     const wrapped = [];
     for (const line of raw) {
       if (sa(line).length > innerW && innerW > 20) {
         for (let i = 0; i < line.length; i += innerW) wrapped.push(line.slice(i, i + innerW));
       } else wrapped.push(line);
     }
-
-    const all = [`  ${bold}📄 Commit Message${reset}`, "", ...wrapped, ""];
-    const boxW = Math.max(...all.map((l) => sa(l).length)) + 4;
-    const t = "╭" + "─".repeat(boxW) + "╮";
-    const b = "╰" + "─".repeat(boxW) + "╯";
-    const p = "│" + " ".repeat(boxW) + "│";
-    let o = t + "\n" + p + "\n";
-    for (const l of all) {
-      const c = sa(l).length;
-      const L = Math.floor((boxW - c) / 2);
-      o += "│" + " ".repeat(L) + l + " ".repeat(boxW - c - L) + "│\n";
-    }
-    o += p + "\n" + b;
-    console.log(o);
+    for (const l of wrapped) console.log(`  ${l}`);
     console.log("");
   };
 
@@ -1018,6 +908,8 @@ async function quickFlow() {
     if (action === "regenerate") {
       spawnSync("git", ["reset", "--soft", "HEAD~1"], { stdio: "pipe" });
       showHeader();
+      console.log(`\n${sep(`${bold}💬  Regenerating Commit Message${reset}`)}\n`);
+      console.log(`  ${dim}AI is re-analyzing your changes...${reset}\n`);
       const c = await makeCommit();
       console.log("");
       if (c === null) { process.exit(130); }
@@ -1034,18 +926,15 @@ async function quickFlow() {
   // ================================================================
   showHeader();
 
-  const pushDest = await boxWithInput(
-    [
-      `  ${bold}⬆️  Push Changes${reset}`,
-      "",
-      `  ${dim}Specify remote and branch${reset}`,
-      "",
-    ],
-    "git push",
-    "origin main",
+  console.log(`\n${sep(`${bold}⬆️  Push Changes${reset}`)}\n`);
+  console.log(`  ${dim}Specify remote and branch  (default: origin main)${reset}\n`);
+
+  const rl3 = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const pushDest = await new Promise((r) =>
+    rl3.question(`  ${dim}git push${reset} `, (a) => { rl3.close(); r(a.trim() || "origin main"); })
   );
 
-  console.log(`  ⬆️  Pushing...`);
+  console.log(`\n  ⬆️  Pushing...`);
   const push = spawnSync("git", ["push", ...pushDest.split(/\s+/)], { stdio: "inherit" });
   if (push.status !== 0) { console.error("\n  ❌ Push failed"); process.exit(1); }
   console.log(`  ${green}✅ Pushed successfully${reset}\n`);
@@ -1061,22 +950,19 @@ async function selfUpdate() {
     return;
   }
 
+  const registry = "https://npm.pkg.github.com/";
+  const pkgSpec = `@rxgodev/neuro-commit@${update.latest}`;
+
   console.log(`\n  Updating ${DIM}v${pkg.version}${RST} → ${GREEN}v${update.latest}${RST}...\n`);
 
   const pmList = [
-    { cmd: "pnpm", args: ["add", "-g"] },
-    { cmd: "yarn", args: ["global", "add"] },
-    { cmd: "npm", args: ["install", "-g"] },
+    { cmd: "pnpm", args: ["add", "-g", pkgSpec, "--registry", registry] },
+    { cmd: "npm", args: ["install", "-g", pkgSpec, "--registry", registry] },
   ];
 
-  // Prefer the package manager that was used to invoke the current command
   const ua = process.env.npm_config_user_agent || "";
-  let preferred = pmList.find((p) => ua.includes(p.cmd));
-  if (preferred) {
-    pmList.unshift(pmList.splice(pmList.indexOf(preferred), 1)[0]);
-  }
+  if (ua.includes("pnpm")) pmList.unshift(pmList.splice(pmList.findIndex((p) => p.cmd === "pnpm"), 1)[0]);
 
-  let lastErr = null;
   for (const pm of pmList) {
     const which = spawnSync(
       process.platform === "win32" ? "where" : "which",
@@ -1085,15 +971,14 @@ async function selfUpdate() {
     );
     if (which.status !== 0) continue;
 
-    const result = spawnSync(pm.cmd, [...pm.args, `@rxgodev/neuro-commit@${update.latest}`], { stdio: "inherit" });
+    const result = spawnSync(pm.cmd, pm.args, { stdio: "inherit" });
     if (result.status === 0) {
       console.log(`  ${GREEN}✅ Updated to v${update.latest}${RST}\n`);
       return;
     }
-    lastErr = result;
   }
 
-  console.error(`\n  ❌ All package managers failed. Try manually:\n`);
+  console.error(`\n  ❌ Update failed. Try manually:\n`);
   for (const pm of pmList) {
     const which = spawnSync(
       process.platform === "win32" ? "where" : "which",
@@ -1101,7 +986,7 @@ async function selfUpdate() {
       { stdio: "pipe" },
     );
     if (which.status === 0) {
-      console.error(`     ${pm.cmd} ${pm.args.join(" ")} @rxgodev/neuro-commit@${update.latest}`);
+      console.error(`     ${pm.cmd} ${pm.args.slice(0, -2).join(" ")} ${pkgSpec}`);
     }
   }
   console.error("");
