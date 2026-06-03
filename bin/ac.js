@@ -764,7 +764,13 @@ async function quickFlow() {
 
   const sa = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
-  const clearScreen = () => process.stdout.write("\x1b[2J\x1b[H");
+  const clearScreen = () => {
+    if (process.platform === "win32") {
+      spawnSync("cls", { stdio: "inherit", shell: true });
+    } else {
+      process.stdout.write("\x1b[2J\x1b[H");
+    }
+  };
 
   // ── Header box (only boxed element) ──
   const showHeader = () => {
@@ -912,7 +918,8 @@ async function quickFlow() {
 
     if (action === "edit") {
       writeFileSync(commitMsgFile, currentMessage, "utf8");
-      const editor = process.env.GIT_EDITOR || process.env.VISUAL || process.env.EDITOR || "vi";
+      const defaultEditor = process.platform === "win32" ? "notepad" : "vi";
+      const editor = process.env.GIT_EDITOR || process.env.VISUAL || process.env.EDITOR || defaultEditor;
       const editRes = spawnSync(`"${editor}" "${commitMsgFile}"`, { stdio: "inherit", shell: true });
       if (editRes.status !== 0) { console.log(`\n${yellow}↩️  Edit cancelled${reset}`); continue; }
       const edited = readFileSync(commitMsgFile, "utf8").trim()
