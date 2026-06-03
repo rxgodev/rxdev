@@ -9,6 +9,8 @@
 
 # NeuroCommit
 
+> **QuickFlow** — the fastest path from `git add` to a perfect commit. Stage, generate, review, push. All in one command.
+
 **AI-powered Conventional Commit message generator** — analyses your staged diff and produces meaningful, standardised commit messages via [Groq](https://console.groq.com) (powered by Meta Llama 3.1/3.3). Works as a Git hook, interactive CLI, or standalone generator.
 
 <p align="center">
@@ -41,7 +43,26 @@
 
 ## Features
 
-- **AI-generated commit messages** — a Conventional Commits subject in English plus a Russian body explaining *why*, derived entirely from your staged diff.
+### 🚀 QuickFlow (`qq go`)
+
+The flagship workflow. A single command that takes you from dirty working tree to pushed commit:
+
+```
+$ qq go
+```
+
+1. **Stage** — interactively choose files to include
+2. **Generate** — AI analyses the diff and streams a Conventional Commit message in real-time
+3. **Review** — see the message, choose what to do next
+4. **Push** — accept and push, or edit, regenerate, or cancel
+
+QuickFlow eliminates context-switching. No more `git add → git commit → wait → git push`. Everything happens in one seamless session.
+
+---
+
+### Core Features
+
+- **AI-generated commit messages** — a Conventional Commits subject in English plus a body in Russian explaining *why*, derived entirely from your staged diff.
 - **Auto-bump version (opt-in)** — intelligently discovers version manifests across the entire repository (monorepo-safe). Supports 15+ formats:
   - `package.json`, `composer.json` — JSON parser
   - `Cargo.toml`, `pyproject.toml` — TOML parser
@@ -53,7 +74,7 @@
   - Merge-safe — reads already-staged manifests from the index.
   - Change-aware — skips bump when changed files are unrelated to the package.
   - Git-tag aware — falls back to the latest semver tag when no manifest version exists.
-- **Edit before commit** — `qq go` lets you review, regenerate, or open `$EDITOR` to tweak the message before pushing.
+- **Edit before commit** — review, regenerate, or open `$EDITOR` to tweak the message before it lands.
 - **Multi-project** — manage hooks and shared `prepare-commit-msg` templates across several repositories from one place.
 - **Ignore list** — `.commitignore` works like `.gitignore`; matching files are excluded from the diff sent to the model.
 
@@ -92,36 +113,40 @@ Navigate to **API key** in the menu and paste your Groq key.
 
 ## Quick Start
 
+After installing, get your first AI-powered commit in seconds:
+
 ```bash
-# Install the AI commit hook in the current repository
+# Install the hook (one time per repo)
 qq init
 
-# Stage files and commit — a message is generated automatically
-git add .
-git commit
-
-# Or use the all-in-one guided flow
+# QuickFlow — stage, generate, review, push
 qq go
 ```
 
-The `qq go` command walks you through: stage → commit → review → push. After the message is generated you can:
+That's it. `qq go` guides you through every step:
 
-- **Push** — accept and push immediately
-- **Edit message** — open `$EDITOR` and amend
-- **Regenerate** — ask the model for a new suggestion
-- **Cancel** — soft-reset and abort
+1. **Choose files to stage** — or press Enter to stage all
+2. **AI generates the message** — streamed live to your terminal
+3. **Review loop** — decide what to do:
+   - **Push** — accept and push immediately
+   - **Edit message** — open `$EDITOR` and amend
+   - **Regenerate** — ask the model for a new suggestion
+   - **Cancel** — soft-reset and abort
+4. **Push** — specify remote/branch or accept defaults
+
+> QuickFlow is the recommended workflow. For Git hook integration (automatic generation via `git commit`), see `qq init`.
 
 ---
 
 ## Commands
 
-| Command        | Description |
-|----------------|-------------|
-| `qq init`      | Install the AI commit hook in the current repository |
-| `qq go`        | Guided flow: stage → commit → review → push |
-| `qq config`    | Configure API key, model, co-author, auto-bump, projects, and templates |
-| `qq status`    | Show integration status for the current repository |
-| `qq uninstall` | Remove the hook from the repository |
+| Command          | Description |
+|------------------|-------------|
+| `qq go`          | **QuickFlow** — stage → generate → review → push (recommended) |
+| `qq init`        | Install the AI commit hook in the current repository |
+| `qq config`      | Configure API key, model, co-author, auto-bump, projects, and templates |
+| `qq status`      | Show integration status for the current repository |
+| `qq uninstall`   | Remove the hook from the repository |
 
 ---
 

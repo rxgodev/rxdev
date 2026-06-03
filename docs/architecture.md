@@ -7,14 +7,29 @@ NeuroCommit consists of two runtime layers that work together to generate AI-pow
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      User (CLI)                             │
-│  qq init │ qq go │ qq config │ qq status │ qq uninstall    │
+│      qq go  ← flagship   │   qq init │ qq config │ ...     │
 └───────────────────┬─────────────────────────────────────────┘
                     │
-                    ▼
+          ┌─────────┴─────────┐
+          ▼                   ▼
+┌──────────────────┐  ┌──────────────────┐
+│  QuickFlow       │  │  Hook Mode       │
+│  (interactive)   │  │  (automatic)     │
+│                  │  │                  │
+│  qq go           │  │  qq init         │
+│  1. stage        │  │  → git commit    │
+│  2. generate     │  │  → hook fires    │
+│  3. review       │  │  → AI generates  │
+│  4. push         │  │  → message saved │
+└────────┬─────────┘  └────────┬─────────┘
+         │                     │
+         └─────────┬───────────┘
+                   ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Node.js CLI  (bin/ac.js)                        │
 │                                                              │
 │  - Package management & updates (update-notifier)            │
+│  - QuickFlow orchestration (stage → generate → push)        │
 │  - Git hook installation & removal                           │
 │  - Interactive configuration (inquirer)                      │
 │  - Multi-project management                                  │
@@ -44,7 +59,7 @@ The CLI is the user-facing entry point. It is a single-file ESM module (~1160 li
 | Command | Responsibility |
 |---------|---------------|
 | `qq init` | Install Python dependencies, copy hooks to `.githooks/`, set `core.hooksPath`, create `.commitignore`, register project |
-| `qq go` | Interactive QuickFlow: stage → commit → review → push |
+| `qq go` | **QuickFlow** — the flagship workflow. Interactive session: stage → generate → review → push. Eliminates context-switching between git commands |
 | `qq config` | Interactive menu for model, prompt, API key, co-author, auto-bump, custom types, projects & templates |
 | `qq status` | Check hook installation state, API key status, auto-bump config |
 | `qq uninstall` | Remove `.githooks/` directory, reset `core.hooksPath`, unregister project |
@@ -68,6 +83,58 @@ All configuration is stored in `~/.config/ai-commit/`:
 | `config.json` | API key, model, prompt, custom types, co-author, bump toggle |
 | `managed-projects.json` | List of registered project paths |
 | `templates.json` | Named `prepare-commit-msg` templates with applied-to tracking |
+
+## QuickFlow Deep Dive
+
+QuickFlow (`qq go`) is the flagship workflow, designed to minimise friction. Unlike hook mode (where `git commit` triggers AI generation), QuickFlow is an **interactive session** that controls the entire lifecycle:
+
+### Session Flow
+
+```
+qq go
+ │
+ ├── Step 1: Stage ──────────────────────────────────
+ │   Prompt: "git add <path>" (default: .)
+ │   → git add <path>
+ │   → Show staged file count
+ │
+ ├── Step 2: Generate ───────────────────────────────
+ │   → git commit --quiet (triggers ai_commit.py hook)
+ │   → AI streams message to stdout in real-time
+ │   → Read generated message from .git/COMMIT_EDITMSG
+ │   → Display in a clean review UI
+ │
+ ├── Step 3: Review Loop ────────────────────────────
+ │   ┌─ Push ───────→ accept & proceed to push
+ │   ├─ Edit ───────→ open $EDITOR → amend commit → re-display
+ │   ├─ Regenerate ─→ git reset --soft HEAD~1 → re-run hook
+ │   └─ Cancel ─────→ git reset --soft HEAD~1 → exit
+ │
+ └── Step 4: Push ──────────────────────────────────
+     Prompt: "git push <remote> <branch>" (default: origin main)
+     → git push
+     → success message
+```
+
+### Key Design Decisions
+
+- **Single process** — unlike hook mode, QuickFlow owns the terminal session. No editor popup, no manual `git push` later.
+- **Regenerate resets** — `git reset --soft HEAD~1` undoes the commit but keeps staged files intact, so the hook can run again.
+- **Edit uses $EDITOR** — falls back to `notepad` (Windows) or `vi` (Unix).
+- **Push defaults** — `origin main` by default, customisable per session.
+- **Streaming feedback** — the AI response is printed character-by-character as it arrives, so the user never waits in silence.
+
+### When to Use QuickFlow vs Hook Mode
+
+| Scenario | Recommended |
+|----------|-------------|
+| Daily development, want fast cycle | `qq go` |
+| IDE integration (commit via VSCode etc.) | Hook mode (`qq init`) |
+| CI / automated commits | Hook mode |
+| Complex diffs needing review | `qq go` (review loop) |
+| New to the tool | `qq go` (guided experience) |
+
+---
 
 ## Layer 2: Python Hook (`ai_commit.py`)
 
