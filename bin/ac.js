@@ -7,6 +7,7 @@ import readline from "readline";
 import { homedir } from "os";
 import updateNotifier from "update-notifier";
 import { unlinkSync } from "fs";
+import { createHash } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -125,6 +126,19 @@ function unregisterProject() {
   } catch {}
 }
 
+function fileHash(content) {
+  return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+function hashFilePath(pyPath) {
+  return pyPath + ".sha256";
+}
+
+function writePyWithHash(path, content) {
+  writeFileSync(path, content);
+  writeFileSync(hashFilePath(path), fileHash(content));
+}
+
 function getPyVersion(content) {
   const m = content.match(/^NEURO_COMMIT_VERSION\s*=\s*"([^"]+)"/m);
   return m ? m[1] : null;
@@ -150,8 +164,17 @@ function updateProjectHooks(projectPath) {
 
   const latest = readFileSync(src, "utf8");
   if (!existsSync(dst)) {
-    writeFileSync(dst, latest);
+    writePyWithHash(dst, latest);
     return true;
+  }
+
+  const hashPath = hashFilePath(dst);
+  if (existsSync(hashPath)) {
+    const origHash = readFileSync(hashPath, "utf8").trim();
+    const curHash = fileHash(readFileSync(dst, "utf8"));
+    if (origHash !== curHash) {
+      return false;
+    }
   }
 
   const current = readFileSync(dst, "utf8");
@@ -160,14 +183,14 @@ function updateProjectHooks(projectPath) {
 
   if (!curVer || !latVer) {
     if (current !== latest) {
-      writeFileSync(dst, latest);
+      writePyWithHash(dst, latest);
       return true;
     }
     return false;
   }
 
   if (semverGt(latVer, curVer)) {
-    writeFileSync(dst, latest);
+    writePyWithHash(dst, latest);
     return true;
   }
 
@@ -681,7 +704,12 @@ async function install() {
       console.error(`❌ Missing: ${src}`);
       process.exit(1);
     }
-    writeFileSync(dst, readFileSync(src, "utf8"));
+    const content = readFileSync(src, "utf8");
+    if (file === "ai_commit.py") {
+      writePyWithHash(dst, content);
+    } else {
+      writeFileSync(dst, content);
+    }
   }
 
   if (process.platform !== "win32") {
