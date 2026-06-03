@@ -13,6 +13,11 @@ from pathlib import Path
 
 import pathspec
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 # === CONFIGURATION ===
 CONFIG_DIR = Path.home() / ".config" / "ai-commit"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -259,7 +264,8 @@ def call_groq(messages):
                         if "content" in delta:
                             content = delta["content"]
                             response_text += content
-                            print(content, end="", flush=True)
+                            sys.stdout.buffer.write(content.encode("utf-8"))
+                            sys.stdout.buffer.flush()
                             time.sleep(0.03)
                     except (json.JSONDecodeError, KeyError, IndexError):
                         pass
