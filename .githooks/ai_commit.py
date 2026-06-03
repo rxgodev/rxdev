@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.14.0"
+NEURO_COMMIT_VERSION = "2.15.0"
 import json
 import os
 import re
@@ -24,10 +24,42 @@ CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = "llama-3.1-8b-instant"
 REQUEST_TIMEOUT = 60
 MAX_ATTEMPTS = 3
 MAX_DIFF_LENGTH = 3000
+
+DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
+DEFAULT_VALID_TYPES = {
+    "feat", "fix", "chore", "docs", "style",
+    "refactor", "perf", "test", "build", "ci", "revert",
+}
+DEFAULT_SYSTEM_PROMPT = (
+    "You are an expert Git commit message generator strictly following Conventional Commits 1.0.0.\n"
+    "RULES:\n"
+    "- SUBJECT: English, imperative mood, lowercase, max 50 chars. NO PERIOD at end.\n"
+    "- TYPE: Use ONLY: {types}.\n"
+    "- SCOPE: Optional, in parentheses, e.g. (auth), (docs), (deps). Keep short.\n"
+    "- BODY: In Russian. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.\n"
+    "- NEVER describe merge commits, version bumps, or generic 'update' without context.\n"
+    "- NEVER invent details not present in the diff.\n"
+    "- If changes are ONLY in README/docs use type 'docs'.\n"
+    "- Output ONLY the raw commit message. NO markdown (no **, no `, no ```), NO explanations, NO prefixes like 'Commit Message:' or 'Response:'. Just the message itself.\n\n"
+    "- Before you can updated code style by linters. DO NOT describe this in comment, ONLY IF this is only update\n\n"
+    "BAD EXAMPLES (NEVER do this):\n"
+    "  'update README.md' too vague\n"
+    "  'Добавлено много документации' not specific\n"
+    "  'Merge branch ...' ignore merge-related changes\n\n"
+    "  'Изменён стиль: добавлены кавычки' изменение было не единственным, а комментарий описывает это\n\n"
+    "GOOD EXAMPLES:\n"
+    "docs(readme): add installation and release steps\n"
+    "\n"
+    "Расширена документация: добавлены шаги установки, развёртывания и релиза пакета. "
+    "Обновлены разделы 'Технический стек', 'Фичи' и 'Переменные среды' в README.md.\n\n"
+    "docs(package): describe flight map features and stack\n"
+    "\n"
+    "Добавлено описание пакета карты полётов: технический стек (Node.js 22, React 19), "
+    "фичи (карта, взаимодействие с пилотом), и демо-ссылка."
+)
 
 
 def load_user_config():
@@ -44,6 +76,17 @@ USER_CONFIG = load_user_config()
 ADD_COAUTHOR = USER_CONFIG.get("coauthor", True)
 BUMP_VERSION = USER_CONFIG.get("bumpVersion", False)
 API_KEY = USER_CONFIG.get("apiKey", "")
+GROQ_MODEL = USER_CONFIG.get("model") or DEFAULT_GROQ_MODEL
+CUSTOM_TYPES = set(USER_CONFIG.get("customTypes", []))
+CUSTOM_PROMPT = USER_CONFIG.get("prompt", "")
+
+valid_types = DEFAULT_VALID_TYPES | CUSTOM_TYPES
+types_str = ", ".join(sorted(valid_types))
+
+if CUSTOM_PROMPT:
+    SYSTEM_PROMPT = CUSTOM_PROMPT.replace("{types}", types_str)
+else:
+    SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT.replace("{types}", types_str)
 
 
 def is_valid_commit_message(msg: str) -> bool:
@@ -63,19 +106,6 @@ def is_valid_commit_message(msg: str) -> bool:
     msg_type = match.group(1)
     description = match.group(2)
 
-    valid_types = {
-        "feat",
-        "fix",
-        "chore",
-        "docs",
-        "style",
-        "refactor",
-        "perf",
-        "test",
-        "build",
-        "ci",
-        "revert",
-    }
     if msg_type not in valid_types:
         return False
 

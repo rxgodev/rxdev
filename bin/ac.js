@@ -581,6 +581,7 @@ async function configInteractive() {
   const config = loadConfig();
 
   while (true) {
+    const modelLabel = config.model === "llama-3.3-70b-versatile" ? "70B (smarter)" : "8B (faster)";
     const mainAction = await promptSelect(
       [
         { name: "📂 Projects & Templates", value: "projects-templates" },
@@ -595,6 +596,18 @@ async function configInteractive() {
         {
           name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
           value: "apikey",
+        },
+        {
+          name: `🧠 Model: ${modelLabel}`,
+          value: "model",
+        },
+        {
+          name: `✏️  Custom prompt: ${config.prompt ? "set" : "not set"}`,
+          value: "prompt",
+        },
+        {
+          name: `📝 Custom types: ${config.customTypes?.length ? config.customTypes.join(", ") : "not set"}`,
+          value: "types",
         },
         { name: "✅ Save & exit", value: "exit" },
       ],
@@ -640,6 +653,64 @@ async function configInteractive() {
         config.apiKey
           ? "✅ API key saved.\n"
           : "ℹ️ API key cleared. Fallback generator will be used.\n",
+      );
+    }
+
+    if (mainAction === "model") {
+      const inquirer = await import("inquirer");
+      const { model } = await inquirer.default.prompt([
+        {
+          type: "list",
+          name: "model",
+          message: "Select Groq model:",
+          choices: [
+            { name: "Llama 3.1 8B (faster, 560 t/s)", value: "llama-3.1-8b-instant" },
+            { name: "Llama 3.3 70B (smarter, 280 t/s)", value: "llama-3.3-70b-versatile" },
+          ],
+          default: config.model || "llama-3.1-8b-instant",
+        },
+      ]);
+      config.model = model;
+      saveConfig(config);
+      console.log(`✅ Model set to ${model.includes("70b") ? "70B" : "8B"}.\n`);
+    }
+
+    if (mainAction === "prompt") {
+      const inquirer = await import("inquirer");
+      const { prompt } = await inquirer.default.prompt([
+        {
+          type: "editor",
+          name: "prompt",
+          message: "Edit system prompt (use {types} placeholder for allowed types):",
+          default: config.prompt || "",
+        },
+      ]);
+      config.prompt = prompt.trim();
+      saveConfig(config);
+      console.log(
+        config.prompt
+          ? "✅ Custom prompt saved.\n"
+          : "ℹ️  Custom prompt cleared. Default prompt will be used.\n",
+      );
+    }
+
+    if (mainAction === "types") {
+      const inquirer = await import("inquirer");
+      const { types } = await inquirer.default.prompt([
+        {
+          type: "input",
+          name: "types",
+          message: "Extra commit types (comma-separated, e.g. hotfix, deps, i18n):",
+          default: (config.customTypes || []).join(", "),
+        },
+      ]);
+      const parsed = types.split(",").map((t) => t.trim()).filter(Boolean);
+      config.customTypes = parsed;
+      saveConfig(config);
+      console.log(
+        parsed.length
+          ? `✅ Custom types: ${parsed.join(", ")}\n`
+          : "ℹ️  Custom types cleared.\n",
       );
     }
 
@@ -1021,11 +1092,10 @@ ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
 
 ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}init${resetColor}          Install AI commit hook
-  ${boldCyan}config${resetColor}        Configure key, models, co-author, projects & templates
+  ${boldCyan}config${resetColor}        Configure model, key, prompt, types, co-author & more
   ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
-  ${boldCyan}retry${resetColor}         Revert last commit and regenerate message
 
   ${"\x1b[1m\x1b[37m"}Options:${resetColor}
 
@@ -1073,12 +1143,6 @@ switch (cmd) {
     break;
   case "status":
     showStatus();
-    break;
-  case "retry":
-    retryLastCommit();
-    break;
-  case "go":
-    quickFlow();
     break;
   default:
     showHelp();

@@ -66,6 +66,9 @@ qq config
 ```
 
 In the menu:
+- **🧠 Model** — switch between Llama 3.1 **8B** (faster, 560 t/s) and **70B** (smarter, 280 t/s).
+- **✏️ Custom prompt** — override the system prompt entirely. Use `{types}` placeholder for allowed types.
+- **📝 Custom types** — add extra Conventional Commits types (e.g. `hotfix`, `deps`, `i18n`).
 - **🔑 API key** — set or clear your Groq API key from [console.groq.com](https://console.groq.com).  
   API key is required for Groq (get one free).
 - **👥 Co-author** — toggle the `Co-authored-by` trailer in commit messages.
@@ -104,7 +107,6 @@ In `qq go`, after the message is generated you can:
 | `qq go` | Guided flow: stage → commit → review → push |
 | `qq config` | Configure API key, co-author, auto-bump, projects, templates |
 | `qq status` | Show integration status for this repo |
-| `qq retry` | Revert the last commit and regenerate its message |
 | `qq uninstall` | Remove the hook from this repo |
 
 ## License
