@@ -14,9 +14,9 @@
 **Générateur de messages de commit Conventional Commits propulsé par l'IA** — analyse votre diff stagé et produit des messages de commit clairs et standardisés via [Groq](https://console.groq.com) (basé sur Meta Llama 3.1/3.3). Fonctionne comme hook Git, CLI interactive ou générateur autonome.
 
 <p align="center">
-  <a href="https://github.com/rxgodev/ac-cli#readme"><b>Documentation</b></a>
+  <a href="https://github.com/rxgodev/neuro-commit#readme"><b>Documentation</b></a>
   ·
-  <a href="https://github.com/rxgodev/ac-cli/issues"><b>Signaler un bug</b></a>
+  <a href="https://github.com/rxgodev/neuro-commit/issues"><b>Signaler un bug</b></a>
   ·
   <a href="https://github.com/rxgodev/neuro-commit/blob/main/README.md">English</a>
 </p>

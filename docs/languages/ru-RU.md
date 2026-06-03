@@ -14,9 +14,9 @@
 **AI-генератор Conventional Commit сообщений** — анализирует ваш staged-дифф и создаёт осмысленные, стандартизированные сообщения коммитов через [Groq](https://console.groq.com) (на базе Meta Llama 3.1/3.3). Работает как Git-хук, интерактивный CLI или автономный генератор.
 
 <p align="center">
-  <a href="https://github.com/rxgodev/ac-cli#readme"><b>Документация</b></a>
+  <a href="https://github.com/rxgodev/neuro-commit#readme"><b>Документация</b></a>
   ·
-  <a href="https://github.com/rxgodev/ac-cli/issues"><b>Сообщить об ошибке</b></a>
+  <a href="https://github.com/rxgodev/neuro-commit/issues"><b>Сообщить об ошибке</b></a>
   ·
   <a href="https://github.com/rxgodev/neuro-commit/blob/main/README.md">English</a>
 </p>

@@ -14,9 +14,9 @@
 **AI 驱动的 Conventional Commit 消息生成器** — 分析您的暂存区差异，通过 [Groq](https://console.groq.com)（基于 Meta Llama 3.1/3.3）生成有意义的、标准化的提交消息。可作为 Git 钩子、交互式 CLI 或独立生成器使用。
 
 <p align="center">
-  <a href="https://github.com/rxgodev/ac-cli#readme"><b>文档</b></a>
+  <a href="https://github.com/rxgodev/neuro-commit#readme"><b>文档</b></a>
   ·
-  <a href="https://github.com/rxgodev/ac-cli/issues"><b>报告错误</b></a>
+  <a href="https://github.com/rxgodev/neuro-commit/issues"><b>报告错误</b></a>
   ·
   <a href="https://github.com/rxgodev/neuro-commit/blob/main/README.md">English</a>
 </p>

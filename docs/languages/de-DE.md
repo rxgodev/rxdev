@@ -14,9 +14,9 @@
 **KI-gestützter Generator für Conventional Commit Nachrichten** — analysiert Ihren staged Diff und erzeugt aussagekräftige, standardisierte Commit-Nachrichten über [Groq](https://console.groq.com) (basiert auf Meta Llama 3.1/3.3). Funktioniert als Git-Hook, interaktive CLI oder eigenständiger Generator.
 
 <p align="center">
-  <a href="https://github.com/rxgodev/ac-cli#readme"><b>Dokumentation</b></a>
+  <a href="https://github.com/rxgodev/neuro-commit#readme"><b>Dokumentation</b></a>
   ·
-  <a href="https://github.com/rxgodev/ac-cli/issues"><b>Fehler melden</b></a>
+  <a href="https://github.com/rxgodev/neuro-commit/issues"><b>Fehler melden</b></a>
   ·
   <a href="https://github.com/rxgodev/neuro-commit/blob/main/README.md">English</a>
 </p>
