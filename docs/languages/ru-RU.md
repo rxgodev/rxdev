@@ -66,9 +66,20 @@ qq config
 ```
 
 В меню:
+
+- **✅ Save & exit** — выйти из меню (всегда первый пункт)
+
+Настройки:
 - **🧠 Model** — выбор модели: Llama 3.1 **8B** (быстрее, 560 t/s) или **70B** (умнее, 280 t/s).
-- **✏️ Custom prompt** — свой системный промпт. Используй `{types}` для списка разрешённых типов.
-- **📝 Custom types** — добавить свои типы Conventional Commits (например `hotfix`, `deps`, `i18n`).
+- **✏️ Custom prompt** — свой системный промпт. Открывает `$EDITOR` для многострочного редактирования.  
+  Используй `{types}` — вместо него подставится список разрешённых типов (feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert + твои кастомные).  
+  Пример:
+  ```
+  You are a git commit generator. Allowed types: {types}.
+  Subject in English, body in Russian.
+  ```
+- **📝 Custom types** — добавить свои типы коммитов сверх встроенных.  
+  Например: `hotfix, deps, i18n, ui, api, db`. Они попадут в список `{types}` и будут приниматься валидацией.
 - **🔑 API key** — указать или удалить Groq API-ключ с [console.groq.com](https://console.groq.com).  
   API-ключ обязателен для Groq (получить бесплатно).
 - **👥 Co-author** — добавлять ли строку `Co-authored-by` в сообщение коммита.

@@ -584,19 +584,8 @@ async function configInteractive() {
     const modelLabel = config.model === "llama-3.3-70b-versatile" ? "70B (smarter)" : "8B (faster)";
     const mainAction = await promptSelect(
       [
-        { name: "📂 Projects & Templates", value: "projects-templates" },
-        {
-          name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
-          value: "coauthor",
-        },
-        {
-          name: `📈 Auto-bump version: ${config.bumpVersion ? "enabled" : "disabled"}`,
-          value: "bump",
-        },
-        {
-          name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
-          value: "apikey",
-        },
+        { name: "✅ Save & exit", value: "exit" },
+        { name: "─".repeat(30), value: "__sep__" },
         {
           name: `🧠 Model: ${modelLabel}`,
           value: "model",
@@ -609,12 +598,25 @@ async function configInteractive() {
           name: `📝 Custom types: ${config.customTypes?.length ? config.customTypes.join(", ") : "not set"}`,
           value: "types",
         },
-        { name: "✅ Save & exit", value: "exit" },
+        {
+          name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
+          value: "apikey",
+        },
+        {
+          name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
+          value: "coauthor",
+        },
+        {
+          name: `📈 Auto-bump: ${config.bumpVersion ? "enabled" : "disabled"}`,
+          value: "bump",
+        },
+        { name: "📂 Projects & Templates", value: "projects-templates" },
       ],
       "Configuration",
     );
 
     if (mainAction === "exit") break;
+    if (mainAction === "__sep__") continue;
 
     if (mainAction === "coauthor") {
       config.coauthor = !config.coauthor;
@@ -1095,12 +1097,7 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}config${resetColor}        Configure model, key, prompt, types, co-author & more
   ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
   ${boldCyan}uninstall${resetColor}     Remove hook
-  ${boldCyan}status${resetColor}        Show integration status
-
-  ${"\x1b[1m\x1b[37m"}Options:${resetColor}
-
-  ${boldCyan}-v, --version${resetColor}   Show version
-  ${boldCyan}-h, --help${resetColor}      Show this help`);
+  ${boldCyan}status${resetColor}        Show integration status`);
 }
 
 const args = process.argv.slice(2);

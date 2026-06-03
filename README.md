@@ -66,9 +66,20 @@ qq config
 ```
 
 In the menu:
+
+- **✅ Save & exit** — exit the menu (always the first option)
+
+Settings:
 - **🧠 Model** — switch between Llama 3.1 **8B** (faster, 560 t/s) and **70B** (smarter, 280 t/s).
-- **✏️ Custom prompt** — override the system prompt entirely. Use `{types}` placeholder for allowed types.
-- **📝 Custom types** — add extra Conventional Commits types (e.g. `hotfix`, `deps`, `i18n`).
+- **✏️ Custom prompt** — override the system prompt. Opens `$EDITOR` for multiline editing.  
+  Use `{types}` as a placeholder — it will be replaced with the actual list of allowed types (e.g. `feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert` plus any custom types you add).  
+  Example custom prompt:
+  ```
+  You are a git commit generator. Allowed types: {types}.
+  Subject in English, body in Russian.
+  ```
+- **📝 Custom types** — add extra Conventional Commits types beyond the built-in ones.  
+  Example: `hotfix, deps, i18n, ui, api, db`. These get added to the `{types}` list in prompts and are accepted by commit validation.
 - **🔑 API key** — set or clear your Groq API key from [console.groq.com](https://console.groq.com).  
   API key is required for Groq (get one free).
 - **👥 Co-author** — toggle the `Co-authored-by` trailer in commit messages.
