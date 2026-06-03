@@ -125,6 +125,21 @@ function unregisterProject() {
   } catch {}
 }
 
+function getPyVersion(content) {
+  const m = content.match(/^NEURO_COMMIT_VERSION\s*=\s*"([^"]+)"/m);
+  return m ? m[1] : null;
+}
+
+function semverGt(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] > pb[i]) return true;
+    if (pa[i] < pb[i]) return false;
+  }
+  return false;
+}
+
 function updateProjectHooks(projectPath) {
   const githooksDir = join(projectPath, ".githooks");
   if (!existsSync(githooksDir)) return false;
@@ -140,7 +155,18 @@ function updateProjectHooks(projectPath) {
   }
 
   const current = readFileSync(dst, "utf8");
-  if (current !== latest) {
+  const curVer = getPyVersion(current);
+  const latVer = getPyVersion(latest);
+
+  if (!curVer || !latVer) {
+    if (current !== latest) {
+      writeFileSync(dst, latest);
+      return true;
+    }
+    return false;
+  }
+
+  if (semverGt(latVer, curVer)) {
     writeFileSync(dst, latest);
     return true;
   }

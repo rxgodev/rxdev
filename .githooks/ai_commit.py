@@ -1,4 +1,4 @@
-# NEURO_COMMIT_VERSION: 2.13.0
+NEURO_COMMIT_VERSION = "2.14.0"
 import json
 import os
 import re
@@ -1132,7 +1132,7 @@ def main():
         log_message("User-provided commit message detected. Skipping AI generation.")
         sys.exit(0)
 
-    print("[+] NeuroCommit started", flush=True)
+    print(f"[+] NeuroCommit v{NEURO_COMMIT_VERSION} started", flush=True)
     log_message(f"Commit file path: {commit_msg_file}")
 
     log_message("\nCHECKING FOR .husky")
