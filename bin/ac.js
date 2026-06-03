@@ -763,238 +763,208 @@ async function quickFlow() {
   const cyan = "\x1b[36m";
   const yellow = "\x1b[33m";
 
-  const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
+  const sa = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
-  const dispWidth = (s) => {
-    const c = s.replace(/\x1b\[[0-9;]*m/g, "");
-    let w = 0;
-    for (const ch of c) {
-      const cp = ch.codePointAt(0);
-      if (cp > 0xffff) w += 2;
-      else if (cp >= 0x1100 && cp <= 0x115f) w += 2;
-      else if (cp >= 0x2e80 && cp <= 0x9fff) w += 2;
-      else if (cp >= 0xa000 && cp <= 0xa4cf) w += 2;
-      else if (cp >= 0xac00 && cp <= 0xd7af) w += 2;
-      else if (cp >= 0xfe30 && cp <= 0xfe6f) w += 2;
-      else if (cp >= 0xff01 && cp <= 0xff60) w += 2;
-      else if (cp >= 0x1f000 && cp <= 0x1ffff) w += 2;
-      else if (cp >= 0x20000 && cp <= 0x2ffff) w += 2;
-      else if (cp >= 0x30000 && cp <= 0x3ffff) w += 2;
-      else w += 1;
-    }
-    return w;
-  };
+  const clearScreen = () => process.stdout.write("\x1b[2J\x1b[H");
 
-  const clearAndHeader = (lines) => {
-    const w = Math.max(...lines.map(dispWidth)) + 4;
+  // ── Box renderer with live-update support ──
+  let _boxH = 0;
+  const box = (lines) => {
+    if (_boxH) process.stdout.write(`\x1b[${_boxH}A`);
+    const w = Math.max(...lines.map((l) => sa(l).length)) + 4;
     const t = "╭" + "─".repeat(w) + "╮";
     const b = "╰" + "─".repeat(w) + "╯";
     const p = "│" + " ".repeat(w) + "│";
     let o = t + "\n" + p + "\n";
     for (const l of lines) {
-      const c = dispWidth(l);
+      const c = sa(l).length;
       const L = Math.floor((w - c) / 2);
       o += "│" + " ".repeat(L) + l + " ".repeat(w - c - L) + "│\n";
     }
     o += p + "\n" + b;
-    return o;
+    _boxH = lines.length + 4;
+    process.stdout.write(o);
   };
 
-  const sectionBox = (title, content) => {
-    const tLen = dispWidth(title);
-    const innerW = Math.max(
-      54,
-      tLen + 6,
-      ...content.map((l) => dispWidth(l) + 4),
-    );
-    const dash = "─".repeat(Math.max(0, innerW - tLen - 3));
-    const top = "╭─ " + title + " " + dash + "╮";
-    const bottom = "╰" + "─".repeat(innerW) + "╯";
-    const pad = "│" + " ".repeat(innerW) + "│";
-    let o = top + "\n" + pad + "\n";
-    for (const l of content) {
-      const cl = dispWidth(l);
-      o += "│  " + l + " ".repeat(Math.max(0, innerW - cl - 2)) + "│\n";
-    }
-    o += pad + "\n" + bottom;
-    return o;
+  const showHeader = () => {
+    clearScreen();
+    box([`${bold}🚀 NeuroCommit QuickFlow®${reset}`]);
+    _boxH = 0;
   };
 
-  const contentBox = (content, title) => {
-    const rawLines = content.trimEnd().split("\n");
-    const maxContentW = rawLines.length > 0
-      ? Math.max(...rawLines.map(dispWidth))
-      : 0;
-    const cols = (process.stdout.columns || 100) - 6;
-    const w = Math.max(Math.min(maxContentW + 4, Math.min(cols, 100)), 30);
-    const innerW = w - 4;
+  // ── Single-line raw input via readline ──
+  const readRaw = () => new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    rl.question("", (ans) => { rl.close(); resolve(ans); });
+  });
 
-    const lines = [];
-    for (const line of rawLines) {
-      if (dispWidth(line) > innerW && innerW > 20) {
-        for (let i = 0; i < line.length; i += innerW) {
-          lines.push(line.slice(i, i + innerW));
-        }
-      } else {
-        lines.push(line);
-      }
-    }
-
-    const tb = "─".repeat(w);
+  // ── Helper: draw a "live box" up to the input line, read, then close ──
+  const boxWithInput = async (content, promptLabel, defaultValue) => {
+    const w = Math.max(...content.map((l) => sa(l).length)) + 4;
+    const top = "╭" + "─".repeat(w) + "╮";
+    const bot = "╰" + "─".repeat(w) + "╯";
     const pad = "│" + " ".repeat(w) + "│";
-    let o;
-    if (title) {
-      const tLen = dispWidth(title);
-      const dash = "─".repeat(Math.max(0, w - tLen - 3));
-      o = "╭─ " + title + " " + dash + "╮\n";
-    } else {
-      o = "╭" + tb + "╮\n";
-    }
-    o += pad + "\n";
-    for (const l of lines) {
-      const cl = dispWidth(l);
-      o += "│  " + l + " ".repeat(Math.max(0, w - cl - 2)) + "│\n";
-    }
-    o += pad + "\n╰" + tb + "╯";
-    return o;
-  };
 
-  const showCommitReview = () => {
-    process.stdout.write("\x1b[2J\x1b[H");
-    console.log(clearAndHeader([`${bold}🚀 NeuroCommit QuickFlow®${reset}`]));
-    console.log(`\n${contentBox(currentMessage, `${bold}📄 Commit Message${reset}`)}\n`);
-  };
+    process.stdout.write(top + "\n" + pad + "\n");
+    for (const l of content) {
+      const c = sa(l).length;
+      const L = Math.floor((w - c) / 2);
+      process.stdout.write("│" + " ".repeat(L) + l + " ".repeat(w - c - L) + "│\n");
+    }
+    process.stdout.write(pad + "\n");
 
-  const nextStep = () => {
-    process.stdout.write("\x1b[2J\x1b[H");
-    console.log(clearAndHeader([`${bold}🚀 NeuroCommit QuickFlow®${reset}`]));
+    // Input line (readline adds \n after Enter, so move back up)
+    const prefix = `  ${dim}${promptLabel}${reset} `;
+    process.stdout.write(`│${prefix}`);
+    const ans = await readRaw();
+    process.stdout.write("\x1b[1A"); // move up — readline advanced one line
+    const used = 1 + sa(prefix + ans).length;
+    process.stdout.write(" ".repeat(Math.max(0, w + 2 - used - 1)) + "│\n");
+
+    process.stdout.write(pad + "\n" + bot + "\n");
+    return ans.trim() || defaultValue;
   };
 
   // ================================================================
   //  STEP 1 — Stage
   // ================================================================
-  nextStep();
+  showHeader();
   installPythonDeps();
 
-  const inq = await import("inquirer");
-
-  const stageHeading = `  ${bold}📂 Stage Changes${reset}\n  ${dim}What files to stage?${reset}\n`;
-
-  process.stdout.write(`\n${stageHeading}`);
-
-  const { addPath } = await inq.default.prompt([{
-    type: "input",
-    name: "addPath",
-    message: "git add",
-    default: ".",
-    prefix: "",
-    transformer: (i) => dim + i + reset,
-  }]);
+  const addPath = await boxWithInput(
+    [
+      `  ${bold}📂 Stage Changes${reset}`,
+      "",
+      `  ${dim}What files to stage?${reset}`,
+      "",
+    ],
+    "git add",
+    ".",
+  );
 
   const addResult = spawnSync("git", ["add", addPath], { stdio: "pipe" });
-  if (addResult.status !== 0) {
-    console.error(`  ❌ Failed to stage changes.`);
-    process.exit(1);
-  }
+  if (addResult.status !== 0) { console.error("  ❌ Failed to stage changes."); process.exit(1); }
 
-  const stagedCount = spawnSync(
-    "git", ["diff", "--cached", "--numstat"],
-    { encoding: "utf8" },
-  ).stdout.trim().split("\n").filter(Boolean).length;
+  const stagedCount = spawnSync("git", ["diff", "--cached", "--numstat"], { encoding: "utf8" })
+    .stdout.trim().split("\n").filter(Boolean).length;
 
   console.log(`  ${green}✅ ${stagedCount} file(s) staged${reset}\n`);
 
   // ================================================================
-  //  STEP 2 — Commit Message
+  //  STEP 2 — Generate
   // ================================================================
+  showHeader();
 
-  const makeCommit = () => {
-    return new Promise((resolve) => {
-      const child = spawn("git", ["commit", "--quiet"], {
-        stdio: "inherit",
-        env: { ...process.env, GIT_EDITOR: "true" },
-      });
-      const onInt = () => { child.kill(); };
-      process.on("SIGINT", onInt);
-      child.on("close", (code) => {
-        process.removeListener("SIGINT", onInt);
-        resolve(code);
-      });
+  const genStatic = [
+    `  ${bold}💬 Generating Commit Message${reset}`,
+    "",
+    `  ${dim}AI is analyzing your staged changes...${reset}`,
+  ];
+
+  // Capture child output live inside the box
+  const makeCommit = () => new Promise((resolve) => {
+    const child = spawn("git", ["commit", "--quiet"], {
+      stdio: ["inherit", "pipe", "inherit"],
+      env: { ...process.env, GIT_EDITOR: "true" },
     });
-  };
 
-  const makeSummary = () => {
-    const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
-      encoding: "utf8",
-    }).stdout.trim();
-    const hash = spawnSync("git", ["rev-parse", "--short", "HEAD"], {
-      encoding: "utf8",
-    }).stdout.trim();
-    const stat = spawnSync(
-      "git",
-      ["diff-tree", "--no-commit-id", "-r", "--shortstat", "HEAD"],
-      { encoding: "utf8" },
-    ).stdout.trim();
-    return `${cyan}${bold}[${branch}: ${hash}]${reset} ${stat}`;
-  };
+    let outBuf = "";
+    let tick = null;
 
-  nextStep();
+    const render = () => {
+      const cleaned = outBuf.replace(/\r$/, "").split("\n").map((l) => {
+        const idx = l.lastIndexOf("\r");
+        return idx >= 0 ? l.slice(idx + 1) : l;
+      }).filter(Boolean);
 
-  console.log(`\n${sectionBox(`${bold}💬 Generating Commit Message${reset}`, [
-    `${dim}AI is analyzing your staged changes...${reset}`,
-  ])}`);
+      const maxLog = 6;
+      if (cleaned.length > maxLog) cleaned.splice(0, cleaned.length - maxLog);
 
-  let commitResultCode = await makeCommit();
+      const all = [...genStatic, "", ...cleaned.map((l) => `  ${dim}${l}${reset}`)];
+      box(all);
+    };
 
-  if (commitResultCode === null) {
-    console.log(`\n  ↪️  Cancelled`);
-    process.exit(130);
-  }
+    child.stdout.on("data", (d) => {
+      outBuf += d.toString();
+      if (outBuf.length > 20000) { const p = outBuf.split("\n"); outBuf = p.slice(-30).join("\n"); }
+      if (tick) clearTimeout(tick);
+      tick = setTimeout(render, 60);
+    });
 
-  if (commitResultCode !== 0) {
-    console.error(`\n  ❌ Failed to generate commit message`);
-    process.exit(1);
-  }
+    process.on("SIGINT", () => child.kill());
+
+    child.on("close", (code) => {
+      if (tick) clearTimeout(tick);
+      render();
+      _boxH = 0;
+      resolve(code);
+    });
+  });
+
+  const commitCode = await makeCommit();
+  console.log("");
+  if (commitCode === null) { process.exit(130); }
+  if (commitCode !== 0) { console.error("  ❌ Failed to generate commit message"); process.exit(1); }
 
   const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
-  let currentMessage = readFileSync(commitMsgFile, "utf8").trim();
+  let currentMessage = readFileSync(commitMsgFile, "utf8").trim()
+    .split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").trim();
 
-  currentMessage = currentMessage
-    .split("\n")
-    .filter((line) => !line.trim().startsWith("#"))
-    .join("\n")
-    .trim();
-
-  if (!currentMessage) {
-    console.error("\n  ❌ Empty commit message");
-    process.exit(1);
-  }
+  if (!currentMessage) { console.error("  ❌ Empty commit message"); process.exit(1); }
 
   // ================================================================
-  //  LOOP — Review / Edit / Regenerate / Cancel
+  //  REVIEW LOOP
   // ================================================================
-  showCommitReview();
+  const inq = await import("inquirer");
+
+  const showReview = () => {
+    clearScreen();
+    box([`${bold}🚀 NeuroCommit QuickFlow®${reset}`]);
+    _boxH = 0;
+    console.log("");
+
+    const raw = currentMessage.trimEnd().split("\n");
+    const maxW = Math.max(...raw.map((l) => sa(l).length));
+    const cols = (process.stdout.columns || 100) - 6;
+    const innerW = Math.max(Math.min(maxW, Math.min(cols - 4, 96)), 26);
+    const wrapped = [];
+    for (const line of raw) {
+      if (sa(line).length > innerW && innerW > 20) {
+        for (let i = 0; i < line.length; i += innerW) wrapped.push(line.slice(i, i + innerW));
+      } else wrapped.push(line);
+    }
+
+    const all = [`  ${bold}📄 Commit Message${reset}`, "", ...wrapped, ""];
+    const boxW = Math.max(...all.map((l) => sa(l).length)) + 4;
+    const t = "╭" + "─".repeat(boxW) + "╮";
+    const b = "╰" + "─".repeat(boxW) + "╯";
+    const p = "│" + " ".repeat(boxW) + "│";
+    let o = t + "\n" + p + "\n";
+    for (const l of all) {
+      const c = sa(l).length;
+      const L = Math.floor((boxW - c) / 2);
+      o += "│" + " ".repeat(L) + l + " ".repeat(boxW - c - L) + "│\n";
+    }
+    o += p + "\n" + b;
+    console.log(o);
+    console.log("");
+  };
+
+  showReview();
 
   while (true) {
     const { action } = await inq.default.prompt([
-      {
-        type: "list",
-        name: "action",
-        message: "What next?",
+      { type: "list", name: "action", message: "What next?",
         choices: [
           { name: `${green}✅  Push${reset}`, value: "push" },
           { name: `${cyan}✏️   Edit message${reset}`, value: "edit" },
           { name: `${yellow}🔄  Regenerate${reset}`, value: "regenerate" },
           { name: `${bold}❌  Cancel${reset}`, value: "cancel" },
-        ],
-        default: "push",
+        ], default: "push",
       },
     ]);
 
-    if (action === "push") {
-      break;
-    }
-
+    if (action === "push") break;
     if (action === "cancel") {
       spawnSync("git", ["reset", "--soft", "HEAD~1"], { stdio: "pipe" });
       console.log(`\n${bold}↩️  Commit cancelled${reset}`);
@@ -1003,108 +973,59 @@ async function quickFlow() {
 
     if (action === "edit") {
       writeFileSync(commitMsgFile, currentMessage, "utf8");
-      const editor =
-        process.env.GIT_EDITOR ||
-        process.env.VISUAL ||
-        process.env.EDITOR ||
-        "vi";
-      const editRes = spawnSync(`${editor} "${commitMsgFile}"`, {
-        stdio: "inherit",
-        shell: true,
-      });
-      if (editRes.status !== 0) {
-        console.log(
-          `\n${yellow}↩️  Edit cancelled, keeping previous message${reset}`,
-        );
-        continue;
-      }
-      const edited = readFileSync(commitMsgFile, "utf8")
-        .split("\n")
-        .filter((line) => !line.trim().startsWith("#"))
-        .join("\n")
-        .trim();
-      if (!edited) {
-        console.log(`\n${yellow}❌ Empty message, keeping previous${reset}`);
-        continue;
-      }
+      const editor = process.env.GIT_EDITOR || process.env.VISUAL || process.env.EDITOR || "vi";
+      const editRes = spawnSync(`"${editor}" "${commitMsgFile}"`, { stdio: "inherit", shell: true });
+      if (editRes.status !== 0) { console.log(`\n${yellow}↩️  Edit cancelled${reset}`); continue; }
+      const edited = readFileSync(commitMsgFile, "utf8").trim()
+        .split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").trim();
+      if (!edited) { console.log(`\n${yellow}❌ Empty message${reset}`); continue; }
       writeFileSync(commitMsgFile, edited, "utf8");
-      const amend = spawnSync(
-        "git",
-        ["commit", "--amend", "-F", commitMsgFile],
-        {
-          stdio: "inherit",
-          env: { ...process.env, GIT_EDITOR: "true" },
-        },
-      );
-      if (amend.status !== 0) {
-        console.error(`\n  ❌ Amend failed`);
-        process.exit(1);
-      }
+      const amend = spawnSync("git", ["commit", "--amend", "-F", commitMsgFile], {
+        stdio: "inherit", env: { ...process.env, GIT_EDITOR: "true" },
+      });
+      if (amend.status !== 0) { console.error("  ❌ Amend failed"); process.exit(1); }
       currentMessage = edited;
-      showCommitReview();
+      showReview();
     }
 
     if (action === "regenerate") {
       spawnSync("git", ["reset", "--soft", "HEAD~1"], { stdio: "pipe" });
-
-      nextStep();
-
-      console.log(`\n${sectionBox(`${bold}💬 Regenerating Commit Message${reset}`, [
-        `${dim}AI is re-analyzing your changes...${reset}`,
-      ])}`);
-
-      commitResultCode = await makeCommit();
-      if (commitResultCode === null) {
-        console.log(`\n  ↪️  Cancelled`);
-        process.exit(130);
-      }
-      if (commitResultCode !== 0) {
-        console.error(`\n  ❌ Failed to regenerate`);
-        process.exit(1);
-      }
-      currentMessage = readFileSync(commitMsgFile, "utf8")
-        .split("\n")
-        .filter((line) => !line.trim().startsWith("#"))
-        .join("\n")
-        .trim();
-      if (!currentMessage) {
-        console.error("\n  ❌ Empty message after regeneration");
-        process.exit(1);
-      }
-      showCommitReview();
+      showHeader();
+      const c = await makeCommit();
+      console.log("");
+      if (c === null) { process.exit(130); }
+      if (c !== 0) { console.error("  ❌ Failed to regenerate"); process.exit(1); }
+      currentMessage = readFileSync(commitMsgFile, "utf8").trim()
+        .split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").trim();
+      if (!currentMessage) { console.error("  ❌ Empty message"); process.exit(1); }
+      showReview();
     }
   }
 
   // ================================================================
   //  STEP 3 — Push
   // ================================================================
-  nextStep();
+  showHeader();
 
-  process.stdout.write(`\n  ${bold}⬆️  Push Changes${reset}\n  ${dim}Specify remote and branch${reset}\n\n`);
+  const pushDest = await boxWithInput(
+    [
+      `  ${bold}⬆️  Push Changes${reset}`,
+      "",
+      `  ${dim}Specify remote and branch${reset}`,
+      "",
+    ],
+    "git push",
+    "origin main",
+  );
 
-  const { pushDest } = await inq.default.prompt([{
-    type: "input",
-    name: "pushDest",
-    message: "git push",
-    default: "origin main",
-    prefix: "",
-    transformer: (i) => dim + i + reset,
-  }]);
-
-  console.log(`\n  ⬆️  Pushing...`);
-  const pushArgs = ["push", ...pushDest.split(/\s+/)];
-  const push = spawnSync("git", pushArgs, { stdio: "inherit" });
-
-  if (push.status !== 0) {
-    console.error(`\n  ❌ Push failed`);
-    process.exit(1);
-  }
+  console.log(`  ⬆️  Pushing...`);
+  const push = spawnSync("git", ["push", ...pushDest.split(/\s+/)], { stdio: "inherit" });
+  if (push.status !== 0) { console.error("\n  ❌ Push failed"); process.exit(1); }
   console.log(`  ${green}✅ Pushed successfully${reset}\n`);
 }
 
 async function selfUpdate() {
   const GREEN = "\x1b[32m";
-  const CYAN = "\x1b[36m";
   const DIM = "\x1b[38;5;244m";
   const RST = "\x1b[0m";
 
@@ -1115,21 +1036,51 @@ async function selfUpdate() {
 
   console.log(`\n  Updating ${DIM}v${pkg.version}${RST} → ${GREEN}v${update.latest}${RST}...\n`);
 
-  const pm = process.env.npm_config_user_agent?.includes("pnpm")
-    ? "pnpm"
-    : "npm";
+  const pmList = [
+    { cmd: "pnpm", args: ["add", "-g"] },
+    { cmd: "yarn", args: ["global", "add"] },
+    { cmd: "npm", args: ["install", "-g"] },
+  ];
 
-  const result = spawnSync(pm, [
-    "add", "-g", `@rxgodev/neuro-commit@${update.latest}`,
-  ], { stdio: "inherit" });
-
-  if (result.status !== 0) {
-    console.error(`\n  ❌ Update failed. Try manually:\n     ${pm} add -g @rxgodev/neuro-commit@${update.latest}`);
-    process.exit(1);
+  // Prefer the package manager that was used to invoke the current command
+  const ua = process.env.npm_config_user_agent || "";
+  let preferred = pmList.find((p) => ua.includes(p.cmd));
+  if (preferred) {
+    pmList.unshift(pmList.splice(pmList.indexOf(preferred), 1)[0]);
   }
 
-  console.log(`  ${GREEN}✅ Updated to v${update.latest}${RST}\n`);
+  let lastErr = null;
+  for (const pm of pmList) {
+    const which = spawnSync(
+      process.platform === "win32" ? "where" : "which",
+      [pm.cmd],
+      { stdio: "pipe" },
+    );
+    if (which.status !== 0) continue;
+
+    const result = spawnSync(pm.cmd, [...pm.args, `@rxgodev/neuro-commit@${update.latest}`], { stdio: "inherit" });
+    if (result.status === 0) {
+      console.log(`  ${GREEN}✅ Updated to v${update.latest}${RST}\n`);
+      return;
+    }
+    lastErr = result;
+  }
+
+  console.error(`\n  ❌ All package managers failed. Try manually:\n`);
+  for (const pm of pmList) {
+    const which = spawnSync(
+      process.platform === "win32" ? "where" : "which",
+      [pm.cmd],
+      { stdio: "pipe" },
+    );
+    if (which.status === 0) {
+      console.error(`     ${pm.cmd} ${pm.args.join(" ")} @rxgodev/neuro-commit@${update.latest}`);
+    }
+  }
+  console.error("");
+  process.exit(1);
 }
+
 
 function showHelp() {
   console.log(`${boldCyan}NeuroCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
