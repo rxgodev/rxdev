@@ -750,21 +750,25 @@ function showStatus() {
 }
 
 async function updateSelf() {
-  const update = updateNotifier({
-    pkg,
-    updateCheckInterval: 0,
-  }).update;
+  console.log("🔍 Checking for updates...");
+  const manager = spawnSync("pnpm", ["--version"]).status === 0 ? "pnpm" : "npm";
+  const registry = "https://npm.pkg.github.com/rxgodev";
 
-  if (!update || update.latest === pkg.version) {
+  const latest = spawnSync(manager, ["view", pkg.name, "version", "--registry", registry], { encoding: "utf8" }).stdout.trim();
+
+  if (!latest) {
+    console.error("❌ Failed to fetch latest version from registry.");
+    return;
+  }
+
+  if (latest === pkg.version) {
     console.log("✅ You are already up to date.");
     return;
   }
 
-  console.log(`🚀 Updating to ${update.latest}...`);
-  const manager = spawnSync("pnpm", ["--version"]).status === 0 ? "pnpm" : "npm";
+  console.log(`🚀 Updating to ${latest}...`);
   const args = manager === "pnpm" ? ["add", "-g"] : ["install", "-g"];
-  
-  spawnSync(manager, [...args, `${pkg.name}@${update.latest}`], { stdio: "inherit" });
+  spawnSync(manager, [...args, `${pkg.name}@${latest}`, "--registry", registry], { stdio: "inherit" });
 }
 
 // === HELP & VERSION ===
