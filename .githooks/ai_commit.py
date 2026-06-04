@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.16.0"
+NEURO_COMMIT_VERSION = "2.16.1"
 import json
 import os
 import re
@@ -243,8 +243,7 @@ def log_message(message: str) -> None:
 
 def write_error_to_commit(msg_file, err_msg):
     with open(msg_file, "w", encoding="utf-8") as f:
-        f.write("# AI COMMIT HOOK FAILED\n")
-        f.write(f"# Reason: {err_msg}\n")
+        f.write(f"chore: {err_msg}\n")
 
 
 def read_commitignore(filepath=".commitignore") -> list:

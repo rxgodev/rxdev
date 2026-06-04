@@ -1030,7 +1030,17 @@ async function quickFlow() {
   const commitCode = await makeCommit();
   console.log("");
   if (commitCode === null) { process.exit(130); }
-  if (commitCode !== 0) { console.error("❌ Failed to generate commit message"); process.exit(1); }
+  if (commitCode !== 0) {
+    const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
+    try {
+      const msg = readFileSync(commitMsgFile, "utf8").trim();
+      if (msg && !msg.startsWith("#")) {
+        console.log(`\n${msg}\n`);
+      }
+    } catch {}
+    console.error("❌ Failed to generate commit message");
+    process.exit(1);
+  }
 
   const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
   let currentMessage = readFileSync(commitMsgFile, "utf8").trim()
