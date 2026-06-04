@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.1"
+NEURO_COMMIT_VERSION = "2.17.2"
 import json
 import os
 import re
@@ -397,11 +397,14 @@ def call_groq(messages):
 
 
 def _normalize_type(text: str) -> str:
-    return re.sub(
-        TYPE_REGEX,
-        lambda m: m.group(0).lower() + ":",
-        text,
-    )
+    def _replacer(m: re.Match) -> str:
+        after = text[m.end():].lstrip()
+        if after.startswith(":"):
+            return m.group(0).lower()
+        if after.startswith("("):
+            return m.group(0).lower()
+        return m.group(0).lower() + ":"
+    return re.sub(TYPE_REGEX, _replacer, text)
 
 
 def _clean_llm_response(text: str) -> str:
