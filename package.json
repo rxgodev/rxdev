@@ -1,6 +1,6 @@
 {
   "name": "@rxgodev/neuro-commit",
-  "version": "2.17.8",
+  "version": "2.16.0",
   "description": "AI-powered commit message generator",
   "keywords": [
     "git",
@@ -25,9 +25,6 @@
     "bin/",
     ".githooks/"
   ],
-  "scripts": {
-    "prepack": "python -c \"import shutil; shutil.rmtree('.githooks/__pycache__', ignore_errors=True)\""
-  },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/rxgodev"
   },

@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.8"
+NEURO_COMMIT_VERSION = "2.16.0"
 import json
 import os
 import re
@@ -171,7 +171,7 @@ def build_system_prompt(types_str: str, language: str, custom_prompt: str = "") 
         "- NEVER invent details not present in the diff.\n"
         "- If changes are ONLY in README/docs use type 'docs'.\n"
         "- Output ONLY the raw commit message. NO markdown (no **, no `, no ```), NO explanations, NO prefixes like 'Commit Message:' or 'Response:'. Just the message itself.\n\n"
-        "- If the only changes are code style formatting by linters, use type 'style'. Otherwise do not mention linter changes.\n\n"
+        "- Before you can updated code style by linters. DO NOT describe this in comment, ONLY IF this is only update\n\n"
         f"{bad_examples}\n"
         f"{good_examples}"
     )
@@ -397,59 +397,49 @@ def call_groq(messages):
 
 
 def _normalize_type(text: str) -> str:
-    def _replacer(m: re.Match) -> str:
-        after = text[m.end():].lstrip()
-        if after.startswith(":"):
-            return m.group(0).lower()
-        if after.startswith("("):
-            return m.group(0).lower()
-        return m.group(0).lower() + ":"
-    return re.sub(TYPE_REGEX, _replacer, text)
+    return re.sub(
+        TYPE_REGEX,
+        lambda m: m.group(0).lower() + ":",
+        text,
+    )
 
 
 def _clean_llm_response(text: str) -> str:
-    try:
-        text = re.sub(r"\*{1,2}", "", text)
-        text = re.sub(r"`{1,3}", "", text)
+    text = re.sub(r"\*{1,2}", "", text)
+    text = re.sub(r"`{1,3}", "", text)
 
-        lines = text.strip().split("\n")
-        skip_prefixes = (
-            "commit message", "response", "output", "result",
-            "explanation", "changes", "summary", "diff", "analysis",
-            "here is", "here's", "based on", "it appears", "a suitable",
-            "however", "alternatively", "if you want", "it's worth noting",
-            "the diff shows", "looking at", "this commit", "the changes",
-            "in this commit", "overview", "the following",
-            "subject line:", "body paragraph:", "note:", "note that",
-        )
+    lines = text.strip().split("\n")
+    skip_prefixes = (
+        "commit message", "response", "output", "result",
+        "explanation", "changes", "summary", "diff", "analysis",
+        "here is", "here's",
+    )
 
-        start = 0
-        for i, line in enumerate(lines):
-            lowered = line.strip().lower()
-            if any(lowered.startswith(p) for p in skip_prefixes):
-                start = i + 1
-            elif not line.strip():
-                continue
-            else:
-                break
+    start = 0
+    for i, line in enumerate(lines):
+        lowered = line.strip().lower()
+        if any(lowered.startswith(p) for p in skip_prefixes):
+            start = i + 1
+        elif not line.strip():
+            continue
+        else:
+            break
 
-        body = "\n".join(lines[start:]).strip()
-        body = _normalize_type(body)
+    body = "\n".join(lines[start:]).strip()
+    body = _normalize_type(body)
 
-        parts = body.split("\n", 1)
-        subject = parts[0].rstrip(".")
-        if len(subject) > 150:
-            subject = subject[:147] + "..."
+    parts = body.split("\n", 1)
+    subject = parts[0].rstrip(".")
+    if len(subject) > 150:
+        subject = subject[:147] + "..."
 
-        if len(parts) > 1 and parts[1].strip():
-            return f"{subject}\n\n{parts[1]}"
+    if len(parts) > 1 and parts[1].strip():
+        return f"{subject}\n\n{parts[1]}"
 
-        if not TYPE_REGEX.match(subject):
-            subject = f"chore: {subject}"
+    if not TYPE_REGEX.match(subject):
+        subject = f"chore: {subject}"
 
-        return subject
-    except Exception:
-        return "chore: update files"
+    return subject
 
 
 def generate_commit_message(diff):
