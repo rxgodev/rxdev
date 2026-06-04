@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.7"
+NEURO_COMMIT_VERSION = "2.17.8"
 import json
 import os
 import re
@@ -408,77 +408,48 @@ def _normalize_type(text: str) -> str:
 
 
 def _clean_llm_response(text: str) -> str:
-    text = re.sub(r"\*{1,2}", "", text)
-    text = re.sub(r"`{1,3}", "", text)
+    try:
+        text = re.sub(r"\*{1,2}", "", text)
+        text = re.sub(r"`{1,3}", "", text)
 
-    lines = text.strip().split("\n")
-    skip_prefixes = (
-        "commit message", "response", "output", "result",
-        "explanation", "changes", "summary", "diff", "analysis",
-        "here is", "here's", "based on", "it appears", "a suitable",
-        "however", "alternatively", "if you want", "it's worth noting",
-        "the diff shows", "looking at", "this commit", "the changes",
-        "in this commit", "overview", "the following",
-    )
-    stop_prefixes = (
-        "however,", "alternatively,", "if you want", "it's worth noting",
-        "note:", "note that", "in summary", "conclusion",
-    )
-    _commit_subject_re = re.compile(
-        rf"^(?:{_build_type_regex(valid_types_global)})(?:\([^)]*\))?\s*:", re.IGNORECASE
-    )
+        lines = text.strip().split("\n")
+        skip_prefixes = (
+            "commit message", "response", "output", "result",
+            "explanation", "changes", "summary", "diff", "analysis",
+            "here is", "here's", "based on", "it appears", "a suitable",
+            "however", "alternatively", "if you want", "it's worth noting",
+            "the diff shows", "looking at", "this commit", "the changes",
+            "in this commit", "overview", "the following",
+            "subject line:", "body paragraph:", "note:", "note that",
+        )
 
-    start = 0
-    for i, line in enumerate(lines):
-        lowered = line.strip().lower()
-        if any(lowered.startswith(p) for p in skip_prefixes):
-            start = i + 1
-        elif not line.strip():
-            continue
-        else:
-            break
-
-    body_lines = lines[start:]
-    subject = None
-    body_parts = []
-    found_subject = False
-
-    for line in body_lines:
-        stripped = line.strip()
-        lowered = stripped.lower()
-
-        if not found_subject:
-            if not stripped:
+        start = 0
+        for i, line in enumerate(lines):
+            lowered = line.strip().lower()
+            if any(lowered.startswith(p) for p in skip_prefixes):
+                start = i + 1
+            elif not line.strip():
                 continue
-            if _commit_subject_re.match(stripped):
-                subject = stripped
-                found_subject = True
-            continue
+            else:
+                break
 
-        if not stripped:
-            body_parts.append("")
-            continue
+        body = "\n".join(lines[start:]).strip()
+        body = _normalize_type(body)
 
-        if any(lowered.startswith(p) for p in stop_prefixes):
-            break
+        parts = body.split("\n", 1)
+        subject = parts[0].rstrip(".")
+        if len(subject) > 150:
+            subject = subject[:147] + "..."
 
-        if _commit_subject_re.match(stripped):
-            break
+        if len(parts) > 1 and parts[1].strip():
+            return f"{subject}\n\n{parts[1]}"
 
-        body_parts.append(stripped)
+        if not TYPE_REGEX.match(subject):
+            subject = f"chore: {subject}"
 
-    if not subject:
+        return subject
+    except Exception:
         return "chore: update files"
-
-    subject = _normalize_type(subject).rstrip(".")
-    if len(subject) > 150:
-        subject = subject[:147] + "..."
-
-    body = "\n".join(body_parts).strip()
-    if body:
-        return f"{subject}\n\n{body}"
-
-    return subject
 
 
 def generate_commit_message(diff):
