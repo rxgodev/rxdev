@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.15.0"
+NEURO_COMMIT_VERSION = "2.16.0"
 import json
 import os
 import re
@@ -33,33 +33,131 @@ DEFAULT_VALID_TYPES = {
     "feat", "fix", "chore", "docs", "style",
     "refactor", "perf", "test", "build", "ci", "revert",
 }
-DEFAULT_SYSTEM_PROMPT = (
-    "You are an expert Git commit message generator strictly following Conventional Commits 1.0.0.\n"
-    "RULES:\n"
-    "- SUBJECT: English, imperative mood, lowercase, max 50 chars. NO PERIOD at end.\n"
-    "- TYPE: Use ONLY: {types}.\n"
-    "- SCOPE: Optional, in parentheses, e.g. (auth), (docs), (deps). Keep short.\n"
-    "- BODY: In Russian. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.\n"
-    "- NEVER describe merge commits, version bumps, or generic 'update' without context.\n"
-    "- NEVER invent details not present in the diff.\n"
-    "- If changes are ONLY in README/docs use type 'docs'.\n"
-    "- Output ONLY the raw commit message. NO markdown (no **, no `, no ```), NO explanations, NO prefixes like 'Commit Message:' or 'Response:'. Just the message itself.\n\n"
-    "- Before you can updated code style by linters. DO NOT describe this in comment, ONLY IF this is only update\n\n"
-    "BAD EXAMPLES (NEVER do this):\n"
-    "  'update README.md' too vague\n"
-    "  'Добавлено много документации' not specific\n"
-    "  'Merge branch ...' ignore merge-related changes\n\n"
-    "  'Изменён стиль: добавлены кавычки' изменение было не единственным, а комментарий описывает это\n\n"
-    "GOOD EXAMPLES:\n"
-    "docs(readme): add installation and release steps\n"
-    "\n"
-    "Расширена документация: добавлены шаги установки, развёртывания и релиза пакета. "
-    "Обновлены разделы 'Технический стек', 'Фичи' и 'Переменные среды' в README.md.\n\n"
-    "docs(package): describe flight map features and stack\n"
-    "\n"
-    "Добавлено описание пакета карты полётов: технический стек (Node.js 22, React 19), "
-    "фичи (карта, взаимодействие с пилотом), и демо-ссылка."
-)
+
+BODY_LANGUAGE_PROMPTS = {
+    "en": "BODY: In English. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.",
+    "ru": "BODY: In Russian. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.",
+    "de": "BODY: In German. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.",
+    "fr": "BODY: In French. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.",
+    "zh": "BODY: In Chinese. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.",
+}
+
+BODY_EXAMPLES = {
+    "en": (
+        "GOOD EXAMPLES:\n"
+        "docs(readme): add installation and release steps\n"
+        "\n"
+        "Extended documentation: added installation, deployment and package release steps. "
+        "Updated 'Tech Stack', 'Features' and 'Environment Variables' sections in README.md.\n\n"
+        "docs(package): describe flight map features and stack\n"
+        "\n"
+        "Added flight map package description: tech stack (Node.js 22, React 19), "
+        "features (map, pilot interaction), and demo link."
+    ),
+    "ru": (
+        "GOOD EXAMPLES:\n"
+        "docs(readme): add installation and release steps\n"
+        "\n"
+        "Расширена документация: добавлены шаги установки, развёртывания и релиза пакета. "
+        "Обновлены разделы 'Технический стек', 'Фичи' и 'Переменные среды' в README.md.\n\n"
+        "docs(package): describe flight map features and stack\n"
+        "\n"
+        "Добавлено описание пакета карты полётов: технический стек (Node.js 22, React 19), "
+        "фичи (карта, взаимодействие с пилотом), и демо-ссылка."
+    ),
+    "de": (
+        "GOOD EXAMPLES:\n"
+        "docs(readme): add installation and release steps\n"
+        "\n"
+        "Dokumentation erweitert: Installations-, Bereitstellungs- und Paket-Release-Schritte hinzugefügt. "
+        "Abschnitte 'Technologie-Stack', 'Funktionen' und 'Umgebungsvariablen' in README.md aktualisiert.\n\n"
+        "docs(package): describe flight map features and stack\n"
+        "\n"
+        "Flugkarten-Paketbeschreibung hinzugefügt: Technologie-Stack (Node.js 22, React 19), "
+        "Funktionen (Karte, Piloteninteraktion) und Demo-Link."
+    ),
+    "fr": (
+        "GOOD EXAMPLES:\n"
+        "docs(readme): add installation and release steps\n"
+        "\n"
+        "Documentation étendue : ajout des étapes d'installation, de déploiement et de publication du paquet. "
+        "Sections 'Stack technique', 'Fonctionnalités' et 'Variables d'environnement' mises à jour dans README.md.\n\n"
+        "docs(package): describe flight map features and stack\n"
+        "\n"
+        "Description du paquet de carte de vol ajoutée : stack technique (Node.js 22, React 19), "
+        "fonctionnalités (carte, interaction pilote) et lien de démonstration."
+    ),
+    "zh": (
+        "GOOD EXAMPLES:\n"
+        "docs(readme): add installation and release steps\n"
+        "\n"
+        "扩展文档：添加了安装、部署和包发布步骤。"
+        "更新了 README.md 中的'技术栈'、'功能特性'和'环境变量'部分。\n\n"
+        "docs(package): describe flight map features and stack\n"
+        "\n"
+        "添加了飞行地图包描述：技术栈（Node.js 22, React 19），"
+        "功能特性（地图，飞行员交互）和演示链接。"
+    ),
+}
+
+BAD_EXAMPLES_BY_LANG = {
+    "en": (
+        "BAD EXAMPLES (NEVER do this):\n"
+        "  'update README.md' too vague\n"
+        "  'Added a lot of documentation' not specific\n"
+        "  'Merge branch ...' ignore merge-related changes\n"
+    ),
+    "ru": (
+        "BAD EXAMPLES (NEVER do this):\n"
+        "  'update README.md' too vague\n"
+        "  'Добавлено много документации' not specific\n"
+        "  'Merge branch ...' ignore merge-related changes\n\n"
+        "  'Изменён стиль: добавлены кавычки' изменение было не единственным, а комментарий описывает это\n"
+    ),
+    "de": (
+        "BAD EXAMPLES (NEVER do this):\n"
+        "  'update README.md' too vague\n"
+        "  'Viele Dokumentationen hinzugefügt' not specific\n"
+        "  'Merge branch ...' ignore merge-related changes\n"
+    ),
+    "fr": (
+        "BAD EXAMPLES (NEVER do this):\n"
+        "  'update README.md' too vague\n"
+        "  'Ajouté beaucoup de documentation' not specific\n"
+        "  'Merge branch ...' ignore merge-related changes\n"
+    ),
+    "zh": (
+        "BAD EXAMPLES (NEVER do this):\n"
+        "  'update README.md' too vague\n"
+        "  '添加了大量文档' not specific\n"
+        "  'Merge branch ...' ignore merge-related changes\n"
+    ),
+}
+
+
+def build_system_prompt(types_str: str, language: str, custom_prompt: str = "") -> str:
+    if custom_prompt:
+        return custom_prompt.replace("{types}", types_str)
+
+    body_prompt = BODY_LANGUAGE_PROMPTS.get(language, BODY_LANGUAGE_PROMPTS["ru"])
+    bad_examples = BAD_EXAMPLES_BY_LANG.get(language, BAD_EXAMPLES_BY_LANG["ru"])
+    good_examples = BODY_EXAMPLES.get(language, BODY_EXAMPLES["ru"])
+
+    return (
+        "You are an expert Git commit message generator strictly following Conventional Commits 1.0.0.\n"
+        "RULES:\n"
+        "- SUBJECT: English, imperative mood, lowercase, max 50 chars. NO PERIOD at end.\n"
+        "- TYPE: Use ONLY: {types}.\n"
+        "- SCOPE: Optional, in parentheses, e.g. (auth), (docs), (deps). Keep short.\n"
+        f"- {body_prompt}\n"
+        "- NEVER describe merge commits, version bumps, or generic 'update' without context.\n"
+        "- NEVER invent details not present in the diff.\n"
+        "- If changes are ONLY in README/docs use type 'docs'.\n"
+        "- Output ONLY the raw commit message. NO markdown (no **, no `, no ```), NO explanations, NO prefixes like 'Commit Message:' or 'Response:'. Just the message itself.\n\n"
+        "- Before you can updated code style by linters. DO NOT describe this in comment, ONLY IF this is only update\n\n"
+        f"{bad_examples}\n"
+        f"{good_examples}"
+    )
 
 
 def load_user_config():
@@ -79,14 +177,12 @@ API_KEY = USER_CONFIG.get("apiKey", "")
 GROQ_MODEL = USER_CONFIG.get("model") or DEFAULT_GROQ_MODEL
 CUSTOM_TYPES = set(USER_CONFIG.get("customTypes", []))
 CUSTOM_PROMPT = USER_CONFIG.get("prompt", "")
+LANGUAGE = USER_CONFIG.get("language", "ru")
 
 valid_types = DEFAULT_VALID_TYPES | CUSTOM_TYPES
 types_str = ", ".join(sorted(valid_types))
 
-if CUSTOM_PROMPT:
-    SYSTEM_PROMPT = CUSTOM_PROMPT.replace("{types}", types_str)
-else:
-    SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT.replace("{types}", types_str)
+SYSTEM_PROMPT = build_system_prompt(types_str, LANGUAGE, CUSTOM_PROMPT)
 
 
 def is_valid_commit_message(msg: str) -> bool:
@@ -124,35 +220,6 @@ LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "ai_commit_debug.log")
 def log_message(message: str) -> None:
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{message}\n")
-
-
-SYSTEM_PROMPT = (
-    "You are an expert Git commit message generator strictly following Conventional Commits 1.0.0.\n"
-    "RULES:\n"
-    "- SUBJECT: English, imperative mood, lowercase, max 50 chars. NO PERIOD at end.\n"
-    "- TYPE: Use ONLY: feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert.\n"
-    "- SCOPE: Optional, in parentheses, e.g. (auth), (docs), (deps). Keep short.\n"
-    "- BODY: In Russian. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.\n"
-    "- NEVER describe merge commits, version bumps, or generic 'update' without context.\n"
-    "- NEVER invent details not present in the diff.\n"
-    "- If changes are ONLY in README/docs use type 'docs'.\n"
-    "- Output ONLY the raw commit message. NO markdown (no **, no `, no ```), NO explanations, NO prefixes like 'Commit Message:' or 'Response:'. Just the message itself.\n\n"
-    "- Before you can updated code style by linters. DO NOT describe this in comment, ONLY IF this is only update\n\n"
-    "BAD EXAMPLES (NEVER do this):\n"
-    "  'update README.md' too vague\n"
-    "  'Добавлено много документации' not specific\n"
-    "  'Merge branch ...' ignore merge-related changes\n\n"
-    "  'Изменён стиль: добавлены кавычки' изменение было не единственным, а комментарий описывает это\n\n"
-    "GOOD EXAMPLES:\n"
-    "docs(readme): add installation and release steps\n"
-    "\n"
-    "Расширена документация: добавлены шаги установки, развёртывания и релиза пакета. "
-    "Обновлены разделы 'Технический стек', 'Фичи' и 'Переменные среды' в README.md.\n\n"
-    "docs(package): describe flight map features and stack\n"
-    "\n"
-    "Добавлено описание пакета карты полётов: технический стек (Node.js 22, React 19), "
-    "фичи (карта, взаимодействие с пилотом), и демо-ссылка."
-)
 
 
 def write_error_to_commit(msg_file, err_msg):

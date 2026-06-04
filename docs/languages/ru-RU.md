@@ -1,6 +1,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white" alt="Node version">
-  <img src="https://img.shields.io/badge/version-2.15.3-8250df" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.16.0-8250df" alt="Version">
   <img src="https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white" alt="CLI">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
   <img src="https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white" alt="Groq">
@@ -56,7 +56,7 @@ QuickFlow устраняет переключение контекста. Ник
 
 ### Основные возможности
 
-- **AI-генерация коммитов** — заголовок в Conventional Commits на английском и тело на русском, объясняющее *почему*, на основе staged-диффа.
+- **AI-генерация коммитов** — заголовок в Conventional Commits на английском и тело на выбранном языке, объясняющее *почему*, на основе staged-диффа. Поддерживается русский, английский, немецкий, французский и китайский.
 - **Авто-бамп версии (опционально)** — интеллектуально обнаруживает манифесты по всему репозиторию (поддержка монорепозиториев). Поддерживает 15+ форматов:
   - `package.json`, `composer.json` — JSON-парсер
   - `Cargo.toml`, `pyproject.toml` — TOML-парсер
@@ -136,7 +136,7 @@ qq go
 |------------------|------------|
 | `qq go`          | **QuickFlow** — стейдж → генерация → ревью → пуш (рекомендуется) |
 | `qq init`        | Установить AI-хук в текущем репозитории |
-| `qq config`      | Настройка API-ключа, модели, co-author, авто-бампа, проектов и шаблонов |
+| `qq config`      | Настройка API-ключа, модели, языка, co-author, авто-бампа, проектов и шаблонов |
 | `qq status`      | Статус интеграции в текущем репозитории |
 | `qq uninstall`   | Удалить хук из репозитория |
 
@@ -153,6 +153,7 @@ qq config
 | Параметр            | Описание |
 |---------------------|----------|
 | **Model**           | Выбор модели: Llama 3.1 **8B** (быстрее, ~560 t/s) или **70B** (умнее, ~280 t/s) |
+| **Language**        | Язык тела коммита: русский, английский, немецкий, французский или китайский |
 | **Custom prompt**   | Свой системный промпт. Используйте `{types}` как плейсхолдер — вместо него подставится список разрешённых типов (feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert + ваши кастомные) |
 | **Custom types**    | Добавьте свои типы коммитов сверх встроенных (например `hotfix, deps, i18n, ui, api, db`) |
 | **API key**         | Указать или удалить Groq API-ключ |

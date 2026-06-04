@@ -1,6 +1,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white" alt="Node version">
-  <img src="https://img.shields.io/badge/version-2.15.3-8250df" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.16.0-8250df" alt="Version">
   <img src="https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white" alt="CLI">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
   <img src="https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white" alt="Groq">
@@ -56,7 +56,7 @@ QuickFlow 消除了上下文切换。不再需要 `git add → git commit → wa
 
 ### 核心功能
 
-- **AI 生成提交消息** — 基于您的暂存区差异，生成英文 Conventional Commits 标题和中文正文（解释*为什么*修改）。
+- **AI 生成提交消息** — 基于您的暂存区差异，生成英文 Conventional Commits 标题和所选语言的正文（解释*为什么*修改）。支持中文、英文、俄文、德文和法文。
 - **自动版本递增（可选）** — 智能发现整个仓库中的版本清单（支持单仓库）。支持 15+ 格式：
   - `package.json`、`composer.json` — JSON 解析器
   - `Cargo.toml`、`pyproject.toml` — TOML 解析器
@@ -136,7 +136,7 @@ qq go
 |-----------------|------|
 | `qq go`         | **QuickFlow** — 暂存 → 生成 → 审查 → 推送（推荐） |
 | `qq init`       | 在当前仓库安装 AI 提交钩子 |
-| `qq config`     | 配置 API 密钥、模型、co-author、自动递增、项目和模板 |
+| `qq config`     | 配置 API 密钥、模型、语言、co-author、自动递增、项目和模板 |
 | `qq status`     | 显示当前仓库的集成状态 |
 | `qq uninstall`  | 从仓库移除钩子 |
 
@@ -153,6 +153,7 @@ qq config
 | 设置                | 说明 |
 |---------------------|------|
 | **Model**           | 切换模型：Llama 3.1 **8B**（更快，~560 t/s）或 **70B**（更智能，~280 t/s） |
+| **Language**        | 提交正文的语言：中文、英文、俄文、德文或法文 |
 | **Custom prompt**   | 覆盖系统提示词。使用 `{types}` 作为占位符 — 将被替换为允许的提交类型列表（feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert 以及您添加的自定义类型） |
 | **Custom types**    | 添加内置类型之外的自定义 Conventional Commits 类型（例如 `hotfix, deps, i18n, ui, api, db`） |
 | **API key**         | 设置或清除您的 Groq API 密钥 |

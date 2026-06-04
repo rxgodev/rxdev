@@ -63,6 +63,15 @@ const TEMPLATES_FILE = join(CONFIG_DIR, "templates.json");
 const DEFAULT_CONFIG = {
   coauthor: true,
   bumpVersion: false,
+  language: "ru",
+};
+
+const LANGUAGES = {
+  en: "English",
+  ru: "Русский",
+  de: "Deutsch",
+  fr: "Français",
+  zh: "中文",
 };
 
 function ensureConfigDir() {
@@ -582,6 +591,7 @@ async function configInteractive() {
 
   while (true) {
     const modelLabel = config.model === "llama-3.3-70b-versatile" ? "70B (smarter)" : "8B (faster)";
+    const langLabel = LANGUAGES[config.language] || "Русский";
     const mainAction = await promptSelect(
       [
         { name: "✅ Save & exit", value: "exit" },
@@ -589,6 +599,10 @@ async function configInteractive() {
         {
           name: `🧠 Model: ${modelLabel}`,
           value: "model",
+        },
+        {
+          name: `🌐 Language: ${langLabel}`,
+          value: "language",
         },
         {
           name: `✏️  Custom prompt: ${config.prompt ? "set" : "not set"}`,
@@ -673,6 +687,25 @@ async function configInteractive() {
       config.model = model;
       saveConfig(config);
       console.log(`✅ Model set to ${model.includes("70b") ? "70B" : "8B"}.\n`);
+    }
+
+    if (mainAction === "language") {
+      const inquirer = await import("inquirer");
+      const { lang } = await inquirer.default.prompt([
+        {
+          type: "list",
+          name: "lang",
+          message: "Select commit message language:",
+          choices: Object.entries(LANGUAGES).map(([code, name]) => ({
+            name: `${name} (${code})`,
+            value: code,
+          })),
+          default: config.language || "ru",
+        },
+      ]);
+      config.language = lang;
+      saveConfig(config);
+      console.log(`✅ Language set to ${LANGUAGES[lang]}.\n`);
     }
 
     if (mainAction === "prompt") {
@@ -1107,7 +1140,7 @@ ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
 
 ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}init${resetColor}          Install AI commit hook
-  ${boldCyan}config${resetColor}        Configure model, key, prompt, types, co-author & more
+  ${boldCyan}config${resetColor}        Configure model, language, key, prompt, types, co-author & more
   ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status`);

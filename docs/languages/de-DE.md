@@ -1,6 +1,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white" alt="Node version">
-  <img src="https://img.shields.io/badge/version-2.15.3-8250df" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.16.0-8250df" alt="Version">
   <img src="https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white" alt="CLI">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
   <img src="https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white" alt="Groq">
@@ -56,7 +56,7 @@ QuickFlow eliminiert Kontextwechsel. Kein `git add → git commit → warten →
 
 ### Kernfunktionen
 
-- **KI-generierte Commit-Nachrichten** — ein Conventional Commits Betreff auf Englisch plus ein deutscher Body, der das *Warum* erklärt, basierend auf Ihrem staged Diff.
+- **KI-generierte Commit-Nachrichten** — ein Conventional Commits Betreff auf Englisch plus ein Body in Ihrer gewählten Sprache, der das *Warum* erklärt, basierend auf Ihrem staged Diff. Unterstützt Deutsch, Englisch, Russisch, Französisch und Chinesisch.
 - **Auto-Bump Version (optional)** — erkennt intelligente Versionsmanifeste im gesamten Repository (Monorepo-tauglich). Unterstützt 15+ Formate:
   - `package.json`, `composer.json` — JSON-Parser
   - `Cargo.toml`, `pyproject.toml` — TOML-Parser
@@ -136,7 +136,7 @@ Das ist alles. `qq go` führt Sie durch jeden Schritt:
 |------------------|--------------|
 | `qq go`          | **QuickFlow** — Stage → Generieren → Prüfen → Pushen (empfohlen) |
 | `qq init`        | Installiert den AI-Hook im aktuellen Repository |
-| `qq config`      | Konfiguriert API-Schlüssel, Modell, Co-Author, Auto-Bump, Projekte und Vorlagen |
+| `qq config`      | Konfiguriert API-Schlüssel, Modell, Sprache, Co-Author, Auto-Bump, Projekte und Vorlagen |
 | `qq status`      | Zeigt den Integrationsstatus des aktuellen Repositorys |
 | `qq uninstall`   | Entfernt den Hook aus dem Repository |
 
@@ -153,6 +153,7 @@ qq config
 | Einstellung          | Beschreibung |
 |----------------------|--------------|
 | **Model**            | Wechsel zwischen Llama 3.1 **8B** (schneller, ~560 t/s) und **70B** (intelligenter, ~280 t/s) |
+| **Language**         | Sprache des Commit-Bodys: Deutsch, Englisch, Russisch, Französisch oder Chinesisch |
 | **Custom prompt**    | System-Prompt überschreiben. Verwenden Sie `{types}` als Platzhalter — ersetzt durch die Liste erlaubter Typen (feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert plus Ihre benutzerdefinierten Typen) |
 | **Custom types**     | Fügen Sie zusätzliche Conventional Commits Typen hinzu (z.B. `hotfix, deps, i18n, ui, api, db`) |
 | **API key**          | Groq API-Schlüssel setzen oder löschen |
