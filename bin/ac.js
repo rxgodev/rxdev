@@ -1041,9 +1041,13 @@ async function quickFlow() {
   if (commitCode !== 0) {
     const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
     try {
-      const msg = readFileSync(commitMsgFile, "utf8").trim();
-      if (msg && !msg.startsWith("#")) {
-        console.log(`\n${msg}\n`);
+      const raw = readFileSync(commitMsgFile, "utf8");
+      const userLines = raw.split("\n").filter(l => {
+        const t = l.trim();
+        return t && !t.startsWith("# On ") && !t.startsWith("# Please") && !t.startsWith("# It looks") && !t.startsWith("# Your branch") && !t.startsWith("# Changes") && !t.startsWith("# Untracked") && !t.startsWith("#");
+      });
+      if (userLines.length > 0) {
+        console.log(`\n${userLines.join("\n")}\n`);
       }
     } catch {}
     console.error("❌ Failed to generate commit message");
