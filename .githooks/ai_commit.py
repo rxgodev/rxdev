@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.2"
+NEURO_COMMIT_VERSION = "2.17.3"
 import json
 import os
 import re
@@ -450,11 +450,14 @@ def _clean_llm_response(text: str) -> str:
 
 def generate_commit_message(diff):
     user_prompt = (
-        "Output ONLY a conventional commit message for this diff. "
-        "No analysis, no explanation, no commentary, no markdown — just the raw commit message.\n"
-        "Example output:\n"
-        "fix(auth): handle token expiry during refresh\n\n"
-        "The parser now checks token expiry before making refresh calls to avoid 401 errors.\n\n"
+        "Generate a conventional commit message for this diff. "
+        "Subject line required. Add a body describing WHY if the change has meaningful context.\n"
+        "Output only the raw message — no markdown, no commentary.\n"
+        "Example:\n"
+        "fix(auth): handle token expiry during refresh\n"
+        "\n"
+        "The parser now checks token expiry before making refresh calls to avoid 401 errors.\n"
+        "\n"
         "Diff:\n"
         f"---\n{diff}"
     )
