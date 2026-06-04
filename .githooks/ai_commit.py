@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.3"
+NEURO_COMMIT_VERSION = "2.17.4"
 import json
 import os
 import re
@@ -43,11 +43,11 @@ BODY_LANGUAGE_PROMPTS = {
 }
 
 BODY_EXAMPLES = {
-    "en": "EXAMPLES:\n  docs(readme): add installation and release steps\n  feat(auth): add OAuth2 login flow",
-    "ru": "EXAMPLES:\n  docs(readme): add installation and release steps\n  feat(auth): add OAuth2 login flow",
-    "de": "EXAMPLES:\n  docs(readme): add installation and release steps\n  feat(auth): add OAuth2 login flow",
-    "fr": "EXAMPLES:\n  docs(readme): add installation and release steps\n  feat(auth): add OAuth2 login flow",
-    "zh": "EXAMPLES:\n  docs(readme): add installation and release steps\n  feat(auth): add OAuth2 login flow",
+    "en": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Added install, deploy and release docs. Updated README.md sections.\n  feat(auth): add OAuth2 login flow\n\n  Implemented OAuth2 with refresh tokens in auth.py for secure API access.",
+    "ru": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Добавлена документация по установке, развёртыванию и релизу. Обновлены разделы README.md.\n  feat(auth): add OAuth2 login flow\n\n  Реализован OAuth2 с refresh-токенами в auth.py для безопасного доступа к API.",
+    "de": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Installations-, Bereitstellungs- und Release-Doku hinzugefügt. README.md-Abschnitte aktualisiert.\n  feat(auth): add OAuth2 login flow\n\n  OAuth2 mit Refresh-Tokens in auth.py für sicheren API-Zugriff implementiert.",
+    "fr": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Documentation d'installation, déploiement et publication ajoutée. Sections README.md mises à jour.\n  feat(auth): add OAuth2 login flow\n\n  OAuth2 avec refresh tokens implémenté dans auth.py pour un accès API sécurisé.",
+    "zh": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  添加了安装、部署和发布文档。更新了 README.md 的各部分。\n  feat(auth): add OAuth2 login flow\n\n  在 auth.py 中实现了带有刷新令牌的 OAuth2，用于安全的 API 访问。",
 }
 
 BAD_EXAMPLES = "BAD (NEVER do this):\n  'update README.md' too vague\n  'Added a lot of documentation' not specific\n  'Merge branch ...' ignore merge-related changes\n  'Изменён стиль: добавлены кавычки' describes WHAT not WHY"
@@ -78,16 +78,10 @@ def build_system_prompt(types_str: str, language: str, custom_prompt: str = "") 
     good_examples = BODY_EXAMPLES.get(language, BODY_EXAMPLES["ru"])
 
     return (
-        "You are an expert Git commit message generator strictly following Conventional Commits 1.0.0.\n"
-        "RULES:\n"
-        "- SUBJECT: English, imperative mood, lowercase, max 50 chars. NO PERIOD at end.\n"
-        "- TYPE: Use ONLY: {types}.\n"
-        "- SCOPE: Optional, in parentheses, e.g. (auth), (docs), (deps). Keep short.\n"
+        "You are a Conventional Commits generator. Rules:\n"
+        f"- Types: {types_str}.\n"
+        "- Subject: English imperative, max 50 chars, no period.\n"
         f"- {body_prompt}\n"
-        "- NEVER describe merge commits, version bumps, or generic 'update' without context.\n"
-        "- NEVER invent details not present in the diff.\n"
-        "- If changes are ONLY in README/docs use type 'docs'.\n"
-        "- Output ONLY the raw commit message. NO markdown, NO explanations, NO prefixes. Just the message.\n\n"
         f"{BAD_EXAMPLES}\n"
         f"{good_examples}"
     )
@@ -398,7 +392,7 @@ def _clean_llm_response(text: str) -> str:
 
 
 def generate_commit_message(diff):
-    user_prompt = f"Generate a commit message for this diff:\n\n---\n{diff}\n---\n\nOutput ONLY the commit message. No explanations, no analysis, no markdown, no backticks."
+    user_prompt = f"Write a commit (subject + blank line + body explaining why) for:\n\n---\n{diff}\n---"
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
