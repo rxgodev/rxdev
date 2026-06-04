@@ -73,7 +73,7 @@ QuickFlow eliminiert Kontextwechsel. Kein `git add → git commit → warten →
 
 ### Voraussetzungen
 
-- **Node.js** >= 22
+- **Node.js** >= 18
 - Ein **kostenloser API-Schlüssel** von [console.groq.com](https://console.groq.com)
 
 ### 1. GitHub Package Registry einrichten
@@ -134,6 +134,9 @@ Das ist alles. `qq go` führt Sie durch jeden Schritt:
 | `qq config`      | Konfiguriert API-Schlüssel, Modell, Sprache, Co-Author, Auto-Bump, Projekte und Vorlagen |
 | `qq status`      | Zeigt den Integrationsstatus des aktuellen Repositorys |
 | `qq uninstall`   | Entfernt den Hook aus dem Repository |
+| `qq version`     | Zeigt die Version an |
+| `qq update`      | Zeigt Update-Anleitung an |
+| `qq --no-color`  | Farben deaktivieren (auch via `NO_COLOR`) |
 
 ---
 

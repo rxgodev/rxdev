@@ -73,7 +73,7 @@ QuickFlow 消除了上下文切换。不再需要 `git add → git commit → wa
 
 ### 前置要求
 
-- **Node.js** >= 22
+- **Node.js** >= 18
 - **免费 API 密钥** 来自 [console.groq.com](https://console.groq.com)
 
 ### 1. 配置 GitHub Package Registry
@@ -134,6 +134,9 @@ qq go
 | `qq config`     | 配置 API 密钥、模型、语言、co-author、自动递增、项目和模板 |
 | `qq status`     | 显示当前仓库的集成状态 |
 | `qq uninstall`  | 从仓库移除钩子 |
+| `qq version`    | 显示版本号 |
+| `qq update`     | 显示更新说明 |
+| `qq --no-color` | 禁用 ANSI 颜色（也支持 `NO_COLOR` 环境变量） |
 
 ---
 

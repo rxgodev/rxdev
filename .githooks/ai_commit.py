@@ -134,6 +134,23 @@ BAD_EXAMPLES_BY_LANG = {
     ),
 }
 
+SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv", ".tox", ".eggs", "dist", "build", ".git2", ".svn"}
+
+
+def _is_skipped_dir(path: Path) -> bool:
+    for part in path.parts:
+        if part in SKIP_DIRS:
+            return True
+    return False
+
+
+def _build_type_regex(types_set: set[str]) -> str:
+    sorted_types = sorted(types_set, key=len, reverse=True)
+    return "|".join(re.escape(t) for t in sorted_types)
+
+
+valid_types_global: set[str] = set()
+
 
 def build_system_prompt(types_str: str, language: str, custom_prompt: str = "") -> str:
     if custom_prompt:
@@ -179,8 +196,10 @@ CUSTOM_TYPES = set(USER_CONFIG.get("customTypes", []))
 CUSTOM_PROMPT = USER_CONFIG.get("prompt", "")
 LANGUAGE = USER_CONFIG.get("language", "ru")
 
-valid_types = DEFAULT_VALID_TYPES | CUSTOM_TYPES
-types_str = ", ".join(sorted(valid_types))
+valid_types_global = DEFAULT_VALID_TYPES | CUSTOM_TYPES
+types_str = ", ".join(sorted(valid_types_global))
+TYPE_REGEX_STR = _build_type_regex(valid_types_global)
+TYPE_REGEX = re.compile(rf"^(?:{TYPE_REGEX_STR})", re.IGNORECASE)
 
 SYSTEM_PROMPT = build_system_prompt(types_str, LANGUAGE, CUSTOM_PROMPT)
 
@@ -202,7 +221,7 @@ def is_valid_commit_message(msg: str) -> bool:
     msg_type = match.group(1)
     description = match.group(2)
 
-    if msg_type not in valid_types:
+    if msg_type not in valid_types_global:
         return False
 
     if len(subject) > 150:
@@ -363,7 +382,6 @@ def call_groq(messages):
                             response_text += content
                             sys.stdout.buffer.write(content.encode("utf-8"))
                             sys.stdout.buffer.flush()
-                            time.sleep(0.03)
                     except (json.JSONDecodeError, KeyError, IndexError):
                         pass
             print(flush=True)
@@ -380,17 +398,15 @@ def call_groq(messages):
 
 def _normalize_type(text: str) -> str:
     return re.sub(
-        r"^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert):",
-        lambda m: m.group(1).lower() + ":",
+        TYPE_REGEX,
+        lambda m: m.group(0).lower() + ":",
         text,
-        flags=re.IGNORECASE,
     )
 
 
 def _clean_llm_response(text: str) -> str:
     text = re.sub(r"\*{1,2}", "", text)
     text = re.sub(r"`{1,3}", "", text)
-    text = re.sub(r"#+\s*", "", text)
 
     lines = text.strip().split("\n")
     skip_prefixes = (
@@ -420,9 +436,7 @@ def _clean_llm_response(text: str) -> str:
     if len(parts) > 1 and parts[1].strip():
         return f"{subject}\n\n{parts[1]}"
 
-    if not re.match(
-        r"^(?:feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)", subject
-    ):
+    if not TYPE_REGEX.match(subject):
         subject = f"chore: {subject}"
 
     return subject
@@ -500,17 +514,17 @@ def generate_fallback_message(diff: str) -> str:
                 ".css": "style",
                 ".scss": "style",
                 ".html": "feat",
-                ".test.": "test",
-                ".spec.": "test",
-                "_test": "test",
             }
             for pattern, ptype in ext_types.items():
-                if pattern in path.lower():
+                if path.lower().endswith(pattern):
                     if ptype not in ("config",) and (
                         ptype != "docs" or parsed_type == "chore"
                     ):
                         parsed_type = ptype
                     break
+
+            if path.endswith(".test.js") or path.endswith(".test.ts") or path.endswith(".test.jsx") or path.endswith(".test.tsx") or path.endswith("_test.py") or path.endswith(".spec.js") or path.endswith(".spec.ts"):
+                parsed_type = "test"
 
             dirs = path.split("/")
             for d in dirs[:-1]:
@@ -763,15 +777,17 @@ def _toml_replace(
 
 def _yaml_handle(content: str, new_version: str):
     ver_re = re.compile(
-        r'^(\s*version\s*:\s*["\']?)([^"\'\s#]+)(["\']?\s*)$', re.MULTILINE
+        r"^version\s*:\s*['\"]?([^'\s#]\S*)['\"]?\s*$", re.MULTILINE
     )
     match = ver_re.search(content)
     if not match:
         return None, None
-    old = match.group(2)
+    old = match.group(1)
     if new_version == "__PEEK__":
         return None, old
-    new_content = content[: match.start(2)] + new_version + content[match.end(2) :]
+
+    start, end = match.start(1), match.end(1)
+    new_content = content[:start] + new_version + content[end:]
     return new_content, old
 
 
@@ -880,83 +896,21 @@ class ManifestDef:
 
 
 MANIFEST_DEFINITIONS: list[ManifestDef] = [
-    ManifestDef(
-        "package.json",
-        ["**/package.json"],
-        _json_handle,
-    ),
-    ManifestDef(
-        "composer.json",
-        ["**/composer.json"],
-        _json_handle,
-    ),
-    ManifestDef(
-        "Cargo.toml",
-        ["**/Cargo.toml"],
-        _toml_handle,
-        sections=["package"],
-    ),
-    ManifestDef(
-        "pyproject.toml",
-        ["**/pyproject.toml"],
-        _toml_handle,
-        sections=["project", "tool.poetry"],
-    ),
-    ManifestDef(
-        "Chart.yaml",
-        ["**/Chart.yaml"],
-        _helm_handle,
-    ),
-    ManifestDef(
-        "pubspec.yaml",
-        ["**/pubspec.yaml"],
-        _yaml_handle,
-    ),
-    ManifestDef(
-        "build.gradle",
-        ["**/build.gradle"],
-        _gradle_handle,
-    ),
-    ManifestDef(
-        "build.gradle.kts",
-        ["**/build.gradle.kts"],
-        _gradle_handle,
-    ),
-    ManifestDef(
-        "Version.props",
-        ["**/Version.props", "**/Directory.Build.props"],
-        _csproj_handle,
-    ),
-    ManifestDef(
-        "csproj",
-        ["**/*.csproj"],
-        _csproj_handle,
-    ),
-    ManifestDef(
-        "gemspec",
-        ["**/*.gemspec"],
-        _gemspec_handle,
-    ),
-    ManifestDef(
-        "setup.cfg",
-        ["**/setup.cfg"],
-        _setupcfg_handle,
-    ),
-    ManifestDef(
-        "VERSION",
-        ["**/VERSION"],
-        _plain_handle,
-    ),
-    ManifestDef(
-        "version.txt",
-        ["**/version.txt"],
-        _plain_handle,
-    ),
-    ManifestDef(
-        ".bumpversion.cfg",
-        ["**/.bumpversion.cfg"],
-        _setupcfg_handle,
-    ),
+    ManifestDef("package.json", ["**/package.json"], _json_handle),
+    ManifestDef("composer.json", ["**/composer.json"], _json_handle),
+    ManifestDef("Cargo.toml", ["**/Cargo.toml"], _toml_handle, sections=["package"]),
+    ManifestDef("pyproject.toml", ["**/pyproject.toml"], _toml_handle, sections=["project", "tool.poetry"]),
+    ManifestDef("Chart.yaml", ["**/Chart.yaml"], _helm_handle),
+    ManifestDef("pubspec.yaml", ["**/pubspec.yaml"], _yaml_handle),
+    ManifestDef("build.gradle", ["**/build.gradle"], _gradle_handle),
+    ManifestDef("build.gradle.kts", ["**/build.gradle.kts"], _gradle_handle),
+    ManifestDef("Version.props", ["**/Version.props", "**/Directory.Build.props"], _csproj_handle),
+    ManifestDef("csproj", ["**/*.csproj"], _csproj_handle),
+    ManifestDef("gemspec", ["**/*.gemspec"], _gemspec_handle),
+    ManifestDef("setup.cfg", ["**/setup.cfg"], _setupcfg_handle),
+    ManifestDef("VERSION", ["**/VERSION"], _plain_handle),
+    ManifestDef("version.txt", ["**/version.txt"], _plain_handle),
+    ManifestDef(".bumpversion.cfg", ["**/.bumpversion.cfg"], _setupcfg_handle),
 ]
 
 
@@ -969,11 +923,14 @@ def discover_manifests(repo_root: Path) -> list[tuple[Path, ManifestDef]]:
             glob_part = pattern.replace("**/", "")
             matches = sorted(Path(repo_root).rglob(glob_part))
             for path in matches:
-                if path.is_file():
-                    normalized = str(path.resolve())
-                    if normalized not in seen:
-                        seen.add(normalized)
-                        found.append((path, mdef))
+                if not path.is_file():
+                    continue
+                if _is_skipped_dir(path):
+                    continue
+                normalized = str(path.resolve())
+                if normalized not in seen:
+                    seen.add(normalized)
+                    found.append((path, mdef))
 
     return found
 
@@ -1029,7 +986,8 @@ def get_changed_files_in_scope(repo_root: Path, manifest_path: Path) -> set[str]
             return set()
 
         changed = result.stdout.strip().splitlines()
-        return {f for f in changed if f.startswith(prefix + "/") or (prefix == ".")}
+        prefix_slash = prefix + "/"
+        return {f for f in changed if f.startswith(prefix_slash)}
     except Exception:
         return set()
 
@@ -1097,6 +1055,7 @@ def bump_project_version(kind: str, message: str = "") -> list[tuple]:
         return []
 
     bumps = []
+    originals: list[tuple[Path, str]] = []
 
     for path, mdef in manifests:
         rel_path = str(path.relative_to(repo_root)).replace("\\", "/")
@@ -1127,6 +1086,8 @@ def bump_project_version(kind: str, message: str = "") -> list[tuple]:
         if new_content is None:
             continue
 
+        originals.append((path, content))
+
         try:
             path.write_text(new_content, encoding="utf-8")
         except Exception as e:
@@ -1148,6 +1109,9 @@ def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None
     import sys
     import time
 
+    log_path = repo_root / "ai_commit_debug.log"
+    log_path_str = str(log_path).replace("\\", "\\\\")
+
     amend_script = textwrap.dedent(f"""\
         import subprocess, os, time, sys
 
@@ -1163,7 +1127,7 @@ def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None
             ).stdout.strip()
 
         committed = False
-        for _ in range(300):
+        for _ in range(600):
             time.sleep(0.1)
             new_head = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
@@ -1190,7 +1154,7 @@ def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None
             env=env,
         )
         if amend.returncode == 0:
-            with open(r"{repo_root / "ai_commit_debug.log"}", "a", encoding="utf-8") as f:
+            with open("{log_path_str}", "a", encoding="utf-8") as f:
                 f.write("amend: commit amended with bumped version\\n")
     """)
 
@@ -1200,6 +1164,30 @@ def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None
         stderr=subprocess.DEVNULL,
         cwd=repo_root,
     )
+
+
+# ============================================================
+#  CONFLICT DETECTION — detect other hook managers
+# ============================================================
+
+
+def check_conflicting_hooks(repo_root: str) -> str | None:
+    conflicts = []
+
+    husky_dir = os.path.join(repo_root, ".husky")
+    if os.path.isdir(husky_dir):
+        conflicts.append(".husky directory detected — conflicts with NeuroCommit hooks. Delete it or run `npx husky uninstall`.")
+
+    lefthook = os.path.join(repo_root, "lefthook.yml")
+    lefthook_alt = os.path.join(repo_root, "lefthook.yaml")
+    if os.path.isfile(lefthook) or os.path.isfile(lefthook_alt):
+        conflicts.append("lefthook config detected — may conflict with NeuroCommit hooks.")
+
+    precommit = os.path.join(repo_root, ".pre-commit-config.yaml")
+    if os.path.isfile(precommit):
+        conflicts.append(".pre-commit-config.yaml detected — may conflict with core.hooksPath.")
+
+    return "\n".join(conflicts) if conflicts else None
 
 
 # ============================================================
@@ -1232,11 +1220,14 @@ def main():
     print(f"[+] NeuroCommit v{NEURO_COMMIT_VERSION} started", flush=True)
     log_message(f"Commit file path: {commit_msg_file}")
 
-    log_message("\nCHECKING FOR .husky")
-    if ".husky" in os.listdir():
-        reason = "Founded .husky directory in your project. Delete this!"
-        write_error_to_commit(commit_msg_file, reason)
-        sys.exit(0)
+    repo_root = find_repo_root()
+    if repo_root:
+        conflict_msg = check_conflicting_hooks(str(repo_root))
+        if conflict_msg:
+            reason = f"Conflict detected:\n{conflict_msg}"
+            log_message(f"Conflict: {reason}")
+            write_error_to_commit(commit_msg_file, reason)
+            sys.exit(0)
 
     diff, all_ignored = get_staged_diff()
 
@@ -1272,6 +1263,10 @@ def main():
 
     if ADD_COAUTHOR:
         message += "\n\nCo-authored-by: NeuroCommit <autocommitrxgo@gmail.com>"
+
+    commit_dir = os.path.dirname(commit_msg_file)
+    if commit_dir and not os.path.exists(commit_dir):
+        os.makedirs(commit_dir, exist_ok=True)
 
     with open(commit_msg_file, "w", encoding="utf-8") as f:
         f.write(message)

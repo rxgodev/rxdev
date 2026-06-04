@@ -1,2 +1,8 @@
 #!/bin/sh
-python .githooks/ai_commit.py "$1"
+# Detect python command
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON=python3
+else
+    PYTHON=python
+fi
+$PYTHON .githooks/ai_commit.py "$1"

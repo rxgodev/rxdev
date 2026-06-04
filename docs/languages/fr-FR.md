@@ -73,7 +73,7 @@ QuickFlow élimine les changements de contexte. Fini le `git add → git commit 
 
 ### Prérequis
 
-- **Node.js** >= 22
+- **Node.js** >= 18
 - Une **clé API gratuite** depuis [console.groq.com](https://console.groq.com)
 
 ### 1. Configurer GitHub Package Registry
@@ -134,6 +134,9 @@ C'est tout. `qq go` vous guide à chaque étape :
 | `qq config`       | Configurer clé API, modèle, langue, co-auteur, auto-incrémentation, projets et modèles |
 | `qq status`       | Afficher l'état d'intégration du dépôt courant |
 | `qq uninstall`    | Supprimer le hook du dépôt |
+| `qq version`      | Afficher la version |
+| `qq update`       | Afficher les instructions de mise à jour |
+| `qq --no-color`   | Désactiver les couleurs ANSI (via `NO_COLOR` aussi) |
 
 ---
 

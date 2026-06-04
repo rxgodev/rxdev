@@ -19,7 +19,7 @@
     "update-notifier": "^7.3.1"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=18"
   },
   "files": [
     "bin/",

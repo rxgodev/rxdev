@@ -71,7 +71,7 @@ QuickFlow eliminates context-switching. No more `git add → git commit → wait
 
 ### Prerequisites
 
-- **Node.js** >= 22
+- **Node.js** >= 18
 - A **free API key** from [console.groq.com](https://console.groq.com)
 
 ### 1. Set up GitHub Package Registry
@@ -84,8 +84,19 @@ Enter your GitHub username and a [personal access token](https://github.com/sett
 
 ### 2. Install globally
 
+**npm:**
+```bash
+npm install -g @rxgodev/neuro-commit@latest
+```
+
+**pnpm:**
 ```bash
 pnpm add -g @rxgodev/neuro-commit@latest
+```
+
+**yarn:**
+```bash
+yarn global add @rxgodev/neuro-commit@latest
 ```
 
 ### 3. Configure your API key
@@ -134,6 +145,9 @@ That's it. `qq go` guides you through every step:
 | `qq config`      | Configure API key, model, language, co-author, auto-bump, projects, and templates |
 | `qq status`      | Show integration status for the current repository |
 | `qq uninstall`   | Remove the hook from the repository |
+| `qq version`     | Show version number |
+| `qq update`      | Show update instructions |
+| `qq --no-color`  | Disable ANSI color output (also respects `NO_COLOR` env) |
 
 ---
 

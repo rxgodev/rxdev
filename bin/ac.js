@@ -924,6 +924,8 @@ function showStatus() {
 
 // === HELP & VERSION ===
 
+const HAS_NO_COLOR = process.env.NO_COLOR !== undefined || process.argv.slice(2).includes("--no-color");
+const nc = (code, s) => HAS_NO_COLOR ? s : `\x1b[${code}m${s}\x1b[0m`;
 const boldCyan = "\x1b[1m\x1b[38;2;57;186;229m";
 const resetColor = "\x1b[0m";
 
@@ -1083,7 +1085,7 @@ async function quickFlow() {
       writeFileSync(commitMsgFile, currentMessage, "utf8");
       const defaultEditor = process.platform === "win32" ? "notepad" : "vi";
       const editor = process.env.GIT_EDITOR || process.env.VISUAL || process.env.EDITOR || defaultEditor;
-      const editRes = spawnSync(`"${editor}" "${commitMsgFile}"`, { stdio: "inherit", shell: true });
+      const editRes = spawnSync(editor, [commitMsgFile], { stdio: "inherit", shell: false });
       if (editRes.status !== 0) { console.log(`\n${yellow}↩️  Edit cancelled${reset}`); continue; }
       const edited = readFileSync(commitMsgFile, "utf8").trim()
         .split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").trim();
@@ -1143,26 +1145,30 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}config${resetColor}        Configure model, language, key, prompt, types, co-author & more
   ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
   ${boldCyan}uninstall${resetColor}     Remove hook
-  ${boldCyan}status${resetColor}        Show integration status`);
+  ${boldCyan}status${resetColor}        Show integration status
+  ${boldCyan}version${resetColor}       Show version number
+  ${boldCyan}update${resetColor}        Show update instructions
+  ${boldCyan}--no-color${resetColor}    Disable ANSI colors (also respects NO_COLOR env)`);
 }
 
 const args = process.argv.slice(2);
 
+const filteredArgs = args.filter(a => a !== "--no-color");
+const cmd = filteredArgs[0];
+
 // Handle global flags first
-if (args.includes("--version") || args.includes("-v")) {
+if (filteredArgs.includes("--version") || filteredArgs.includes("-v") || cmd === "version") {
   console.log(`v${pkg.version}`);
   process.exit(0);
 }
 
-if (args.includes("--help") || args.includes("-h")) {
+if (filteredArgs.includes("--help") || filteredArgs.includes("-h")) {
   showHelp();
   process.exit(0);
 }
 
-const cmd = args[0];
-
 // === AUTO-UPDATE HOOKS (only for real commands, not flags) ===
-if (cmd !== "uninstall") {
+if (cmd !== "uninstall" && cmd !== "update") {
   const projects = getManagedProjects().filter((p) => existsSync(p));
   let updatedCount = 0;
   for (const proj of projects) {
@@ -1174,22 +1180,34 @@ if (cmd !== "uninstall") {
 }
 
 // === COMMANDS ===
-switch (cmd) {
-  case "init":
-    install();
-    break;
-  case "config":
-    configInteractive();
-    break;
-  case "uninstall":
-    uninstall();
-    break;
-  case "status":
-    showStatus();
-    break;
-  case "go":
-    quickFlow();
-    break;
-  default:
-    showHelp();
+async function mainCmd() {
+  switch (cmd) {
+    case "init":
+      await install();
+      break;
+    case "config":
+      await configInteractive();
+      break;
+    case "uninstall":
+      uninstall();
+      break;
+    case "status":
+      showStatus();
+      break;
+    case "go":
+      await quickFlow();
+      break;
+    case "update":
+      console.log(`To update NeuroCommit, run:\n  npm install -g @rxgodev/neuro-commit@latest\n  pnpm add -g @rxgodev/neuro-commit@latest`);
+      break;
+    case "version":
+      console.log(`v${pkg.version}`);
+      break;
+    default:
+      showHelp();
+  }
 }
+mainCmd().catch((e) => {
+  console.error(`\n❌ Error: ${e.message}`);
+  process.exit(1);
+});
