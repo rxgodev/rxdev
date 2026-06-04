@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.6"
+NEURO_COMMIT_VERSION = "2.17.7"
 import json
 import os
 import re
@@ -420,6 +420,13 @@ def _clean_llm_response(text: str) -> str:
         "the diff shows", "looking at", "this commit", "the changes",
         "in this commit", "overview", "the following",
     )
+    stop_prefixes = (
+        "however,", "alternatively,", "if you want", "it's worth noting",
+        "note:", "note that", "in summary", "conclusion",
+    )
+    _commit_subject_re = re.compile(
+        rf"^(?:{_build_type_regex(valid_types_global)})(?:\([^)]*\))?\s*:", re.IGNORECASE
+    )
 
     start = 0
     for i, line in enumerate(lines):
@@ -431,19 +438,45 @@ def _clean_llm_response(text: str) -> str:
         else:
             break
 
-    body = "\n".join(lines[start:]).strip()
-    body = _normalize_type(body)
+    body_lines = lines[start:]
+    subject = None
+    body_parts = []
+    found_subject = False
 
-    parts = body.split("\n", 1)
-    subject = parts[0].rstrip(".")
+    for line in body_lines:
+        stripped = line.strip()
+        lowered = stripped.lower()
+
+        if not found_subject:
+            if not stripped:
+                continue
+            if _commit_subject_re.match(stripped):
+                subject = stripped
+                found_subject = True
+            continue
+
+        if not stripped:
+            body_parts.append("")
+            continue
+
+        if any(lowered.startswith(p) for p in stop_prefixes):
+            break
+
+        if _commit_subject_re.match(stripped):
+            break
+
+        body_parts.append(stripped)
+
+    if not subject:
+        return "chore: update files"
+
+    subject = _normalize_type(subject).rstrip(".")
     if len(subject) > 150:
         subject = subject[:147] + "..."
 
-    if len(parts) > 1 and parts[1].strip():
-        return f"{subject}\n\n{parts[1]}"
-
-    if not TYPE_REGEX.match(subject):
-        subject = f"chore: {subject}"
+    body = "\n".join(body_parts).strip()
+    if body:
+        return f"{subject}\n\n{body}"
 
     return subject
 
