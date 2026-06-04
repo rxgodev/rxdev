@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.2"
+NEURO_COMMIT_VERSION = "2.17.3"
 import json
 import os
 import re
@@ -43,96 +43,14 @@ BODY_LANGUAGE_PROMPTS = {
 }
 
 BODY_EXAMPLES = {
-    "en": (
-        "GOOD EXAMPLES:\n"
-        "docs(readme): add installation and release steps\n"
-        "\n"
-        "Extended documentation: added installation, deployment and package release steps. "
-        "Updated 'Tech Stack', 'Features' and 'Environment Variables' sections in README.md.\n\n"
-        "docs(package): describe flight map features and stack\n"
-        "\n"
-        "Added flight map package description: tech stack (Node.js 22, React 19), "
-        "features (map, pilot interaction), and demo link."
-    ),
-    "ru": (
-        "GOOD EXAMPLES:\n"
-        "docs(readme): add installation and release steps\n"
-        "\n"
-        "Расширена документация: добавлены шаги установки, развёртывания и релиза пакета. "
-        "Обновлены разделы 'Технический стек', 'Фичи' и 'Переменные среды' в README.md.\n\n"
-        "docs(package): describe flight map features and stack\n"
-        "\n"
-        "Добавлено описание пакета карты полётов: технический стек (Node.js 22, React 19), "
-        "фичи (карта, взаимодействие с пилотом), и демо-ссылка."
-    ),
-    "de": (
-        "GOOD EXAMPLES:\n"
-        "docs(readme): add installation and release steps\n"
-        "\n"
-        "Dokumentation erweitert: Installations-, Bereitstellungs- und Paket-Release-Schritte hinzugefügt. "
-        "Abschnitte 'Technologie-Stack', 'Funktionen' und 'Umgebungsvariablen' in README.md aktualisiert.\n\n"
-        "docs(package): describe flight map features and stack\n"
-        "\n"
-        "Flugkarten-Paketbeschreibung hinzugefügt: Technologie-Stack (Node.js 22, React 19), "
-        "Funktionen (Karte, Piloteninteraktion) und Demo-Link."
-    ),
-    "fr": (
-        "GOOD EXAMPLES:\n"
-        "docs(readme): add installation and release steps\n"
-        "\n"
-        "Documentation étendue : ajout des étapes d'installation, de déploiement et de publication du paquet. "
-        "Sections 'Stack technique', 'Fonctionnalités' et 'Variables d'environnement' mises à jour dans README.md.\n\n"
-        "docs(package): describe flight map features and stack\n"
-        "\n"
-        "Description du paquet de carte de vol ajoutée : stack technique (Node.js 22, React 19), "
-        "fonctionnalités (carte, interaction pilote) et lien de démonstration."
-    ),
-    "zh": (
-        "GOOD EXAMPLES:\n"
-        "docs(readme): add installation and release steps\n"
-        "\n"
-        "扩展文档：添加了安装、部署和包发布步骤。"
-        "更新了 README.md 中的'技术栈'、'功能特性'和'环境变量'部分。\n\n"
-        "docs(package): describe flight map features and stack\n"
-        "\n"
-        "添加了飞行地图包描述：技术栈（Node.js 22, React 19），"
-        "功能特性（地图，飞行员交互）和演示链接。"
-    ),
+    "en": "EXAMPLES:\n  docs(readme): add installation and release steps\n  feat(auth): add OAuth2 login flow",
+    "ru": "EXAMPLES:\n  docs(readme): add installation and release steps\n  feat(auth): add OAuth2 login flow",
+    "de": "EXAMPLES:\n  docs(readme): add installation and release steps\n  feat(auth): add OAuth2 login flow",
+    "fr": "EXAMPLES:\n  docs(readme): add installation and release steps\n  feat(auth): add OAuth2 login flow",
+    "zh": "EXAMPLES:\n  docs(readme): add installation and release steps\n  feat(auth): add OAuth2 login flow",
 }
 
-BAD_EXAMPLES_BY_LANG = {
-    "en": (
-        "BAD EXAMPLES (NEVER do this):\n"
-        "  'update README.md' too vague\n"
-        "  'Added a lot of documentation' not specific\n"
-        "  'Merge branch ...' ignore merge-related changes\n"
-    ),
-    "ru": (
-        "BAD EXAMPLES (NEVER do this):\n"
-        "  'update README.md' too vague\n"
-        "  'Добавлено много документации' not specific\n"
-        "  'Merge branch ...' ignore merge-related changes\n\n"
-        "  'Изменён стиль: добавлены кавычки' изменение было не единственным, а комментарий описывает это\n"
-    ),
-    "de": (
-        "BAD EXAMPLES (NEVER do this):\n"
-        "  'update README.md' too vague\n"
-        "  'Viele Dokumentationen hinzugefügt' not specific\n"
-        "  'Merge branch ...' ignore merge-related changes\n"
-    ),
-    "fr": (
-        "BAD EXAMPLES (NEVER do this):\n"
-        "  'update README.md' too vague\n"
-        "  'Ajouté beaucoup de documentation' not specific\n"
-        "  'Merge branch ...' ignore merge-related changes\n"
-    ),
-    "zh": (
-        "BAD EXAMPLES (NEVER do this):\n"
-        "  'update README.md' too vague\n"
-        "  '添加了大量文档' not specific\n"
-        "  'Merge branch ...' ignore merge-related changes\n"
-    ),
-}
+BAD_EXAMPLES = "BAD (NEVER do this):\n  'update README.md' too vague\n  'Added a lot of documentation' not specific\n  'Merge branch ...' ignore merge-related changes\n  'Изменён стиль: добавлены кавычки' describes WHAT not WHY"
 
 SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv", ".tox", ".eggs", "dist", "build", ".git2", ".svn"}
 
@@ -157,7 +75,6 @@ def build_system_prompt(types_str: str, language: str, custom_prompt: str = "") 
         return custom_prompt.replace("{types}", types_str)
 
     body_prompt = BODY_LANGUAGE_PROMPTS.get(language, BODY_LANGUAGE_PROMPTS["ru"])
-    bad_examples = BAD_EXAMPLES_BY_LANG.get(language, BAD_EXAMPLES_BY_LANG["ru"])
     good_examples = BODY_EXAMPLES.get(language, BODY_EXAMPLES["ru"])
 
     return (
@@ -170,9 +87,8 @@ def build_system_prompt(types_str: str, language: str, custom_prompt: str = "") 
         "- NEVER describe merge commits, version bumps, or generic 'update' without context.\n"
         "- NEVER invent details not present in the diff.\n"
         "- If changes are ONLY in README/docs use type 'docs'.\n"
-        "- Output ONLY the raw commit message. NO markdown (no **, no `, no ```), NO explanations, NO prefixes like 'Commit Message:' or 'Response:'. Just the message itself.\n\n"
-        "- Before you can updated code style by linters. DO NOT describe this in comment, ONLY IF this is only update\n\n"
-        f"{bad_examples}\n"
+        "- Output ONLY the raw commit message. NO markdown, NO explanations, NO prefixes. Just the message.\n\n"
+        f"{BAD_EXAMPLES}\n"
         f"{good_examples}"
     )
 
@@ -482,7 +398,7 @@ def _clean_llm_response(text: str) -> str:
 
 
 def generate_commit_message(diff):
-    user_prompt = f"Diff:\n---\n{diff}\n---\n\nOutput ONLY the raw commit message. No explanations, no analysis, no markdown, no backticks."
+    user_prompt = f"Generate a commit message for this diff:\n\n---\n{diff}\n---\n\nOutput ONLY the commit message. No explanations, no analysis, no markdown, no backticks."
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
