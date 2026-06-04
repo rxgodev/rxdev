@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.5"
+NEURO_COMMIT_VERSION = "2.17.6"
 import json
 import os
 import re
@@ -170,11 +170,7 @@ def build_system_prompt(types_str: str, language: str, custom_prompt: str = "") 
         "- NEVER describe merge commits, version bumps, or generic 'update' without context.\n"
         "- NEVER invent details not present in the diff.\n"
         "- If changes are ONLY in README/docs use type 'docs'.\n"
-        "- FORMAT:\n"
-        "  type(scope): subject in English\n"
-        "\n"
-        "  body in specified language (explain WHY, not WHAT)\n"
-        "- NO markdown, NO prefixes like 'Commit Message:' or 'Response:'.\n\n"
+        "- Output ONLY the raw commit message. NO markdown (no **, no `, no ```), NO explanations, NO prefixes like 'Commit Message:' or 'Response:'. Just the message itself.\n\n"
         "- If the only changes are code style formatting by linters, use type 'style'. Otherwise do not mention linter changes.\n\n"
         f"{bad_examples}\n"
         f"{good_examples}"
@@ -453,12 +449,7 @@ def _clean_llm_response(text: str) -> str:
 
 
 def generate_commit_message(diff):
-    user_prompt = (
-        "Write a commit message for this diff. "
-        "Include a subject line and a body paragraph explaining WHY the change was made.\n"
-        "Diff:\n"
-        f"---\n{diff}"
-    )
+    user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
