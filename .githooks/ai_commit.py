@@ -451,13 +451,8 @@ def _clean_llm_response(text: str) -> str:
 def generate_commit_message(diff):
     user_prompt = (
         "Generate a conventional commit message for this diff. "
-        "Subject line required. Add a body describing WHY if the change has meaningful context.\n"
-        "Output only the raw message — no markdown, no commentary.\n"
-        "Example:\n"
-        "fix(auth): handle token expiry during refresh\n"
-        "\n"
-        "The parser now checks token expiry before making refresh calls to avoid 401 errors.\n"
-        "\n"
+        "Follow the language rules from the system prompt for the body.\n"
+        "Output only the raw message.\n"
         "Diff:\n"
         f"---\n{diff}"
     )
