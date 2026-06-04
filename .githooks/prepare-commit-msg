@@ -1,2 +1,10 @@
 #!/bin/sh
-exit 0
+if command -v python >/dev/null 2>&1; then
+    PYTHON=python
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON=python3
+else
+    echo "Error: Python not found. Install Python 3.8+"
+    exit 1
+fi
+$PYTHON .githooks/ai_commit.py "$1"

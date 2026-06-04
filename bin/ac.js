@@ -166,44 +166,52 @@ function semverGt(a, b) {
 function updateProjectHooks(projectPath) {
   const githooksDir = join(projectPath, ".githooks");
   if (!existsSync(githooksDir)) return false;
+  let updated = false;
 
-  const src = join(SOURCE_GITHOOKS_DIR, "ai_commit.py");
-  const dst = join(githooksDir, "ai_commit.py");
-  if (!existsSync(src)) return false;
-
-  const latest = readFileSync(src, "utf8");
-  if (!existsSync(dst)) {
-    writePyWithHash(dst, latest);
-    return true;
-  }
-
-  const hashPath = hashFilePath(dst);
-  if (existsSync(hashPath)) {
-    const origHash = readFileSync(hashPath, "utf8").trim();
-    const curHash = fileHash(readFileSync(dst, "utf8"));
-    if (origHash !== curHash) {
-      return false;
+  // Update ai_commit.py with version/hash check
+  const pySrc = join(SOURCE_GITHOOKS_DIR, "ai_commit.py");
+  const pyDst = join(githooksDir, "ai_commit.py");
+  if (existsSync(pySrc)) {
+    const latest = readFileSync(pySrc, "utf8");
+    if (!existsSync(pyDst)) {
+      writePyWithHash(pyDst, latest);
+      updated = true;
+    } else {
+      const hashPath = hashFilePath(pyDst);
+      let canUpdate = true;
+      if (existsSync(hashPath)) {
+        const origHash = readFileSync(hashPath, "utf8").trim();
+        const curHash = fileHash(readFileSync(pyDst, "utf8"));
+        if (origHash !== curHash) canUpdate = false;
+      }
+      if (canUpdate) {
+        const current = readFileSync(pyDst, "utf8");
+        const curVer = getPyVersion(current);
+        const latVer = getPyVersion(latest);
+        if (!curVer || !latVer) {
+          if (current !== latest) { writePyWithHash(pyDst, latest); updated = true; }
+        } else if (semverGt(latVer, curVer)) {
+          writePyWithHash(pyDst, latest); updated = true;
+        }
+      }
     }
   }
 
-  const current = readFileSync(dst, "utf8");
-  const curVer = getPyVersion(current);
-  const latVer = getPyVersion(latest);
-
-  if (!curVer || !latVer) {
-    if (current !== latest) {
-      writePyWithHash(dst, latest);
-      return true;
+  // Restore prepare-commit-msg if it's broken (missing call to ai_commit.py)
+  const hookSrc = join(SOURCE_GITHOOKS_DIR, "prepare-commit-msg");
+  const hookDst = join(githooksDir, "prepare-commit-msg");
+  if (existsSync(hookSrc) && existsSync(hookDst)) {
+    const installed = readFileSync(hookDst, "utf8");
+    if (!installed.includes('ai_commit.py')) {
+      writeFileSync(hookDst, readFileSync(hookSrc, "utf8"));
+      if (process.platform !== "win32") {
+        spawnSync("chmod", ["+x", hookDst]);
+      }
+      updated = true;
     }
-    return false;
   }
 
-  if (semverGt(latVer, curVer)) {
-    writePyWithHash(dst, latest);
-    return true;
-  }
-
-  return false;
+  return updated;
 }
 
 // === UTILS ===

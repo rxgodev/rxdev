@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.16.2"
+NEURO_COMMIT_VERSION = "2.17.1"
 import json
 import os
 import re
@@ -396,11 +396,11 @@ def call_groq(messages):
 
 
 def _normalize_type(text: str) -> str:
-    return re.sub(
-        TYPE_REGEX,
-        lambda m: m.group(0).lower() + ":",
-        text,
-    )
+    m = re.match(r"^(" + TYPE_REGEX_STR + r")", text, re.IGNORECASE)
+    if m:
+        rest = text[m.end():].lstrip(": ").strip()
+        return m.group(1).lower() + ": " + rest
+    return text
 
 
 def _clean_llm_response(text: str) -> str:
@@ -419,6 +419,10 @@ def _clean_llm_response(text: str) -> str:
         "the feat", "the fix", "the chore", "the docs", "the style",
         "the refactor", "the test", "the build", "the ci", "the revert",
         "or, if you", "or you could", "note:", "note that",
+        "this commit message", "this commit follows",
+        "in this case", "the conventional",
+        "by the way", "as an alternative",
+        "the diff shows", "type(scope)", "type(scope):",
     )
     _commit_re = re.compile(
         rf"^(?:{TYPE_REGEX_STR})(?:\([^)]*\))?\s*:", re.IGNORECASE
@@ -478,7 +482,7 @@ def _clean_llm_response(text: str) -> str:
 
 
 def generate_commit_message(diff):
-    user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
+    user_prompt = f"Diff:\n---\n{diff}\n---\n\nOutput ONLY the raw commit message. No explanations, no analysis, no markdown, no backticks."
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
