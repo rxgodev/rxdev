@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.16.1"
+NEURO_COMMIT_VERSION = "2.16.2"
 import json
 import os
 import re
@@ -411,7 +411,17 @@ def _clean_llm_response(text: str) -> str:
     skip_prefixes = (
         "commit message", "response", "output", "result",
         "explanation", "changes", "summary", "diff", "analysis",
-        "here is", "here's",
+        "here is", "here's", "based on", "it appears", "a suitable",
+        "the diff shows", "looking at", "in this commit",
+    )
+    stop_prefixes = (
+        "however", "alternatively", "if you want", "it's worth noting",
+        "the feat", "the fix", "the chore", "the docs", "the style",
+        "the refactor", "the test", "the build", "the ci", "the revert",
+        "or, if you", "or you could", "note:", "note that",
+    )
+    _commit_re = re.compile(
+        rf"^(?:{TYPE_REGEX_STR})(?:\([^)]*\))?\s*:", re.IGNORECASE
     )
 
     start = 0
@@ -424,19 +434,45 @@ def _clean_llm_response(text: str) -> str:
         else:
             break
 
-    body = "\n".join(lines[start:]).strip()
-    body = _normalize_type(body)
+    body_lines = lines[start:]
+    subject = None
+    body_parts = []
+    found_subject = False
 
-    parts = body.split("\n", 1)
-    subject = parts[0].rstrip(".")
+    for line in body_lines:
+        stripped = line.strip()
+        lowered = stripped.lower()
+
+        if not found_subject:
+            if not stripped:
+                continue
+            if _commit_re.match(stripped) or TYPE_REGEX.match(stripped):
+                subject = stripped
+                found_subject = True
+            continue
+
+        if not stripped:
+            body_parts.append("")
+            continue
+
+        if any(lowered.startswith(p) for p in stop_prefixes):
+            break
+
+        if _commit_re.match(stripped):
+            break
+
+        body_parts.append(stripped)
+
+    if not subject:
+        return "chore: update files"
+
+    subject = _normalize_type(subject).rstrip(".")
     if len(subject) > 150:
         subject = subject[:147] + "..."
 
-    if len(parts) > 1 and parts[1].strip():
-        return f"{subject}\n\n{parts[1]}"
-
-    if not TYPE_REGEX.match(subject):
-        subject = f"chore: {subject}"
+    body = "\n".join(body_parts).strip()
+    if body:
+        return f"{subject}\n\n{body}"
 
     return subject
 
