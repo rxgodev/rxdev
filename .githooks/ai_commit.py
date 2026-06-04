@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.0"
+NEURO_COMMIT_VERSION = "2.17.1"
 import json
 import os
 import re
@@ -171,7 +171,7 @@ def build_system_prompt(types_str: str, language: str, custom_prompt: str = "") 
         "- NEVER invent details not present in the diff.\n"
         "- If changes are ONLY in README/docs use type 'docs'.\n"
         "- Output ONLY the raw commit message. NO markdown (no **, no `, no ```), NO explanations, NO prefixes like 'Commit Message:' or 'Response:'. Just the message itself.\n\n"
-        "- Before you can updated code style by linters. DO NOT describe this in comment, ONLY IF this is only update\n\n"
+        "- If the only changes are code style formatting by linters, use type 'style'. Otherwise do not mention linter changes.\n\n"
         f"{bad_examples}\n"
         f"{good_examples}"
     )
@@ -412,7 +412,10 @@ def _clean_llm_response(text: str) -> str:
     skip_prefixes = (
         "commit message", "response", "output", "result",
         "explanation", "changes", "summary", "diff", "analysis",
-        "here is", "here's",
+        "here is", "here's", "based on", "it appears", "a suitable",
+        "however", "alternatively", "if you want", "it's worth noting",
+        "the diff shows", "looking at", "this commit", "the changes",
+        "in this commit", "overview", "the following",
     )
 
     start = 0
@@ -443,7 +446,15 @@ def _clean_llm_response(text: str) -> str:
 
 
 def generate_commit_message(diff):
-    user_prompt = f"Analyze this diff and create a commit message:\n\n---\n{diff}"
+    user_prompt = (
+        "Output ONLY a conventional commit message for this diff. "
+        "No analysis, no explanation, no commentary, no markdown — just the raw commit message.\n"
+        "Example output:\n"
+        "fix(auth): handle token expiry during refresh\n\n"
+        "The parser now checks token expiry before making refresh calls to avoid 401 errors.\n\n"
+        "Diff:\n"
+        f"---\n{diff}"
+    )
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
