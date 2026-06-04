@@ -1,25 +1,20 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white" alt="Node version">
-  <img src="https://img.shields.io/badge/version-2.16.0-8250df" alt="Version">
-  <img src="https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white" alt="CLI">
-  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
-  <img src="https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white" alt="Groq">
-  <img src="https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df" alt="Llama 3.1/3.3">
-</p>
+<div align="center">
 
 # NeuroCommit
 
-> **QuickFlow** — 从 `git add` 到完美提交的最快路径。暂存、生成、审查、推送。一条命令搞定。
+**AI 驱动的 Git 提交生成器** — 暂存、生成、审查、推送，一条命令搞定。
 
-**AI 驱动的 Conventional Commit 消息生成器** — 分析您的暂存区差异，通过 [Groq](https://console.groq.com)（基于 Meta Llama 3.1/3.3）生成有意义的、标准化的提交消息。可作为 Git 钩子、交互式 CLI 或独立生成器使用。
+[![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Version](https://img.shields.io/badge/version-2.16.0-8250df)](https://github.com/rxgodev/neuro-commit/releases)
+[![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
+[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
+[![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
-<p align="center">
-  <a href="https://github.com/rxgodev/neuro-commit#readme"><b>文档</b></a>
-  ·
-  <a href="https://github.com/rxgodev/neuro-commit/issues"><b>报告错误</b></a>
-  ·
-  <a href="https://github.com/rxgodev/neuro-commit/blob/main/README.md">English</a>
-</p>
+[文档](https://github.com/rxgodev/neuro-commit#readme) · [报告错误](https://github.com/rxgodev/neuro-commit/issues) ·
+[English](https://github.com/rxgodev/neuro-commit/blob/main/README.md)
+
+</div>
 
 ---
 

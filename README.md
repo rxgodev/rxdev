@@ -1,33 +1,20 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white" alt="Node version">
-  <img src="https://img.shields.io/badge/version-2.16.0-8250df" alt="Version">
-  <img src="https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white" alt="CLI">
-  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
-  <img src="https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white" alt="Groq">
-  <img src="https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df" alt="Llama 3.1/3.3">
-</p>
+<div align="center">
 
 # NeuroCommit
 
-> **QuickFlow** — the fastest path from `git add` to a perfect commit. Stage, generate, review, push. All in one command.
+**AI-powered Git commit generator** — stage, generate, review, push in one command.
 
-**AI-powered Conventional Commit message generator** — analyses your staged diff and produces meaningful, standardised commit messages via [Groq](https://console.groq.com) (powered by Meta Llama 3.1/3.3). Works as a Git hook, interactive CLI, or standalone generator.
+[![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Version](https://img.shields.io/badge/version-2.16.0-8250df)](https://github.com/rxgodev/neuro-commit/releases)
+[![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
+[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
+[![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
-<p align="center">
-  <a href="https://github.com/rxgodev/neuro-commit#readme"><b>Documentation</b></a>
-  ·
-  <a href="https://github.com/rxgodev/neuro-commit/issues"><b>Report a Bug</b></a>
-  ·
-  <a href="./docs/languages/ru-RU.md">Русский</a>
-  ·
-  <a href="./docs/languages/zh-CN.md">中文</a>
-  ·
-  <a href="./docs/languages/de-DE.md">Deutsch</a>
-  ·
-  <a href="./docs/languages/fr-FR.md">Français</a>
-</p>
+[Documentation](https://github.com/rxgodev/neuro-commit#readme) · [Report Bug](https://github.com/rxgodev/neuro-commit/issues) ·
+[Русский](./docs/languages/ru-RU.md) · [中文](./docs/languages/zh-CN.md) · [Deutsch](./docs/languages/de-DE.md) · [Français](./docs/languages/fr-FR.md)
 
----
+</div>
 
 ## Table of Contents
 

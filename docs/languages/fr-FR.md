@@ -1,25 +1,20 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white" alt="Node version">
-  <img src="https://img.shields.io/badge/version-2.16.0-8250df" alt="Version">
-  <img src="https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white" alt="CLI">
-  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
-  <img src="https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white" alt="Groq">
-  <img src="https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df" alt="Llama 3.1/3.3">
-</p>
+<div align="center">
 
 # NeuroCommit
 
-> **QuickFlow** — le chemin le plus rapide de `git add` au commit parfait. Stage, génération, review, push. En une seule commande.
+**Générateur de commits Git par IA** — stage, génération, review, push en une commande.
 
-**Générateur de messages de commit Conventional Commits propulsé par l'IA** — analyse votre diff stagé et produit des messages de commit clairs et standardisés via [Groq](https://console.groq.com) (basé sur Meta Llama 3.1/3.3). Fonctionne comme hook Git, CLI interactive ou générateur autonome.
+[![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Version](https://img.shields.io/badge/version-2.16.0-8250df)](https://github.com/rxgodev/neuro-commit/releases)
+[![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
+[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
+[![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
-<p align="center">
-  <a href="https://github.com/rxgodev/neuro-commit#readme"><b>Documentation</b></a>
-  ·
-  <a href="https://github.com/rxgodev/neuro-commit/issues"><b>Signaler un bug</b></a>
-  ·
-  <a href="https://github.com/rxgodev/neuro-commit/blob/main/README.md">English</a>
-</p>
+[Documentation](https://github.com/rxgodev/neuro-commit#readme) · [Signaler un bug](https://github.com/rxgodev/neuro-commit/issues) ·
+[English](https://github.com/rxgodev/neuro-commit/blob/main/README.md)
+
+</div>
 
 ---
 
