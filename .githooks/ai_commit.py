@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.4"
+NEURO_COMMIT_VERSION = "2.17.5"
 import json
 import os
 import re
@@ -35,19 +35,19 @@ DEFAULT_VALID_TYPES = {
 }
 
 BODY_LANGUAGE_PROMPTS = {
-    "en": "BODY: In English. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.",
-    "ru": "BODY: In Russian. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.",
-    "de": "BODY: In German. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.",
-    "fr": "BODY: In French. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.",
-    "zh": "BODY: In Chinese. Explain WHY, not WHAT. Be specific: mention files, functions, or changes.",
+    "en": "BODY: In English. 1-2 sentences explaining WHY, not WHAT. Use past tense.",
+    "ru": "BODY: In Russian. 1-2 sentences explaining WHY, not WHAT. Use past tense.",
+    "de": "BODY: In German. 1-2 sentences explaining WHY, not WHAT. Use past tense.",
+    "fr": "BODY: In French. 1-2 sentences explaining WHY, not WHAT. Use past tense.",
+    "zh": "BODY: In Chinese. 1-2 sentences explaining WHY, not WHAT. Use past tense.",
 }
 
 BODY_EXAMPLES = {
-    "en": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Added install, deploy and release docs. Updated README.md sections.\n  feat(auth): add OAuth2 login flow\n\n  Implemented OAuth2 with refresh tokens in auth.py for secure API access.",
-    "ru": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Добавлена документация по установке, развёртыванию и релизу. Обновлены разделы README.md.\n  feat(auth): add OAuth2 login flow\n\n  Реализован OAuth2 с refresh-токенами в auth.py для безопасного доступа к API.",
-    "de": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Installations-, Bereitstellungs- und Release-Doku hinzugefügt. README.md-Abschnitte aktualisiert.\n  feat(auth): add OAuth2 login flow\n\n  OAuth2 mit Refresh-Tokens in auth.py für sicheren API-Zugriff implementiert.",
-    "fr": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Documentation d'installation, déploiement et publication ajoutée. Sections README.md mises à jour.\n  feat(auth): add OAuth2 login flow\n\n  OAuth2 avec refresh tokens implémenté dans auth.py pour un accès API sécurisé.",
-    "zh": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  添加了安装、部署和发布文档。更新了 README.md 的各部分。\n  feat(auth): add OAuth2 login flow\n\n  在 auth.py 中实现了带有刷新令牌的 OAuth2，用于安全的 API 访问。",
+    "en": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Required to onboard new contributors.\n  feat(auth): add OAuth2 login flow\n\n  Needed secure token-based auth for API access.",
+    "ru": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Требовалось для онбординга новых контрибьюторов.\n  feat(auth): add OAuth2 login flow\n\n  Потребовалась безопасная токен-аутентификация для API.",
+    "de": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Notwendig für das Onboarding neuer Mitwirkender.\n  feat(auth): add OAuth2 login flow\n\n  Sichere Token-Authentifizierung für den API-Zugriff erforderlich.",
+    "fr": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Nécessaire pour l'intégration des nouveaux contributeurs.\n  feat(auth): add OAuth2 login flow\n\n  Authentification sécurisée par token nécessaire pour l'API.",
+    "zh": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  需要为新贡献者提供入门指南。\n  feat(auth): add OAuth2 login flow\n\n  需要安全的基于令牌的 API 认证。",
 }
 
 BAD_EXAMPLES = "BAD (NEVER do this):\n  'update README.md' too vague\n  'Added a lot of documentation' not specific\n  'Merge branch ...' ignore merge-related changes\n  'Изменён стиль: добавлены кавычки' describes WHAT not WHY"
@@ -80,8 +80,9 @@ def build_system_prompt(types_str: str, language: str, custom_prompt: str = "") 
     return (
         "You are a Conventional Commits generator. Rules:\n"
         f"- Types: {types_str}.\n"
-        "- Subject: English imperative, max 50 chars, no period.\n"
+        "- Subject: English imperative, lowercase, max 50 chars, no period.\n"
         f"- {body_prompt}\n"
+        "- NEVER list changes or use bullet points in body.\n"
         f"{BAD_EXAMPLES}\n"
         f"{good_examples}"
     )
@@ -309,6 +310,8 @@ def _normalize_type(text: str) -> str:
     m = re.match(r"^(" + TYPE_REGEX_STR + r")", text, re.IGNORECASE)
     if m:
         rest = text[m.end():].lstrip(": ").strip()
+        if rest and len(rest) > 1 and rest[0].isupper() and rest[1].islower():
+            rest = rest[0].lower() + rest[1:]
         return m.group(1).lower() + ": " + rest
     return text
 
