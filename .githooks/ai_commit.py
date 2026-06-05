@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.17.5"
+NEURO_COMMIT_VERSION = "2.17.6"
 import json
 import os
 import re
@@ -35,22 +35,28 @@ DEFAULT_VALID_TYPES = {
 }
 
 BODY_LANGUAGE_PROMPTS = {
-    "en": "BODY: In English. 1-2 sentences explaining WHY, not WHAT. Use past tense.",
-    "ru": "BODY: In Russian. 1-2 sentences explaining WHY, not WHAT. Use past tense.",
-    "de": "BODY: In German. 1-2 sentences explaining WHY, not WHAT. Use past tense.",
-    "fr": "BODY: In French. 1-2 sentences explaining WHY, not WHAT. Use past tense.",
-    "zh": "BODY: In Chinese. 1-2 sentences explaining WHY, not WHAT. Use past tense.",
+    "en": "Body: one short WHY sentence in past tense. NO lists, NO file names, NO bullet points.",
+    "ru": "Body: ОДНО короткое предложение WHY в прошлом времени. БЕЗ списков, БЕЗ имён файлов.",
+    "de": "Body: EIN kurzer WHY-Satz im Präteritum. KEINE Listen, KEINE Dateinamen, KEINE Aufzählungen.",
+    "fr": "Body: UNE courte phrase WHY au passé. PAS de listes, PAS de noms de fichiers, PAS de puces.",
+    "zh": "Body: 一个短句WHY，过去时。不要列表，不要文件名，不要项目符号。",
 }
 
 BODY_EXAMPLES = {
-    "en": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Required to onboard new contributors.\n  feat(auth): add OAuth2 login flow\n\n  Needed secure token-based auth for API access.",
-    "ru": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Требовалось для онбординга новых контрибьюторов.\n  feat(auth): add OAuth2 login flow\n\n  Потребовалась безопасная токен-аутентификация для API.",
-    "de": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Notwendig für das Onboarding neuer Mitwirkender.\n  feat(auth): add OAuth2 login flow\n\n  Sichere Token-Authentifizierung für den API-Zugriff erforderlich.",
-    "fr": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  Nécessaire pour l'intégration des nouveaux contributeurs.\n  feat(auth): add OAuth2 login flow\n\n  Authentification sécurisée par token nécessaire pour l'API.",
-    "zh": "EXAMPLES:\n  docs(readme): add installation and release steps\n\n  需要为新贡献者提供入门指南。\n  feat(auth): add OAuth2 login flow\n\n  需要安全的基于令牌的 API 认证。",
+    "en": "EXAMPLES:\n  docs(readme): add install steps\n\n  Needed to help new contributors get started.\n  feat(api): implement OAuth2\n\n  Required secure token-based API auth.\n  fix(auth): handle timeout\n\n  Login was hanging indefinitely on slow connections.",
+    "ru": "EXAMPLES:\n  docs(readme): add install steps\n\n  Понадобилось для онбординга новичков.\n  feat(api): implement OAuth2\n\n  Потребовалась безопасная аутентификация для API.\n  fix(auth): handle timeout\n\n  Логин зависал при медленном соединении.",
+    "de": "EXAMPLES:\n  docs(readme): add install steps\n\n  Für das Onboarding neuer Mitwirkender nötig.\n  feat(api): implement OAuth2\n\n  Sichere Token-Authentifizierung für die API erforderlich.\n  fix(auth): handle timeout\n\n  Login hängte sich bei langsamen Verbindungen auf.",
+    "fr": "EXAMPLES:\n  docs(readme): add install steps\n\n  Nécessaire pour l'intégration des nouveaux contributeurs.\n  feat(api): implement OAuth2\n\n  Authentification API sécurisée par token requise.\n  fix(auth): handle timeout\n\n  La connexion bloquait indéfiniment sur les connexions lentes.",
+    "zh": "EXAMPLES:\n  docs(readme): add install steps\n\n  需要为新贡献者提供入门帮助。\n  feat(api): implement OAuth2\n\n  需要安全的基于令牌的 API 认证。\n  fix(auth): handle timeout\n\n  登录在慢连接上无限挂起。",
 }
 
-BAD_EXAMPLES = "BAD (NEVER do this):\n  'update README.md' too vague\n  'Added a lot of documentation' not specific\n  'Merge branch ...' ignore merge-related changes\n  'Изменён стиль: добавлены кавычки' describes WHAT not WHY"
+BAD_EXAMPLES = (
+    "CRITICAL rules:\n"
+    "- description starts with a lowercase letter (Add -> add, Fix -> fix)\n"
+    "- body is ONE short WHY sentence. NO lists, NO file names, NO line items\n"
+    "- feat = new feature for user, fix = bug fix, docs = docs only, refactor = code change with no behavior change\n"
+    "- Output ONLY the commit. No commentary."
+)
 
 SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv", ".tox", ".eggs", "dist", "build", ".git2", ".svn"}
 
@@ -78,11 +84,9 @@ def build_system_prompt(types_str: str, language: str, custom_prompt: str = "") 
     good_examples = BODY_EXAMPLES.get(language, BODY_EXAMPLES["ru"])
 
     return (
-        "You are a Conventional Commits generator. Rules:\n"
-        f"- Types: {types_str}.\n"
-        "- Subject: English imperative, lowercase, max 50 chars, no period.\n"
+        "Format:\ntype(scope): lowercase description\n\none short WHY sentence\n"
+        f"Valid types: {types_str}.\n"
         f"- {body_prompt}\n"
-        "- NEVER list changes or use bullet points in body.\n"
         f"{BAD_EXAMPLES}\n"
         f"{good_examples}"
     )
@@ -258,7 +262,7 @@ def call_groq(messages):
         "model": GROQ_MODEL,
         "messages": messages,
         "stream": True,
-        "temperature": 0.1,
+        "temperature": 0.0,
     }
     headers = {
         "Content-Type": "application/json",
@@ -310,8 +314,6 @@ def _normalize_type(text: str) -> str:
     m = re.match(r"^(" + TYPE_REGEX_STR + r")", text, re.IGNORECASE)
     if m:
         rest = text[m.end():].lstrip(": ").strip()
-        if rest and len(rest) > 1 and rest[0].isupper() and rest[1].islower():
-            rest = rest[0].lower() + rest[1:]
         return m.group(1).lower() + ": " + rest
     return text
 
@@ -395,7 +397,7 @@ def _clean_llm_response(text: str) -> str:
 
 
 def generate_commit_message(diff):
-    user_prompt = f"Write a commit (subject + blank line + body explaining why) for:\n\n---\n{diff}\n---"
+    user_prompt = f"write a commit (subject + blank line + body explaining why) for:\n\n---\n{diff}\n---"
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},

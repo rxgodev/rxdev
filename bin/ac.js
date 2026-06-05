@@ -17,6 +17,10 @@ const pkg = JSON.parse(
   readFileSync(join(__dirname, "../package.json"), "utf8"),
 );
 
+const HAS_NO_COLOR = process.env.NO_COLOR !== undefined || process.argv.slice(2).includes("--no-color");
+const csi = (code) => HAS_NO_COLOR ? "" : `\x1b[${code}m`;
+const nc = (code, s) => HAS_NO_COLOR ? s : `\x1b[${code}m${s}\x1b[0m`;
+
 const update = updateNotifier({
   pkg,
   updateCheckInterval: 0,
@@ -24,11 +28,11 @@ const update = updateNotifier({
 
 if (update?.latest && update.latest !== pkg.version) {
   const s = (str) => str.replace(/\x1b\[[0-9;]*m/g, "");
-  const RED = "\x1b[31m", GREEN = "\x1b[32m", CYAN = "\x1b[36m", DIM = "\x1b[38;5;244m", RST = "\x1b[0m";
+  const RED = csi("31"), GREEN = csi("32"), DIM = csi("38;5;244"), RST = csi("0");
 
   const lines = [
     `Update available: ${RED}${pkg.version}${RST} → ${GREEN}${update.latest}${RST}`,
-    `${DIM}pnpm add -g @rxgodev/neuro-commit@${update.latest}${RST}`,
+    `${DIM}npm install -g @rxgodev/neuro-commit@${update.latest}${RST}`,
   ];
 
   const maxWidth = Math.max(...lines.map((l) => s(l).length)) + 8;
@@ -932,18 +936,16 @@ function showStatus() {
 
 // === HELP & VERSION ===
 
-const HAS_NO_COLOR = process.env.NO_COLOR !== undefined || process.argv.slice(2).includes("--no-color");
-const nc = (code, s) => HAS_NO_COLOR ? s : `\x1b[${code}m${s}\x1b[0m`;
-const boldCyan = "\x1b[1m\x1b[38;2;57;186;229m";
-const resetColor = "\x1b[0m";
+const boldCyan = csi("1;38;2;57;186;229");
+const resetColor = csi("0");
 
 async function quickFlow() {
-  const bold = "\x1b[1m";
-  const dim = "\x1b[38;5;244m";
-  const reset = "\x1b[0m";
-  const green = "\x1b[32m";
-  const cyan = "\x1b[36m";
-  const yellow = "\x1b[33m";
+  const bold = csi("1");
+  const dim = csi("38;5;244");
+  const reset = csi("0");
+  const green = csi("32");
+  const cyan = csi("36");
+  const yellow = csi("33");
 
   const sa = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -1220,7 +1222,14 @@ async function mainCmd() {
       await quickFlow();
       break;
     case "update":
-      console.log(`To update NeuroCommit, run:\n  npm install -g @rxgodev/neuro-commit@latest\n  pnpm add -g @rxgodev/neuro-commit@latest`);
+      console.log("Updating NeuroCommit...\n");
+      const upd = spawnSync("npm", ["install", "-g", "@rxgodev/neuro-commit@latest"], { stdio: "inherit", shell: true });
+      if (upd.status === 0) {
+        console.log("\n✅ NeuroCommit updated successfully.");
+      } else {
+        console.log("\n❌ Update failed. Try manually:");
+        console.log("  npm install -g @rxgodev/neuro-commit@latest");
+      }
       break;
     case "version":
       console.log(`v${pkg.version}`);
