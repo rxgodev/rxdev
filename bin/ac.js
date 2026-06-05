@@ -17,9 +17,6 @@ const pkg = JSON.parse(
   readFileSync(join(__dirname, "../package.json"), "utf8"),
 );
 
-const HAS_NO_COLOR = process.env.NO_COLOR !== undefined || process.argv.slice(2).includes("--no-color");
-const csi = (code) => HAS_NO_COLOR ? "" : `\x1b[${code}m`;
-const nc = (code, s) => HAS_NO_COLOR ? s : `\x1b[${code}m${s}\x1b[0m`;
 
 const update = updateNotifier({
   pkg,
@@ -28,7 +25,7 @@ const update = updateNotifier({
 
 if (update?.latest && update.latest !== pkg.version) {
   const s = (str) => str.replace(/\x1b\[[0-9;]*m/g, "");
-  const RED = csi("31"), GREEN = csi("32"), DIM = csi("38;5;244"), RST = csi("0");
+  const RED = "\x1b[31m", GREEN = "\x1b[32m", DIM = "\x1b[38;5;244m", RST = "\x1b[0m";
 
   const lines = [
     `Update available: ${RED}${pkg.version}${RST} → ${GREEN}${update.latest}${RST}`,
@@ -936,16 +933,16 @@ function showStatus() {
 
 // === HELP & VERSION ===
 
-const boldCyan = csi("1;38;2;57;186;229");
-const resetColor = csi("0");
+const boldCyan = "\x1b[1m\x1b[38;2;57;186;229m";
+const resetColor = "\x1b[0m";
 
 async function quickFlow() {
-  const bold = csi("1");
-  const dim = csi("38;5;244");
-  const reset = csi("0");
-  const green = csi("32");
-  const cyan = csi("36");
-  const yellow = csi("33");
+  const bold = "\x1b[1m";
+  const dim = "\x1b[38;5;244m";
+  const reset = "\x1b[0m";
+  const green = "\x1b[32m";
+  const cyan = "\x1b[36m";
+  const yellow = "\x1b[33m";
 
   const sa = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -1171,13 +1168,12 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
   ${boldCyan}version${resetColor}       Show version number
-  ${boldCyan}update${resetColor}        Show update instructions
-  ${boldCyan}--no-color${resetColor}    Disable ANSI colors (also respects NO_COLOR env)`);
+  ${boldCyan}update${resetColor}        Show update instructions`);
 }
 
 const args = process.argv.slice(2);
 
-const filteredArgs = args.filter(a => a !== "--no-color");
+const filteredArgs = args;
 const cmd = filteredArgs[0];
 
 // Handle global flags first
