@@ -5,7 +5,7 @@
 **Générateur de commits Git par IA** — stage, génération, review, push en une commande.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-2.17.9-8250df)](https://github.com/rxgodev/neuro-commit/releases)
+[![Version](https://img.shields.io/badge/version-2.18.1-8250df)](https://github.com/rxgodev/neuro-commit/releases)
 [![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
@@ -144,6 +144,7 @@ C'est tout. `qq go` vous guide à chaque étape :
 | `qq init`         | Installer le hook AI dans le dépôt courant |
 | `qq config`       | Configurer clé API, modèle, langue, co-auteur, auto-incrémentation, projets et modèles |
 | `qq status`       | Afficher l'état d'intégration du dépôt courant |
+| `qq filter`       | Réécrire l'historique git — supprimer fichiers, secrets ou chemins via git-filter-repo |
 | `qq uninstall`    | Supprimer le hook du dépôt |
 | `qq version`      | Afficher la version |
 | `qq update`       | Afficher les instructions de mise à jour |
