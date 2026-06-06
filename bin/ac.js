@@ -931,6 +931,99 @@ function showStatus() {
   console.log("");
 }
 
+// === FILTER-REPO ===
+
+async function checkFilterRepo() {
+  const r = spawnSync("git", ["filter-repo", "--version"], { stdio: "pipe", encoding: "utf8" });
+  if (r.status !== 0) {
+    console.error("❌ git-filter-repo not found. Install it:\n");
+    console.error("  pip install git-filter-repo\n");
+    console.error("  Or: https://github.com/newren/git-filter-repo");
+    process.exit(1);
+  }
+  return r.stdout.trim();
+}
+
+async function filterHistory() {
+  const version = await checkFilterRepo();
+  console.log(`\n🔧 git-filter-repo ${version}\n`);
+
+  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout.trim();
+  console.log(`📁 Repository: ${gitRoot}\n`);
+
+  const bold = "\x1b[1m";
+  const red = "\x1b[31m";
+  const green = "\x1b[32m";
+  const reset = "\x1b[0m";
+  const dim = "\x1b[38;5;244m";
+
+  const inq = await import("inquirer");
+  const { operation } = await inq.default.prompt([
+    {
+      type: "list",
+      name: "operation",
+      message: "Select operation:",
+      choices: [
+        { name: "🗑️  Remove file from history (e.g. .env leaked)", value: "remove-file" },
+        { name: "🔑 Replace text in history (e.g. secret key)", value: "replace-text" },
+        { name: "📂 Remove entire path from history", value: "remove-path" },
+        { name: "⬅️  Back", value: "back" },
+      ],
+    },
+  ]);
+
+  if (operation === "back") return;
+
+  let args = ["filter-repo", "--force"];
+
+  if (operation === "remove-file") {
+    const { filePath } = await inq.default.prompt([
+      { type: "input", name: "filePath", message: "File path to remove (e.g. .env):" },
+    ]);
+    if (!filePath.trim()) return;
+    args.push("--path", filePath.trim(), "--invert-paths");
+  } else if (operation === "replace-text") {
+    const { search, replace } = await inq.default.prompt([
+      { type: "input", name: "search", message: "Text to find:" },
+      { type: "input", name: "replace", message: "Replace with:" },
+    ]);
+    if (!search.trim()) return;
+    args.push("--replace-text", `<${search.trim()}>:${replace.trim()}`);
+  } else if (operation === "remove-path") {
+    const { dirPath } = await inq.default.prompt([
+      { type: "input", name: "dirPath", message: "Directory path to remove (e.g. secrets/):" },
+    ]);
+    if (!dirPath.trim()) return;
+    args.push("--path", dirPath.trim(), "--invert-paths");
+  }
+
+  console.log(`\n${red}${bold}⚠️  WARNING: This will REWRITE git history!${reset}`);
+  console.log(`${dim}This is a destructive operation. Make sure you have a backup.${reset}\n`);
+
+  const { confirm } = await inq.default.prompt([
+    {
+      type: "confirm",
+      name: "confirm",
+      message: `Run: git ${args.join(" ")}`,
+      default: false,
+    },
+  ]);
+
+  if (!confirm) {
+    console.log("↩️  Cancelled.\n");
+    return;
+  }
+
+  console.log(`\n🔄 Rewriting history...\n`);
+  const result = spawnSync("git", args, { stdio: "inherit" });
+  if (result.status !== 0) {
+    console.error("\n❌ History rewrite failed.");
+    process.exit(1);
+  }
+  console.log(`\n${green}✅ History rewritten successfully.${reset}`);
+  console.log(`${dim}Use 'git push --force --all' to update remote.${reset}\n`);
+}
+
 // === HELP & VERSION ===
 
 const boldCyan = "\x1b[1m\x1b[38;2;57;186;229m";
@@ -1183,6 +1276,7 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
+  ${boldCyan}filter${resetColor}        Rewrite git history (remove secrets, files, etc.)
   ${boldCyan}version${resetColor}       Show version number
   ${boldCyan}update${resetColor}        Show update instructions`);
 }
@@ -1229,6 +1323,9 @@ async function mainCmd() {
       break;
     case "status":
       showStatus();
+      break;
+    case "filter":
+      await filterHistory();
       break;
     case "go":
       await quickFlow();
