@@ -1030,119 +1030,123 @@ async function filterHistory() {
   const dim = "\x1b[38;5;244m";
 
   const inq = await import("inquirer");
-  const { operation } = await inq.default.prompt([
-    {
-      type: "list",
-      name: "operation",
-      message: "Select operation:",
-      choices: [
-        { name: "🗑️  Remove file from history (e.g. .env leaked)", value: "remove-file" },
-        { name: "🔑 Replace text in history (e.g. secret key)", value: "replace-text" },
-        { name: "📂 Remove entire path from history", value: "remove-path" },
-        { name: "⬅️  Back", value: "back" },
-      ],
-    },
-  ]);
 
-  if (operation === "back") return;
-
-  let args = ["filter-repo", "--force"];
-
-  if (operation === "remove-file") {
-    const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
-    const fInq = await import("inquirer");
-    const { filePaths } = await fInq.default.prompt([
-      {
-        type: "checkbox",
-        name: "filePaths",
-        message: "Select files to remove from history:",
-        choices: addBackChoice(buildFileTree(allFiles)),
-        pageSize: 20,
-      },
-    ]);
-    if (filePaths.includes("__back__") || !filePaths.length) return;
-    const expanded = expandDirSelections(filePaths, allFiles);
-    for (const fp of expanded) args.push("--path", fp, "--invert-paths");
-
-    const { addGitignore } = await fInq.default.prompt([
-      { type: "confirm", name: "addGitignore", message: "Add these files to .gitignore?", default: true },
-    ]);
-    if (addGitignore) {
-      const gitignorePath = join(gitRoot, ".gitignore");
-      let content = "";
-      if (existsSync(gitignorePath)) content = readFileSync(gitignorePath, "utf8");
-      let added = 0;
-      for (const fp of expanded) {
-        if (!content.includes(fp)) {
-          content = content.trimEnd() + `\n${fp}\n`;
-          added++;
-        }
-      }
-      writeFileSync(gitignorePath, content);
-      if (added > 0) console.log(`✅ Added ${added} file(s) to .gitignore`);
-    }
-  } else if (operation === "replace-text") {
-    const { search, replace } = await inq.default.prompt([
-      { type: "input", name: "search", message: "Text to find:" },
-      { type: "input", name: "replace", message: "Replace with:" },
-    ]);
-    if (!search.trim()) return;
-    args.push("--replace-text", `<${search.trim()}>:${replace.trim()}`);
-  } else if (operation === "remove-path") {
-    const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
-    const dirs = [...new Set(allFiles.map(f => f.includes("/") ? f.split("/")[0] : "."))].filter(d => d !== ".").sort();
-    const dInq = await import("inquirer");
-    const { dirPath } = await dInq.default.prompt([
+  while (true) {
+    const { operation } = await inq.default.prompt([
       {
         type: "list",
-        name: "dirPath",
-        message: "Select directory to remove from history:",
-        choices: addBackChoice(dirs.map(d => ({ name: d + "/", value: d }))),
+        name: "operation",
+        message: "Select operation:",
+        choices: [
+          { name: "🗑️  Remove file from history (e.g. .env leaked)", value: "remove-file" },
+          { name: "🔑 Replace text in history (e.g. secret key)", value: "replace-text" },
+          { name: "📂 Remove entire path from history", value: "remove-path" },
+          { name: "⬅️  Back", value: "back" },
+        ],
       },
     ]);
-    if (!dirPath || dirPath === "__back__") return;
-    args.push("--path", dirPath, "--invert-paths");
 
-    const { addGitignore } = await dInq.default.prompt([
-      { type: "confirm", name: "addGitignore", message: `Add ${dirPath}/ to .gitignore?`, default: true },
-    ]);
-    if (addGitignore) {
-      const gitignorePath = join(gitRoot, ".gitignore");
-      let content = "";
-      if (existsSync(gitignorePath)) content = readFileSync(gitignorePath, "utf8");
-      const entry = dirPath + "/";
-      if (!content.includes(entry)) {
-        writeFileSync(gitignorePath, content.trimEnd() + `\n${entry}\n`);
-        console.log(`✅ Added ${entry} to .gitignore`);
+    if (operation === "back") return;
+
+    let args = ["filter-repo", "--force"];
+
+    if (operation === "remove-file") {
+      const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
+      const fInq = await import("inquirer");
+      const { filePaths } = await fInq.default.prompt([
+        {
+          type: "checkbox",
+          name: "filePaths",
+          message: "Select files to remove from history (empty = back):",
+          choices: buildFileTree(allFiles),
+          pageSize: 20,
+        },
+      ]);
+      if (!filePaths.length) continue;
+      const expanded = expandDirSelections(filePaths, allFiles);
+      for (const fp of expanded) args.push("--path", fp, "--invert-paths");
+
+      const { addGitignore } = await fInq.default.prompt([
+        { type: "confirm", name: "addGitignore", message: "Add these files to .gitignore?", default: true },
+      ]);
+      if (addGitignore) {
+        const gitignorePath = join(gitRoot, ".gitignore");
+        let content = "";
+        if (existsSync(gitignorePath)) content = readFileSync(gitignorePath, "utf8");
+        let added = 0;
+        for (const fp of expanded) {
+          if (!content.includes(fp)) {
+            content = content.trimEnd() + `\n${fp}\n`;
+            added++;
+          }
+        }
+        writeFileSync(gitignorePath, content);
+        if (added > 0) console.log(`✅ Added ${added} file(s) to .gitignore`);
+      }
+    } else if (operation === "replace-text") {
+      const { search, replace } = await inq.default.prompt([
+        { type: "input", name: "search", message: "Text to find:" },
+        { type: "input", name: "replace", message: "Replace with:" },
+      ]);
+      if (!search.trim()) continue;
+      args.push("--replace-text", `<${search.trim()}>:${replace.trim()}`);
+    } else if (operation === "remove-path") {
+      const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
+      const dirs = [...new Set(allFiles.map(f => f.includes("/") ? f.split("/")[0] : "."))].filter(d => d !== ".").sort();
+      const dInq = await import("inquirer");
+      const { dirPath } = await dInq.default.prompt([
+        {
+          type: "list",
+          name: "dirPath",
+          message: "Select directory to remove from history:",
+          choices: addBackChoice(dirs.map(d => ({ name: d + "/", value: d }))),
+        },
+      ]);
+      if (!dirPath || dirPath === "__back__") continue;
+      args.push("--path", dirPath, "--invert-paths");
+
+      const { addGitignore } = await dInq.default.prompt([
+        { type: "confirm", name: "addGitignore", message: `Add ${dirPath}/ to .gitignore?`, default: true },
+      ]);
+      if (addGitignore) {
+        const gitignorePath = join(gitRoot, ".gitignore");
+        let content = "";
+        if (existsSync(gitignorePath)) content = readFileSync(gitignorePath, "utf8");
+        const entry = dirPath + "/";
+        if (!content.includes(entry)) {
+          writeFileSync(gitignorePath, content.trimEnd() + `\n${entry}\n`);
+          console.log(`✅ Added ${entry} to .gitignore`);
+        }
       }
     }
+
+    console.log(`\n${red}${bold}⚠️  WARNING: This will REWRITE git history!${reset}`);
+    console.log(`${dim}This is a destructive operation. Make sure you have a backup.${reset}\n`);
+
+    const { confirm } = await inq.default.prompt([
+      {
+        type: "confirm",
+        name: "confirm",
+        message: `Run: git ${args.join(" ")}`,
+        default: false,
+      },
+    ]);
+
+    if (!confirm) {
+      console.log("↩️  Cancelled.\n");
+      continue;
+    }
+
+    console.log(`\n🔄 Rewriting history...\n`);
+    const result = spawnSync("git", args, { stdio: "inherit" });
+    if (result.status !== 0) {
+      console.error("\n❌ History rewrite failed.");
+      process.exit(1);
+    }
+    console.log(`\n${green}✅ History rewritten successfully.${reset}`);
+    console.log(`${dim}Use 'git push --force --all' to update remote.${reset}\n`);
+    break;
   }
-
-  console.log(`\n${red}${bold}⚠️  WARNING: This will REWRITE git history!${reset}`);
-  console.log(`${dim}This is a destructive operation. Make sure you have a backup.${reset}\n`);
-
-  const { confirm } = await inq.default.prompt([
-    {
-      type: "confirm",
-      name: "confirm",
-      message: `Run: git ${args.join(" ")}`,
-      default: false,
-    },
-  ]);
-
-  if (!confirm) {
-    console.log("↩️  Cancelled.\n");
-    return;
-  }
-
-  console.log(`\n🔄 Rewriting history...\n`);
-  const result = spawnSync("git", args, { stdio: "inherit" });
-  if (result.status !== 0) {
-    console.error("\n❌ History rewrite failed.");
-    process.exit(1);
-  }
-  console.log(`\n${green}✅ History rewritten successfully.${reset}`);
-  console.log(`${dim}Use 'git push --force --all' to update remote.${reset}\n`);
 }
 
 // === HELP & VERSION ===
