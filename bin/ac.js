@@ -607,6 +607,54 @@ function listProjects() {
   }
 }
 
+// === FILE TREE HELPERS ===
+
+function buildFileTree(files, prefix = "  ") {
+  const tree = {};
+  const rootFiles = [];
+
+  for (const f of files) {
+    const parts = f.split("/");
+    if (parts.length === 1) {
+      rootFiles.push(f);
+    } else {
+      const dir = parts[0];
+      if (!tree[dir]) tree[dir] = [];
+      tree[dir].push(f);
+    }
+  }
+
+  const choices = [];
+  const seenDirs = Object.keys(tree).sort();
+  for (const dir of seenDirs) {
+    choices.push({ name: `📁 ${dir}/`, value: `__dir__${dir}` });
+    for (const f of tree[dir].sort()) {
+      choices.push({ name: `${prefix}${f.slice(dir.length + 1)}`, value: f });
+    }
+  }
+  for (const f of rootFiles.sort()) {
+    choices.push({ name: f, value: f });
+  }
+  return choices;
+}
+
+function expandDirSelections(selected, allFiles) {
+  const expanded = [];
+  for (const s of selected) {
+    if (s.startsWith("__dir__")) {
+      const dir = s.slice(7);
+      expanded.push(...allFiles.filter(f => f === dir || f.startsWith(dir + "/")));
+    } else {
+      expanded.push(s);
+    }
+  }
+  return [...new Set(expanded)];
+}
+
+function addBackChoice(choices) {
+  return [...choices, { name: "⬅️  Back", value: "__back__" }];
+}
+
 // === CONFIG INTERACTION ===
 
 async function configInteractive() {
@@ -1002,17 +1050,37 @@ async function filterHistory() {
 
   if (operation === "remove-file") {
     const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
-    const { filePaths } = await inq.default.prompt([
+    const fInq = await import("inquirer");
+    const { filePaths } = await fInq.default.prompt([
       {
         type: "checkbox",
         name: "filePaths",
         message: "Select files to remove from history:",
-        choices: allFiles.map(f => ({ name: f, value: f })),
+        choices: addBackChoice(buildFileTree(allFiles)),
         pageSize: 20,
       },
     ]);
-    if (!filePaths.length) return;
-    for (const fp of filePaths) args.push("--path", fp, "--invert-paths");
+    if (filePaths.includes("__back__") || !filePaths.length) return;
+    const expanded = expandDirSelections(filePaths, allFiles);
+    for (const fp of expanded) args.push("--path", fp, "--invert-paths");
+
+    const { addGitignore } = await fInq.default.prompt([
+      { type: "confirm", name: "addGitignore", message: "Add these files to .gitignore?", default: true },
+    ]);
+    if (addGitignore) {
+      const gitignorePath = join(gitRoot, ".gitignore");
+      let content = "";
+      if (existsSync(gitignorePath)) content = readFileSync(gitignorePath, "utf8");
+      let added = 0;
+      for (const fp of expanded) {
+        if (!content.includes(fp)) {
+          content = content.trimEnd() + `\n${fp}\n`;
+          added++;
+        }
+      }
+      writeFileSync(gitignorePath, content);
+      if (added > 0) console.log(`✅ Added ${added} file(s) to .gitignore`);
+    }
   } else if (operation === "replace-text") {
     const { search, replace } = await inq.default.prompt([
       { type: "input", name: "search", message: "Text to find:" },
@@ -1023,16 +1091,31 @@ async function filterHistory() {
   } else if (operation === "remove-path") {
     const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
     const dirs = [...new Set(allFiles.map(f => f.includes("/") ? f.split("/")[0] : "."))].filter(d => d !== ".").sort();
-    const { dirPath } = await inq.default.prompt([
+    const dInq = await import("inquirer");
+    const { dirPath } = await dInq.default.prompt([
       {
         type: "list",
         name: "dirPath",
         message: "Select directory to remove from history:",
-        choices: [...dirs.map(d => ({ name: d + "/", value: d })), { name: "⬅️ Back", value: "" }],
+        choices: addBackChoice(dirs.map(d => ({ name: d + "/", value: d }))),
       },
     ]);
-    if (!dirPath) return;
+    if (!dirPath || dirPath === "__back__") return;
     args.push("--path", dirPath, "--invert-paths");
+
+    const { addGitignore } = await dInq.default.prompt([
+      { type: "confirm", name: "addGitignore", message: `Add ${dirPath}/ to .gitignore?`, default: true },
+    ]);
+    if (addGitignore) {
+      const gitignorePath = join(gitRoot, ".gitignore");
+      let content = "";
+      if (existsSync(gitignorePath)) content = readFileSync(gitignorePath, "utf8");
+      const entry = dirPath + "/";
+      if (!content.includes(entry)) {
+        writeFileSync(gitignorePath, content.trimEnd() + `\n${entry}\n`);
+        console.log(`✅ Added ${entry} to .gitignore`);
+      }
+    }
   }
 
   console.log(`\n${red}${bold}⚠️  WARNING: This will REWRITE git history!${reset}`);
@@ -1114,13 +1197,12 @@ async function quickFlow() {
   const allChanged = [...new Set([...unstaged, ...alreadyStaged])];
 
   const sInq = await import("inquirer");
-  const fileChoices = [
-    { name: "📦 Stage all files", value: "__all__", checked: allChanged.length > 0 },
+  const fileChoices = allChanged.length === 0 ? [] : [
+    { name: "📦 Stage all files", value: "__all__" },
     { name: "─".repeat(30), value: "__sep__" },
-    ...allChanged.map(f => ({
-      name: `${alreadyStaged.includes(f) ? "✅" : "  "} ${f}`,
-      value: f,
-      checked: alreadyStaged.includes(f),
+    ...buildFileTree(allChanged).map(c => ({
+      ...c,
+      checked: c.value.startsWith("__dir__") ? allChanged.filter(f => f === c.value.slice(7) || f.startsWith(c.value.slice(7) + "/")).every(f => alreadyStaged.includes(f)) : (c.value === "__all__" ? false : alreadyStaged.includes(c.value)),
     })),
   ];
 
@@ -1128,21 +1210,38 @@ async function quickFlow() {
     console.log("ℹ️  No changed files found.\n");
   }
 
-  const { selectedFiles } = allChanged.length === 0
-    ? { selectedFiles: [] }
-    : await sInq.default.prompt([
-        {
-          type: "checkbox",
-          name: "selectedFiles",
-          message: "Select files to stage:",
-          choices: fileChoices,
-          pageSize: 20,
-        },
-      ]);
+  let filesToStage = [];
 
-  const filesToStage = selectedFiles.includes("__all__")
-    ? allChanged
-    : selectedFiles.filter(f => f !== "__sep__" && f !== "__all__");
+  while (true) {
+    const { selectedFiles } = allChanged.length === 0
+      ? { selectedFiles: [] }
+      : await sInq.default.prompt([
+          {
+            type: "checkbox",
+            name: "selectedFiles",
+            message: "Select files to stage:",
+            choices: addBackChoice(fileChoices),
+            pageSize: 20,
+          },
+        ]);
+
+    if (selectedFiles.includes("__back__")) {
+      if (filesToStage.length === 0) return;
+      break;
+    }
+
+    if (selectedFiles.includes("__all__") || selectedFiles.includes("__sep__")) {
+      if (selectedFiles.length === 1 && selectedFiles[0] === "__all__") {
+        filesToStage = allChanged;
+        break;
+      }
+      if (selectedFiles.length === 1 && selectedFiles[0] === "__sep__") continue;
+    }
+
+    const filtered = selectedFiles.filter(f => f !== "__sep__" && f !== "__all__");
+    filesToStage = expandDirSelections(filtered, allChanged);
+    if (filesToStage.length > 0) break;
+  }
 
   if (filesToStage.length > 0) {
     const addResult = spawnSync("git", ["add", ...filesToStage], { stdio: "pipe" });
@@ -1306,22 +1405,33 @@ async function quickFlow() {
   const currentBranch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).stdout.trim();
 
   const inqPush = await import("inquirer");
-  const { remote, branch } = await inqPush.default.prompt([
+  const remoteChoices = addBackChoice(
+    remotes.length ? remotes.map(r => ({ name: r, value: r })) : [{ name: "origin", value: "origin" }]
+  );
+  const { remote } = await inqPush.default.prompt([
     {
       type: "list",
       name: "remote",
       message: "Select remote:",
-      choices: remotes.length ? remotes : [{ name: "origin", value: "origin" }],
+      choices: remoteChoices,
       default: remotes.includes("origin") ? "origin" : (remotes[0] || "origin"),
     },
+  ]);
+  if (remote === "__back__") return;
+
+  const branchChoices = addBackChoice(
+    allBranches.length ? allBranches.map(b => ({ name: b, value: b })) : [{ name: "main", value: "main" }]
+  );
+  const { branch } = await inqPush.default.prompt([
     {
       type: "list",
       name: "branch",
       message: "Select branch:",
-      choices: allBranches.length ? allBranches : [{ name: "main", value: "main" }],
+      choices: branchChoices,
       default: currentBranch || "main",
     },
   ]);
+  if (branch === "__back__") return;
 
   console.log(`\n⬆️  Pushing to ${remote}/${branch}...`);
   const push = spawnSync("git", ["push", remote, branch], { stdio: "inherit" });
