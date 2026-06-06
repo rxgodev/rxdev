@@ -263,6 +263,20 @@ function installPythonDeps() {
       process.exit(1);
     }
   }
+
+  const filterRepo = spawnSync("git", ["filter-repo", "--version"], { stdio: "pipe" });
+  if (filterRepo.status !== 0) {
+    console.log("📦 Installing git-filter-repo...");
+    const install = spawnSync(
+      pythonCmd,
+      ["-m", "pip", "install", "--quiet", "git-filter-repo"],
+      { stdio: "inherit" },
+    );
+    if (install.status !== 0) {
+      console.error("❌ Failed to install git-filter-repo. Try: pip install git-filter-repo");
+      process.exit(1);
+    }
+  }
 }
 
 function setGitHooksPath() {
@@ -916,17 +930,12 @@ function showStatus() {
 
 // === FILTER-REPO ===
 
-const FILTER_REPO_SCRIPT = join(__dirname, "../.githooks/git-filter-repo");
-
 async function checkFilterRepo() {
-  if (!existsSync(FILTER_REPO_SCRIPT)) {
-    console.error("❌ git-filter-repo not bundled. Reinstall the package.");
-    process.exit(1);
-  }
-  const pythonCmd = checkPython();
-  const r = spawnSync(pythonCmd, [FILTER_REPO_SCRIPT, "--version"], { stdio: "pipe", encoding: "utf8" });
+  const r = spawnSync("git", ["filter-repo", "--version"], { stdio: "pipe", encoding: "utf8" });
   if (r.status !== 0) {
-    console.error("❌ git-filter-repo failed to run.");
+    console.error("❌ git-filter-repo not found. Install it:\n");
+    console.error("  pip install git-filter-repo\n");
+    console.error("  Or run: qq init");
     process.exit(1);
   }
   return r.stdout.trim();
@@ -934,7 +943,6 @@ async function checkFilterRepo() {
 
 async function filterHistory() {
   const version = await checkFilterRepo();
-  const pythonCmd = checkPython();
   console.log(`\n🔧 git-filter-repo ${version}\n`);
 
   const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout.trim();
@@ -963,7 +971,7 @@ async function filterHistory() {
 
   if (operation === "back") return;
 
-  let args = ["--force"];
+  let args = ["filter-repo", "--force"];
 
   if (operation === "remove-file") {
     const { filePath } = await inq.default.prompt([
@@ -993,7 +1001,7 @@ async function filterHistory() {
     {
       type: "confirm",
       name: "confirm",
-      message: `Run: ${pythonCmd} ${FILTER_REPO_SCRIPT} ${args.join(" ")}`,
+      message: `Run: git ${args.join(" ")}`,
       default: false,
     },
   ]);
@@ -1004,7 +1012,7 @@ async function filterHistory() {
   }
 
   console.log(`\n🔄 Rewriting history...\n`);
-  const result = spawnSync(pythonCmd, [FILTER_REPO_SCRIPT, ...args], { stdio: "inherit" });
+  const result = spawnSync("git", args, { stdio: "inherit" });
   if (result.status !== 0) {
     console.error("\n❌ History rewrite failed.");
     process.exit(1);
