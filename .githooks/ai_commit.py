@@ -314,6 +314,9 @@ def _normalize_type(text: str) -> str:
     m = re.match(r"^(" + TYPE_REGEX_STR + r")", text, re.IGNORECASE)
     if m:
         rest = text[m.end():].lstrip(": ").strip()
+        scope_match = re.match(r"^\(([^)]*)\)\s*:\s*(.*)", rest)
+        if scope_match:
+            return m.group(1).lower() + f"({scope_match.group(1)}): " + scope_match.group(2).strip()
         return m.group(1).lower() + ": " + rest
     return text
 
@@ -1209,10 +1212,10 @@ def main():
         if bumps:
             footer_lines = [
                 f"Bump version ({kind}):",
-                *(f"  {f}: {o} {n}" for f, o, n in bumps),
+                *(f"  {f}: {o} → {n}" for f, o, n in bumps),
             ]
             for f, o, n in bumps:
-                print(f"[+] Bumped {f}: {o} {n} ({kind})")
+                print(f"[+] Bumped {f}: {o} → {n} ({kind})")
             message += "\n\n" + "\n".join(footer_lines)
 
     if ADD_COAUTHOR:
