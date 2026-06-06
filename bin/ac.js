@@ -298,7 +298,7 @@ async function askYesNo(question) {
 async function promptSelect(options, message) {
   const inquirer = await import("inquirer");
   const { choice } = await inquirer.default.prompt([
-    { type: "list", name: "choice", message, choices: options },
+    { type: "list", name: "choice", message, choices: options, pageSize: 20 },
   ]);
   return choice;
 }
@@ -598,195 +598,178 @@ function listProjects() {
 async function configInteractive() {
   const config = loadConfig();
 
-  while (true) {
-    const modelLabel = config.model === "llama-3.3-70b-versatile" ? "70B (smarter)" : "8B (faster)";
-    const langLabel = LANGUAGES[config.language] || "Русский";
-    const mainAction = await promptSelect(
-      [
-        { name: "✅ Save & exit", value: "exit" },
-        { name: "─".repeat(30), value: "__sep__" },
-        {
-          name: `🧠 Model: ${modelLabel}`,
-          value: "model",
-        },
-        {
-          name: `🌐 Language: ${langLabel}`,
-          value: "language",
-        },
-        {
-          name: `✏️  Custom prompt: ${config.prompt ? "set" : "not set"}`,
-          value: "prompt",
-        },
-        {
-          name: `📝 Custom types: ${config.customTypes?.length ? config.customTypes.join(", ") : "not set"}`,
-          value: "types",
-        },
-        {
-          name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
-          value: "apikey",
-        },
-        {
-          name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
-          value: "coauthor",
-        },
-        {
-          name: `📈 Auto-bump: ${config.bumpVersion ? "enabled" : "disabled"}`,
-          value: "bump",
-        },
-        { name: "📂 Projects & Templates", value: "projects-templates" },
-      ],
-      "Configuration",
+  const modelLabel = config.model === "llama-3.3-70b-versatile" ? "70B (smarter)" : "8B (faster)";
+  const langLabel = LANGUAGES[config.language] || "Русский";
+  const mainAction = await promptSelect(
+    [
+      { name: "✅ Save & exit", value: "exit" },
+      { name: "─".repeat(30), value: "__sep__" },
+      {
+        name: `🧠 Model: ${modelLabel}`,
+        value: "model",
+      },
+      {
+        name: `🌐 Language: ${langLabel}`,
+        value: "language",
+      },
+      {
+        name: `✏️  Custom prompt: ${config.prompt ? "set" : "not set"}`,
+        value: "prompt",
+      },
+      {
+        name: `📝 Custom types: ${config.customTypes?.length ? config.customTypes.join(", ") : "not set"}`,
+        value: "types",
+      },
+      {
+        name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
+        value: "apikey",
+      },
+      {
+        name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
+        value: "coauthor",
+      },
+      {
+        name: `📈 Auto-bump: ${config.bumpVersion ? "enabled" : "disabled"}`,
+        value: "bump",
+      },
+      { name: "📂 Projects & Templates", value: "projects-templates" },
+    ],
+    "Configuration",
+  );
+
+  if (mainAction === "exit") return;
+  if (mainAction === "__sep__") return;
+
+  if (mainAction === "coauthor") {
+    config.coauthor = !config.coauthor;
+    saveConfig(config);
+    console.log(
+      config.coauthor
+        ? "✅ Co-author enabled.\n"
+        : "✅ Co-author disabled.\n",
     );
+  }
 
-    if (mainAction === "exit") break;
-    if (mainAction === "__sep__") continue;
+  if (mainAction === "bump") {
+    config.bumpVersion = !config.bumpVersion;
+    saveConfig(config);
+    console.log(
+      config.bumpVersion
+        ? "✅ Auto-bump enabled.\n"
+        : "✅ Auto-bump disabled.\n",
+    );
+  }
 
-    if (mainAction === "coauthor") {
-      config.coauthor = !config.coauthor;
-      saveConfig(config);
-      console.log(
-        config.coauthor
-          ? "✅ Co-author enabled.\n"
-          : "✅ Co-author disabled.\n",
-      );
-    }
+  if (mainAction === "apikey") {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const masked = config.apiKey
+      ? config.apiKey.slice(0, 8) + "..." + config.apiKey.slice(-4)
+      : "not set";
+    const key = await new Promise((resolve) => {
+      rl.question(`🔑 API key (current: ${masked})\n   Enter new key (or empty to clear): `, resolve);
+    });
+    rl.close();
+    config.apiKey = key.trim();
+    saveConfig(config);
+    console.log(
+      config.apiKey
+        ? "✅ API key saved.\n"
+        : "ℹ️  API key cleared. Fallback generator will be used.\n",
+    );
+  }
 
-    if (mainAction === "bump") {
-      config.bumpVersion = !config.bumpVersion;
-      saveConfig(config);
-      console.log(
-        config.bumpVersion
-          ? "✅ Auto-bump enabled.\n"
-          : "✅ Auto-bump disabled.\n",
-      );
-    }
-
-    if (mainAction === "apikey") {
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      const masked = config.apiKey
-        ? config.apiKey.slice(0, 8) + "..." + config.apiKey.slice(-4)
-        : "not set";
-      const key = await new Promise((resolve) => {
-        rl.question(`🔑 API key (current: ${masked})\n   Enter new key (or empty to clear): `, resolve);
-      });
-      rl.close();
-      config.apiKey = key.trim();
-      saveConfig(config);
-      console.log(
-        config.apiKey
-          ? "✅ API key saved.\n"
-          : "ℹ️  API key cleared. Fallback generator will be used.\n",
-      );
-    }
-
-    if (mainAction === "model") {
-      const inquirer = await import("inquirer");
-      const { model } = await inquirer.default.prompt([
-        {
-          type: "list",
-          name: "model",
-          message: "Select Groq model:",
-          choices: [
-            { name: "Llama 3.1 8B (faster, 560 t/s)", value: "llama-3.1-8b-instant" },
-            { name: "Llama 3.3 70B (smarter, 280 t/s)", value: "llama-3.3-70b-versatile" },
-          ],
-          default: config.model || "llama-3.1-8b-instant",
-        },
-      ]);
-      config.model = model;
-      saveConfig(config);
-      console.log(`✅ Model set to ${model.includes("70b") ? "70B" : "8B"}.\n`);
-    }
-
-    if (mainAction === "language") {
-      const inquirer = await import("inquirer");
-      const { lang } = await inquirer.default.prompt([
-        {
-          type: "list",
-          name: "lang",
-          message: "Select commit message language:",
-          choices: Object.entries(LANGUAGES).map(([code, name]) => ({
-            name: `${name} (${code})`,
-            value: code,
-          })),
-          default: config.language || "ru",
-        },
-      ]);
-      config.language = lang;
-      saveConfig(config);
-      console.log(`✅ Language set to ${LANGUAGES[lang]}.\n`);
-    }
-
-    if (mainAction === "prompt") {
-      const inquirer = await import("inquirer");
-      const { prompt } = await inquirer.default.prompt([
-        {
-          type: "editor",
-          name: "prompt",
-          message: "Edit system prompt (use {types} placeholder for allowed types):",
-          default: config.prompt || "",
-        },
-      ]);
-      config.prompt = prompt.trim();
-      saveConfig(config);
-      console.log(
-        config.prompt
-          ? "✅ Custom prompt saved.\n"
-          : "ℹ️  Custom prompt cleared. Default prompt will be used.\n",
-      );
-    }
-
-    if (mainAction === "types") {
-      const inquirer = await import("inquirer");
-      const { types } = await inquirer.default.prompt([
-        {
-          type: "input",
-          name: "types",
-          message: "Extra commit types (comma-separated, e.g. hotfix, deps, i18n):",
-          default: (config.customTypes || []).join(", "),
-        },
-      ]);
-      const parsed = types.split(",").map((t) => t.trim()).filter(Boolean);
-      config.customTypes = parsed;
-      saveConfig(config);
-      console.log(
-        parsed.length
-          ? `✅ Custom types: ${parsed.join(", ")}\n`
-          : "ℹ️  Custom types cleared.\n",
-      );
-    }
-
-    if (mainAction === "projects-templates") {
-      const ptAction = await promptSelect(
-        [
-          { name: "📋 List all projects", value: "list-projects" },
-          { name: "🎨 Templates", value: "templates" },
-          { name: "⬅️ Back", value: "back" },
-        ],
-        "Projects & Templates",
-      );
-
-      if (ptAction === "list-projects") {
-        listProjects();
-      } else if (ptAction === "templates") {
-        await manageTemplates();
-      }
-    }
-
-    // After any change, offer quick exit without scrolling the main menu
+  if (mainAction === "model") {
     const inquirer = await import("inquirer");
-    const { next } = await inquirer.default.prompt([
+    const { model } = await inquirer.default.prompt([
       {
         type: "list",
-        name: "next",
-        message: "What next?",
+        name: "model",
+        message: "Select Groq model:",
         choices: [
-          { name: "⬅️  Continue configuring", value: "continue" },
-          { name: "✅ Save & exit", value: "exit" },
+          { name: "Llama 3.1 8B (faster, 560 t/s)", value: "llama-3.1-8b-instant" },
+          { name: "Llama 3.3 70B (smarter, 280 t/s)", value: "llama-3.3-70b-versatile" },
         ],
+        default: config.model || "llama-3.1-8b-instant",
       },
     ]);
-    if (next === "exit") break;
+    config.model = model;
+    saveConfig(config);
+    console.log(`✅ Model set to ${model.includes("70b") ? "70B" : "8B"}.\n`);
+  }
+
+  if (mainAction === "language") {
+    const inquirer = await import("inquirer");
+    const { lang } = await inquirer.default.prompt([
+      {
+        type: "list",
+        name: "lang",
+        message: "Select commit message language:",
+        choices: Object.entries(LANGUAGES).map(([code, name]) => ({
+          name: `${name} (${code})`,
+          value: code,
+        })),
+        default: config.language || "ru",
+      },
+    ]);
+    config.language = lang;
+    saveConfig(config);
+    console.log(`✅ Language set to ${LANGUAGES[lang]}.\n`);
+  }
+
+  if (mainAction === "prompt") {
+    const inquirer = await import("inquirer");
+    const { prompt } = await inquirer.default.prompt([
+      {
+        type: "editor",
+        name: "prompt",
+        message: "Edit system prompt (use {types} placeholder for allowed types):",
+        default: config.prompt || "",
+      },
+    ]);
+    config.prompt = prompt.trim();
+    saveConfig(config);
+    console.log(
+      config.prompt
+        ? "✅ Custom prompt saved.\n"
+        : "ℹ️  Custom prompt cleared. Default prompt will be used.\n",
+    );
+  }
+
+  if (mainAction === "types") {
+    const inquirer = await import("inquirer");
+    const { types } = await inquirer.default.prompt([
+      {
+        type: "input",
+        name: "types",
+        message: "Extra commit types (comma-separated, e.g. hotfix, deps, i18n):",
+        default: (config.customTypes || []).join(", "),
+      },
+    ]);
+    const parsed = types.split(",").map((t) => t.trim()).filter(Boolean);
+    config.customTypes = parsed;
+    saveConfig(config);
+    console.log(
+      parsed.length
+        ? `✅ Custom types: ${parsed.join(", ")}\n`
+        : "ℹ️  Custom types cleared.\n",
+    );
+  }
+
+  if (mainAction === "projects-templates") {
+    const ptAction = await promptSelect(
+      [
+        { name: "📋 List all projects", value: "list-projects" },
+        { name: "🎨 Templates", value: "templates" },
+        { name: "⬅️ Back", value: "back" },
+      ],
+      "Projects & Templates",
+    );
+
+    if (ptAction === "list-projects") {
+      listProjects();
+    } else if (ptAction === "templates") {
+      await manageTemplates();
+    }
   }
 }
 
