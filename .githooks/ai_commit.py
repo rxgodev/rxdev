@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.18.2"
+NEURO_COMMIT_VERSION = "2.19.0"
 import json
 import os
 import re
@@ -1206,7 +1206,7 @@ def main():
 
     bumps = []
 
-    if BUMP_VERSION:
+    if BUMP_VERSION and not os.environ.get("NEURO_COMMIT_SKIP_BUMP"):
         kind = determine_bump_kind(message)
         bumps = bump_project_version(kind, message)
         if bumps:

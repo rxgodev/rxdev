@@ -124,11 +124,11 @@ function registerProject() {
   }
 }
 
-function unregisterProject() {
+function unregisterProject(targetPath) {
   if (!existsSync(MANAGED_PROJECTS_FILE)) return;
   try {
     const data = JSON.parse(readFileSync(MANAGED_PROJECTS_FILE, "utf8"));
-    const filtered = data.projects.filter((p) => p !== process.cwd());
+    const filtered = data.projects.filter((p) => p !== (targetPath || process.cwd()));
     writeFileSync(
       MANAGED_PROJECTS_FILE,
       JSON.stringify({ projects: filtered }, null, 2),
@@ -774,6 +774,7 @@ async function configInteractive() {
       [
         { name: "📋 List all projects", value: "list-projects" },
         { name: "🎨 Templates", value: "templates" },
+        { name: "🔌 Disable hook in project", value: "disable-hook" },
         { name: "⬅️ Back", value: "back" },
       ],
       "Projects & Templates",
@@ -783,6 +784,32 @@ async function configInteractive() {
       listProjects();
     } else if (ptAction === "templates") {
       await manageTemplates();
+    } else if (ptAction === "disable-hook") {
+      const allProjects = getManagedProjects().filter((p) => existsSync(p));
+      if (allProjects.length === 0) {
+        console.log("📭 No managed projects found.");
+      } else {
+        const dInq = await import("inquirer");
+        const { target } = await dInq.default.prompt([
+          {
+            type: "list",
+            name: "target",
+            message: "Select project to disable hook:",
+            choices: allProjects.map(p => ({ name: `${p.split(/[\\/]/).pop()} → ${p}`, value: p })),
+          },
+        ]);
+        const githooks = join(target, ".githooks");
+        if (existsSync(githooks)) {
+          if (process.platform === "win32") {
+            spawnSync("cmd", ["/c", "rmdir", "/s", "/q", githooks]);
+          } else {
+            spawnSync("rm", ["-rf", githooks]);
+          }
+        }
+        spawnSync("git", ["config", "--unset", "core.hooksPath"], { stdio: "ignore", cwd: target });
+        unregisterProject(target);
+        console.log(`\n✅ Hook disabled for ${target.split(/[\\/]/).pop()}\n`);
+      }
     }
   }
 }
@@ -974,11 +1001,18 @@ async function filterHistory() {
   let args = ["filter-repo", "--force"];
 
   if (operation === "remove-file") {
-    const { filePath } = await inq.default.prompt([
-      { type: "input", name: "filePath", message: "File path to remove (e.g. .env):" },
+    const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
+    const { filePaths } = await inq.default.prompt([
+      {
+        type: "checkbox",
+        name: "filePaths",
+        message: "Select files to remove from history:",
+        choices: allFiles.map(f => ({ name: f, value: f })),
+        pageSize: 20,
+      },
     ]);
-    if (!filePath.trim()) return;
-    args.push("--path", filePath.trim(), "--invert-paths");
+    if (!filePaths.length) return;
+    for (const fp of filePaths) args.push("--path", fp, "--invert-paths");
   } else if (operation === "replace-text") {
     const { search, replace } = await inq.default.prompt([
       { type: "input", name: "search", message: "Text to find:" },
@@ -987,11 +1021,18 @@ async function filterHistory() {
     if (!search.trim()) return;
     args.push("--replace-text", `<${search.trim()}>:${replace.trim()}`);
   } else if (operation === "remove-path") {
+    const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
+    const dirs = [...new Set(allFiles.map(f => f.includes("/") ? f.split("/")[0] : "."))].filter(d => d !== ".").sort();
     const { dirPath } = await inq.default.prompt([
-      { type: "input", name: "dirPath", message: "Directory path to remove (e.g. secrets/):" },
+      {
+        type: "list",
+        name: "dirPath",
+        message: "Select directory to remove from history:",
+        choices: [...dirs.map(d => ({ name: d + "/", value: d })), { name: "⬅️ Back", value: "" }],
+      },
     ]);
-    if (!dirPath.trim()) return;
-    args.push("--path", dirPath.trim(), "--invert-paths");
+    if (!dirPath) return;
+    args.push("--path", dirPath, "--invert-paths");
   }
 
   console.log(`\n${red}${bold}⚠️  WARNING: This will REWRITE git history!${reset}`);
@@ -1067,20 +1108,47 @@ async function quickFlow() {
   installPythonDeps();
 
   console.log(`\n${sep(`${bold}📂  Stage Changes${reset}`)}\n`);
-  console.log(`${dim}What files to stage?  (default: .)${reset}\n`);
 
-  const rl1 = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const addPath = await new Promise((r) =>
-    rl1.question(`${dim}git add${reset} `, (a) => { rl1.close(); r(a.trim() || "."); })
-  );
+  const unstaged = spawnSync("git", ["diff", "--name-only"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
+  const alreadyStaged = spawnSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
+  const allChanged = [...new Set([...unstaged, ...alreadyStaged])];
 
-  const addResult = spawnSync("git", ["add", addPath], { stdio: "pipe" });
-  if (addResult.status !== 0) { console.error("❌ Failed to stage changes."); process.exit(1); }
+  const sInq = await import("inquirer");
+  const fileChoices = [
+    { name: "📦 Stage all files", value: "__all__", checked: allChanged.length > 0 },
+    { name: "─".repeat(30), value: "__sep__" },
+    ...allChanged.map(f => ({
+      name: `${alreadyStaged.includes(f) ? "✅" : "  "} ${f}`,
+      value: f,
+      checked: alreadyStaged.includes(f),
+    })),
+  ];
 
-  const stagedCount = spawnSync("git", ["diff", "--cached", "--numstat"], { encoding: "utf8" })
-    .stdout.trim().split("\n").filter(Boolean).length;
+  if (allChanged.length === 0) {
+    console.log("ℹ️  No changed files found.\n");
+  }
 
-  console.log(`${green}✅ ${stagedCount} file(s) staged${reset}\n`);
+  const { selectedFiles } = allChanged.length === 0
+    ? { selectedFiles: [] }
+    : await sInq.default.prompt([
+        {
+          type: "checkbox",
+          name: "selectedFiles",
+          message: "Select files to stage:",
+          choices: fileChoices,
+          pageSize: 20,
+        },
+      ]);
+
+  const filesToStage = selectedFiles.includes("__all__")
+    ? allChanged
+    : selectedFiles.filter(f => f !== "__sep__" && f !== "__all__");
+
+  if (filesToStage.length > 0) {
+    const addResult = spawnSync("git", ["add", ...filesToStage], { stdio: "pipe" });
+    if (addResult.status !== 0) { console.error("❌ Failed to stage changes."); process.exit(1); }
+    console.log(`${green}✅ ${filesToStage.length} file(s) staged${reset}\n`);
+  }
 
   // ================================================================
   //  STEP 2 — Generate
@@ -1090,10 +1158,10 @@ async function quickFlow() {
   console.log(`\n${sep(`${bold}💬  Generating Commit Message${reset}`)}\n`);
   console.log(`${dim}AI is analyzing your staged changes...${reset}\n`);
 
-  const makeCommit = () => new Promise((resolve) => {
+  const makeCommit = (skipBump) => new Promise((resolve) => {
     const child = spawn("git", ["commit", "--quiet"], {
       stdio: ["inherit", "pipe", "pipe"],
-      env: { ...process.env, GIT_EDITOR: "true" },
+      env: { ...process.env, GIT_EDITOR: "true", ...(skipBump ? { NEURO_COMMIT_SKIP_BUMP: "1" } : {}) },
       detached: true,
     });
 
@@ -1215,7 +1283,7 @@ async function quickFlow() {
       showHeader();
       console.log(`\n${sep(`${bold}💬  Regenerating Commit Message${reset}`)}\n`);
       console.log(`${dim}AI is re-analyzing your changes...${reset}\n`);
-      const c = await makeCommit();
+      const c = await makeCommit(true);
       console.log("");
       if (c === null) { process.exit(130); }
       if (c !== 0) { console.error("❌ Failed to regenerate"); process.exit(1); }
