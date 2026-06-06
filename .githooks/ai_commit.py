@@ -1,4 +1,4 @@
-NEURO_COMMIT_VERSION = "2.18.1"
+NEURO_COMMIT_VERSION = "2.18.2"
 import json
 import os
 import re
