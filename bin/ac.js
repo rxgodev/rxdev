@@ -1329,12 +1329,12 @@ async function mainCmd() {
       break;
     case "update":
       console.log("Updating NeuroCommit...\n");
-      const upd = spawnSync("npm", ["install", "-g", "@rxgodev/neuro-commit@latest"], { stdio: "inherit", shell: true });
+      const pm = spawnSync("pnpm", ["--version"], { stdio: "pipe" }).status === 0 ? "pnpm" : "npm";
+      const upd = spawnSync(pm, ["add", "-g", "@rxgodev/neuro-commit@latest"], { stdio: "inherit", shell: true });
       if (upd.status === 0) {
         console.log("\n✅ NeuroCommit updated successfully.");
       } else {
-        console.log("\n❌ Update failed. Try manually:");
-        console.log("  npm install -g @rxgodev/neuro-commit@latest");
+        console.log(`\n❌ Update failed. Try manually:\n  ${pm} add -g @rxgodev/neuro-commit@latest`);
       }
       break;
     case "version":
