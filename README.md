@@ -5,7 +5,7 @@
 **AI-powered Git commit generator** — stage, generate, review, push in one command.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-2.17.9-8250df)](https://github.com/rxgodev/neuro-commit/releases)
+[![Version](https://img.shields.io/badge/version-2.18.1-8250df)](https://github.com/rxgodev/neuro-commit/releases)
 [![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
@@ -63,6 +63,8 @@ QuickFlow eliminates context-switching. No more `git add → git commit → wait
   - Git-tag aware — falls back to the latest semver tag when no manifest version exists.
 - **Edit before commit** — review, regenerate, or open `$EDITOR` to tweak the message before it lands.
 - **Multi-project** — manage hooks and shared `prepare-commit-msg` templates across several repositories from one place.
+- **History rewriting** — `qq filter` provides an interactive wrapper around `git-filter-repo` for removing secrets, files, or paths from git history.
+- **Interactive push** — QuickFlow push step shows an interactive list of remotes and branches to choose from.
 - **Ignore list** — `.commitignore` works like `.gitignore`; matching files are excluded from the diff sent to the model.
 
 ---
@@ -130,7 +132,7 @@ That's it. `qq go` guides you through every step:
    - **Edit message** — open `$EDITOR` and amend
    - **Regenerate** — ask the model for a new suggestion
    - **Cancel** — soft-reset and abort
-4. **Push** — specify remote/branch or accept defaults
+4. **Push** — select remote and branch interactively from lists
 
 > QuickFlow is the recommended workflow. For Git hook integration (automatic generation via `git commit`), see `qq init`.
 
@@ -144,6 +146,7 @@ That's it. `qq go` guides you through every step:
 | `qq init`        | Install the AI commit hook in the current repository |
 | `qq config`      | Configure API key, model, language, co-author, auto-bump, projects, and templates |
 | `qq status`      | Show integration status for the current repository |
+| `qq filter`      | Rewrite git history — remove files, secrets, or paths using git-filter-repo |
 | `qq uninstall`   | Remove the hook from the repository |
 | `qq version`     | Show version number |
 | `qq update`      | Show update instructions |
