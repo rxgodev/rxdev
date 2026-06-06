@@ -147,7 +147,6 @@ Das ist alles. `qq go` führt Sie durch jeden Schritt:
 | `qq uninstall`   | Entfernt den Hook aus dem Repository |
 | `qq version`     | Zeigt die Version an |
 | `qq update`      | Zeigt Update-Anleitung an |
-| `qq --no-color`  | Farben deaktivieren (auch via `NO_COLOR`) |
 
 ---
 

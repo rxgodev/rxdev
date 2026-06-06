@@ -147,7 +147,6 @@ C'est tout. `qq go` vous guide à chaque étape :
 | `qq uninstall`    | Supprimer le hook du dépôt |
 | `qq version`      | Afficher la version |
 | `qq update`       | Afficher les instructions de mise à jour |
-| `qq --no-color`   | Désactiver les couleurs ANSI (via `NO_COLOR` aussi) |
 
 ---
 

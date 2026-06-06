@@ -29,7 +29,7 @@ if (update?.latest && update.latest !== pkg.version) {
 
   const lines = [
     `Update available: ${RED}${pkg.version}${RST} → ${GREEN}${update.latest}${RST}`,
-    `${DIM}npm install -g @rxgodev/neuro-commit@${update.latest}${RST}`,
+    `${DIM}pnpm add -g @rxgodev/neuro-commit@${update.latest}${RST}`,
   ];
 
   const maxWidth = Math.max(...lines.map((l) => s(l).length)) + 8;

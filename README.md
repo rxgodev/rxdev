@@ -147,7 +147,6 @@ That's it. `qq go` guides you through every step:
 | `qq uninstall`   | Remove the hook from the repository |
 | `qq version`     | Show version number |
 | `qq update`      | Show update instructions |
-| `qq --no-color`  | Disable ANSI color output (also respects `NO_COLOR` env) |
 
 ---
 
