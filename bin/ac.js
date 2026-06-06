@@ -1142,15 +1142,31 @@ async function quickFlow() {
   showHeader();
 
   console.log(`\n${sep(`${bold}⬆️  Push Changes${reset}`)}\n`);
-  console.log(`${dim}Specify remote and branch  (default: origin main)${reset}\n`);
 
-  const rl3 = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const pushDest = await new Promise((r) =>
-    rl3.question(`${dim}git push${reset} `, (a) => { rl3.close(); r(a.trim() || "origin main"); })
-  );
+  const remotes = spawnSync("git", ["remote"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
+  const allBranches = spawnSync("git", ["branch", "--format=%(refname:short)"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
+  const currentBranch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).stdout.trim();
 
-  console.log(`\n⬆️  Pushing...`);
-  const push = spawnSync("git", ["push", ...pushDest.split(/\s+/)], { stdio: "inherit" });
+  const inqPush = await import("inquirer");
+  const { remote, branch } = await inqPush.default.prompt([
+    {
+      type: "list",
+      name: "remote",
+      message: "Select remote:",
+      choices: remotes.length ? remotes : [{ name: "origin", value: "origin" }],
+      default: remotes.includes("origin") ? "origin" : (remotes[0] || "origin"),
+    },
+    {
+      type: "list",
+      name: "branch",
+      message: "Select branch:",
+      choices: allBranches.length ? allBranches : [{ name: "main", value: "main" }],
+      default: currentBranch || "main",
+    },
+  ]);
+
+  console.log(`\n⬆️  Pushing to ${remote}/${branch}...`);
+  const push = spawnSync("git", ["push", remote, branch], { stdio: "inherit" });
   if (push.status !== 0) { console.error("\n❌ Push failed"); process.exit(1); }
   console.log(`${green}✅ Pushed successfully${reset}\n`);
 }
