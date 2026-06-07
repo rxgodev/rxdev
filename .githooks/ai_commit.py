@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 NEURO_COMMIT_VERSION = "2.19.3"
 import json
 import os
@@ -221,7 +223,9 @@ def get_staged_diff():
             if line.startswith("diff --git"):
                 parts = line.split()
                 if len(parts) >= 3:
-                    current_file = parts[-1].lstrip("b/")
+                    current_file = parts[-1]
+                    if current_file.startswith("b/"):
+                        current_file = current_file[2:]
                     if spec.match_file(current_file):
                         current_file = None
                         continue
@@ -267,7 +271,7 @@ def call_groq(messages):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {API_KEY}",
-        "User-Agent": "neuro-commit/3.0",
+        "User-Agent": f"neuro-commit/{NEURO_COMMIT_VERSION}",
     }
 
     req = urllib.request.Request(
@@ -1094,6 +1098,11 @@ def _amend_bump(bumps: list[tuple], repo_root: Path, old_head: str = "") -> None
             if new_head and new_head != old_head:
                 committed = True
                 break
+
+        if not committed:
+            with open("{log_path_str}", "a", encoding="utf-8") as f:
+                f.write("amend: no new commit detected within timeout; skipping version-bump amend\\n")
+            sys.exit(0)
 
         for rel_path, _, new_version in bumps:
             path = os.path.join(repo_root, rel_path)
