@@ -22,6 +22,8 @@ import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 
 export const NEURO_COMMIT_VERSION = "2.19.3";
 
@@ -65,6 +67,10 @@ export const PROVIDERS = {
   },
 };
 export const DEFAULT_PROVIDER = "groq";
+
+export const REQUEST_TIMEOUT = 60; // seconds
+export const MAX_ATTEMPTS = 3;
+export const MAX_DIFF_LENGTH = 3000;
 
 // ============================================================
 //  SYSTEM PROMPT
@@ -115,7 +121,8 @@ export function buildSystemPrompt(typesStr, language, customPrompt = "") {
 //  VALIDATION / CLEANING
 // ============================================================
 
-export function isValidCommitMessage(msg) {
+export function isValidCommitMessage(msg, types = validTypes) {
+  const typeSet = types instanceof Set ? types : new Set(types);
   if (!msg.trim()) return false;
   const subject = msg.trim().split("\n")[0].trim();
   if (/[а-яА-ЯёЁ]/.test(subject)) return false;
@@ -125,14 +132,14 @@ export function isValidCommitMessage(msg) {
 
   const type = m[1];
   const description = m[2];
-  if (!validTypes.has(type)) return false;
+  if (!typeSet.has(type)) return false;
   if (subject.length > 150) return false;
   if (description.endsWith(".")) return false;
   return true;
 }
 
-export function normalizeType(text) {
-  const m = text.match(new RegExp("^(" + TYPE_REGEX_STR + ")", "i"));
+export function normalizeType(text, typeRegexStr = TYPE_REGEX_STR) {
+  const m = text.match(new RegExp("^(" + typeRegexStr + ")", "i"));
   if (m) {
     const rest = text.slice(m[0].length).replace(/^[: ]+/, "").trim();
     const sm = rest.match(/^\(([^)]*)\)\s*:\s*(.*)/);
@@ -160,7 +167,10 @@ const STOP_PREFIXES = [
   "the diff shows", "type(scope)", "type(scope):",
 ];
 
-export function cleanLlmResponse(text) {
+export function cleanLlmResponse(text, typeRegexStr = TYPE_REGEX_STR) {
+  const typeRegex = new RegExp("^(?:" + typeRegexStr + ")", "i");
+  const commitRe = new RegExp("^(?:" + typeRegexStr + ")(?:\\([^)]*\\))?\\s*:", "i");
+
   text = text.replace(/\*{1,2}/g, "").replace(/`{1,3}/g, "");
   const lines = text.trim().split("\n");
 
@@ -183,7 +193,7 @@ export function cleanLlmResponse(text) {
 
     if (!found) {
       if (!stripped) continue;
-      if (COMMIT_RE.test(stripped) || TYPE_REGEX.test(stripped)) {
+      if (commitRe.test(stripped) || typeRegex.test(stripped)) {
         subject = stripped;
         found = true;
       }
@@ -195,13 +205,13 @@ export function cleanLlmResponse(text) {
       continue;
     }
     if (STOP_PREFIXES.some((p) => lowered.startsWith(p))) break;
-    if (COMMIT_RE.test(stripped)) break;
+    if (commitRe.test(stripped)) break;
     bodyParts.push(stripped);
   }
 
   if (!subject) return "chore: update files";
 
-  subject = normalizeType(subject).replace(/\.+$/, "");
+  subject = normalizeType(subject, typeRegexStr).replace(/\.+$/, "");
   if (subject.length > 150) subject = subject.slice(0, 147) + "...";
 
   const body = bodyParts.join("\n").trim();
@@ -831,4 +841,162 @@ export function getStagedDiff() {
     diffText = `Files changed (binary or no text diff):\n${fileList}`;
   }
   return { diff: diffText, allIgnored: false };
+}
+
+// ============================================================
+//  LLM CALL — streaming over built-in http/https (no fetch dep)
+// ============================================================
+
+export function callLlm(messages, cfg, opts = {}) {
+  const {
+    echo = true,
+    clean = true,
+    temperature = 0.0,
+    maxTokens = null,
+    typeRegexStr = TYPE_REGEX_STR,
+  } = opts;
+
+  if (cfg.needsKey && !cfg.apiKey) {
+    return Promise.reject(new Error(
+      `API key for provider '${cfg.provider}' is not set. Run 'qq config' to set ` +
+      `your key, export ${cfg.providerEnv || "the provider env var"}, or switch ` +
+      "provider (e.g. 'ollama' runs locally with no key).",
+    ));
+  }
+
+  const payload = { model: cfg.model, messages, stream: true, temperature };
+  if (maxTokens) payload.max_tokens = maxTokens;
+  const body = JSON.stringify(payload);
+
+  let url;
+  try {
+    url = new URL(cfg.apiUrl);
+  } catch {
+    return Promise.reject(new Error(`Invalid API URL: ${cfg.apiUrl}`));
+  }
+  const isHttps = url.protocol === "https:";
+  const reqFn = isHttps ? httpsRequest : httpRequest;
+
+  const headers = {
+    "Content-Type": "application/json",
+    "User-Agent": `neuro-commit/${NEURO_COMMIT_VERSION}`,
+    "Content-Length": Buffer.byteLength(body),
+  };
+  if (cfg.apiKey) headers["Authorization"] = `Bearer ${cfg.apiKey}`;
+
+  return new Promise((resolve, reject) => {
+    const req = reqFn(
+      {
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname + url.search,
+        method: "POST",
+        headers,
+        timeout: REQUEST_TIMEOUT * 1000,
+      },
+      (res) => {
+        res.setEncoding("utf8");
+        const status = res.statusCode;
+
+        if (status !== 200) {
+          let errBody = "";
+          res.on("data", (d) => { errBody += d; });
+          res.on("end", () => {
+            if (status === 429) {
+              logMessage(`${cfg.provider} rate limited: ${errBody}`);
+              reject(new Error(`${cfg.provider} API rate limit exceeded. Wait a moment and retry.`));
+            } else {
+              reject(new Error(`${cfg.provider} API HTTP ${status}: ${errBody}`));
+            }
+          });
+          return;
+        }
+
+        let buffer = "";
+        let text = "";
+        const handleLine = (line) => {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) return;
+          const dataStr = trimmed.slice(6);
+          if (dataStr === "[DONE]") return;
+          try {
+            const chunk = JSON.parse(dataStr);
+            const content = chunk.choices?.[0]?.delta?.content;
+            if (content) {
+              text += content;
+              if (echo) process.stdout.write(content);
+            }
+          } catch {
+            // ignore malformed SSE chunks
+          }
+        };
+
+        res.on("data", (chunk) => {
+          buffer += chunk;
+          let idx;
+          while ((idx = buffer.indexOf("\n")) !== -1) {
+            handleLine(buffer.slice(0, idx));
+            buffer = buffer.slice(idx + 1);
+          }
+        });
+        res.on("end", () => {
+          if (buffer) handleLine(buffer);
+          if (echo) process.stdout.write("\n");
+          const t = text.trim();
+          resolve(clean ? cleanLlmResponse(t, typeRegexStr) : t);
+        });
+      },
+    );
+
+    req.on("timeout", () => {
+      req.destroy(new Error(`${cfg.provider} API request timed out after ${REQUEST_TIMEOUT}s`));
+    });
+    req.on("error", (e) => {
+      reject(new Error(`${cfg.provider} API error: ${e.message} (is ${cfg.apiUrl} reachable?)`));
+    });
+    req.write(body);
+    req.end();
+  });
+}
+
+export async function generateCommitMessage(diff, cfg, opts = {}) {
+  const { echo = true } = opts;
+  const typeRegexStr = buildTypeRegexStr(cfg.validTypes || DEFAULT_VALID_TYPES);
+  const typeSet = new Set(cfg.validTypes || DEFAULT_VALID_TYPES);
+
+  const userPrompt =
+    `write a commit (subject + blank line + body explaining why) for:\n\n---\n${diff}\n---`;
+  const messages = [
+    { role: "system", content: cfg.systemPrompt },
+    { role: "user", content: userPrompt },
+  ];
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      logMessage(`Calling LLM (attempt ${attempt}/${MAX_ATTEMPTS})`);
+      if (echo) process.stdout.write(`[${attempt}/${MAX_ATTEMPTS}] Generating commit message...\n\n`);
+      const message = await callLlm(messages, cfg, { echo, typeRegexStr });
+
+      if (!message || message.startsWith("#") || message.length < 10) {
+        lastError = "Empty or too-short response";
+        logMessage(`Response too short or invalid: ${JSON.stringify(message)}`);
+        continue;
+      }
+      if (!isValidCommitMessage(message, typeSet)) {
+        lastError = "Response did not match Conventional Commits format";
+        logMessage(`Validation failed (attempt ${attempt}): ${JSON.stringify(message.slice(0, 120))}`);
+        continue;
+      }
+      logMessage(`SUCCESS on attempt ${attempt}`);
+      return message;
+    } catch (e) {
+      lastError = e.message;
+      logMessage(`FAILURE on attempt ${attempt}: ${e.message}`);
+      if (attempt < MAX_ATTEMPTS && echo) process.stdout.write(`  Retry: ${e.message}\n`);
+    }
+  }
+  logMessage(`All ${MAX_ATTEMPTS} attempts failed (${lastError}), caller should use fallback`);
+  return null;
 }

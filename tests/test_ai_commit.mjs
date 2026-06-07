@@ -5,9 +5,22 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { createServer } from "node:http";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const aic = await import(join(here, "..", ".githooks", "ai_commit.mjs"));
+
+// Local SSE server helpers for callLlm tests (no network, no keys).
+function sseServer(chunks) {
+  return createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/event-stream" });
+    for (const c of chunks) res.write(c);
+    res.end();
+  });
+}
+function listen(server) {
+  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server.address().port)));
+}
 
 test("parseSemver: valid", () => {
   assert.deepEqual(aic.parseSemver("1.2.3"), {
@@ -310,4 +323,85 @@ test("filterDiffLines: keeps +/- under # File, drops ignored files", () => {
   assert.ok(out.includes("+new line"));
   assert.ok(!out.includes("secret.env"));
   assert.ok(!out.includes("API_TOKEN"));
+});
+
+// ── slice 3: streaming LLM call ──
+
+test("callLlm: parses an SSE stream", async () => {
+  const server = sseServer([
+    'data: {"choices":[{"delta":{"content":"feat: "}}]}\n\n',
+    'data: {"choices":[{"delta":{"content":"add thing"}}]}\n\n',
+    "data: [DONE]\n\n",
+  ]);
+  const port = await listen(server);
+  try {
+    const cfg = { provider: "test", apiUrl: `http://127.0.0.1:${port}/v1`, apiKey: "", needsKey: false, model: "m" };
+    const out = await aic.callLlm([{ role: "user", content: "x" }], cfg, { echo: false });
+    assert.equal(out, "feat: add thing");
+  } finally {
+    server.close();
+  }
+});
+
+test("callLlm: clean=false returns raw text", async () => {
+  const server = sseServer([
+    'data: {"choices":[{"delta":{"content":"Here is:\\nfeat: x"}}]}\n\n',
+    "data: [DONE]\n\n",
+  ]);
+  const port = await listen(server);
+  try {
+    const cfg = { provider: "test", apiUrl: `http://127.0.0.1:${port}/v1`, apiKey: "", needsKey: false, model: "m" };
+    const out = await aic.callLlm([{ role: "user", content: "x" }], cfg, { echo: false, clean: false });
+    assert.equal(out, "Here is:\nfeat: x");
+  } finally {
+    server.close();
+  }
+});
+
+test("callLlm: 429 rejects with rate-limit message", async () => {
+  const server = createServer((req, res) => { res.writeHead(429); res.end("slow down"); });
+  const port = await listen(server);
+  try {
+    const cfg = { provider: "test", apiUrl: `http://127.0.0.1:${port}/v1`, apiKey: "", needsKey: false, model: "m" };
+    await assert.rejects(
+      () => aic.callLlm([{ role: "user", content: "x" }], cfg, { echo: false }),
+      /rate limit/i,
+    );
+  } finally {
+    server.close();
+  }
+});
+
+test("callLlm: missing key rejects", async () => {
+  await assert.rejects(
+    () => aic.callLlm([], { provider: "groq", needsKey: true, apiKey: "", apiUrl: "http://x/v1", providerEnv: "GROQ_API_KEY" }, { echo: false }),
+    /API key/,
+  );
+});
+
+test("generateCommitMessage: returns a validated message", async () => {
+  const server = sseServer([
+    'data: {"choices":[{"delta":{"content":"feat: add a real thing"}}]}\n\n',
+    "data: [DONE]\n\n",
+  ]);
+  const port = await listen(server);
+  try {
+    const cfg = aic.resolveConfig({ provider: "custom", apiUrl: `http://127.0.0.1:${port}/v1` }, {});
+    const msg = await aic.generateCommitMessage("# File: a.js\n+x", cfg, { echo: false });
+    assert.equal(msg, "feat: add a real thing");
+  } finally {
+    server.close();
+  }
+});
+
+test("generateCommitMessage: null after repeated failures", async () => {
+  const server = createServer((req, res) => { res.writeHead(500); res.end("boom"); });
+  const port = await listen(server);
+  try {
+    const cfg = aic.resolveConfig({ provider: "custom", apiUrl: `http://127.0.0.1:${port}/v1` }, {});
+    const msg = await aic.generateCommitMessage("diff", cfg, { echo: false });
+    assert.equal(msg, null);
+  } finally {
+    server.close();
+  }
 });
