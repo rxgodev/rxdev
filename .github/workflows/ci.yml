@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }}
+    # ubuntu-22.04 reliably provides the older interpreters (3.8/3.9)
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip pathspec
+      - name: Byte-compile hook (catches version-incompatible syntax)
+        run: python -m py_compile .githooks/ai_commit.py
+      - name: Unit tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+  node:
+    name: Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm install --no-audit --no-fund
+      - name: Syntax check
+        run: node --check bin/ac.js
+      - name: CLI smoke test
+        run: |
+          node bin/ac.js version
+          node bin/ac.js --help >/dev/null

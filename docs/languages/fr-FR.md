@@ -7,7 +7,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Version](https://img.shields.io/badge/version-2.18.1-8250df)](https://github.com/rxgodev/neuro-commit/releases)
 [![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
-[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
 [![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
@@ -180,12 +180,12 @@ Modifiez `.commitignore` (syntaxe identique à `.gitignore`) pour exclure des fi
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](./architecture.md) | Aperçu de l'architecture CLI Node.js + hook Python |
-| [Auto-incrémentation](./auto-bump.md) | Incrémentation intelligente de version pour 15+ formats de manifest |
-| [Modèles et projets](./templates.md) | Gestion multi-dépôts et modèles de hooks partagés |
+| [Architecture](../architecture.md) | Aperçu de l'architecture CLI Node.js + hook Python |
+| [Auto-incrémentation](../auto-bump.md) | Incrémentation intelligente de version pour 15+ formats de manifest |
+| [Modèles et projets](../templates.md) | Gestion multi-dépôts et modèles de hooks partagés |
 
 ---
 
 ## Licence
 
-**MIT** — voir [LICENSE](./LICENSE).
+**MIT** — voir [LICENSE](../../LICENSE).
