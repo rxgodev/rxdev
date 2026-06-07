@@ -6,6 +6,8 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createServer } from "node:http";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const aic = await import(join(here, "..", ".githooks", "ai_commit.mjs"));
@@ -403,5 +405,53 @@ test("generateCommitMessage: null after repeated failures", async () => {
     assert.equal(msg, null);
   } finally {
     server.close();
+  }
+});
+
+// ── slice 4: version bump ──
+
+test("tomlHandle: peek + set in [package], preserves other lines", () => {
+  const toml = '[package]\nname = "x"\nversion = "1.2.3"\n';
+  assert.deepEqual(aic.tomlHandle(toml, "__PEEK__", ["package"]), [null, "1.2.3"]);
+  const [out, old] = aic.tomlHandle(toml, "2.0.0", ["package"]);
+  assert.equal(old, "1.2.3");
+  assert.ok(out.includes('version = "2.0.0"'));
+  assert.ok(out.includes('name = "x"'));
+});
+
+test("discoverManifests: finds manifests, skips node_modules", () => {
+  const root = mkdtempSync(join(tmpdir(), "nc-disc-"));
+  try {
+    writeFileSync(join(root, "package.json"), '{"version":"1.0.0"}');
+    mkdirSync(join(root, "pkg"));
+    writeFileSync(join(root, "pkg", "pyproject.toml"), '[project]\nversion = "1.0.0"\n');
+    mkdirSync(join(root, "node_modules"));
+    mkdirSync(join(root, "node_modules", "dep"));
+    writeFileSync(join(root, "node_modules", "dep", "package.json"), '{"version":"9.9.9"}');
+
+    const found = aic.discoverManifests(root);
+    const rels = found.map((m) => m.path.slice(root.length + 1));
+    assert.ok(rels.includes("package.json"));
+    assert.ok(rels.some((r) => r.endsWith("pyproject.toml")));
+    assert.ok(!rels.some((r) => r.includes("node_modules")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("bumpProjectVersion: bumps package.json + pyproject.toml", () => {
+  const root = mkdtempSync(join(tmpdir(), "nc-bump-"));
+  try {
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "x", version: "1.2.3" }, null, 2) + "\n");
+    writeFileSync(join(root, "pyproject.toml"), '[project]\nname = "x"\nversion = "1.2.3"\n');
+
+    const bumps = aic.bumpProjectVersion("minor", "feat: add", root);
+    const byFile = Object.fromEntries(bumps.map((b) => [b[0], b[2]]));
+    assert.equal(byFile["package.json"], "1.3.0");
+    assert.equal(byFile["pyproject.toml"], "1.3.0");
+    assert.ok(readFileSync(join(root, "package.json"), "utf8").includes('"1.3.0"'));
+    assert.ok(readFileSync(join(root, "pyproject.toml"), "utf8").includes('version = "1.3.0"'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

@@ -16,10 +16,11 @@
 // (replacing pathspec), staged-diff extraction, and rotating logs.
 
 import {
-  readFileSync, existsSync, mkdirSync, appendFileSync, renameSync, statSync,
+  readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync,
+  appendFileSync, renameSync, statSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { join, dirname } from "node:path";
+import { join, dirname, basename, relative, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { request as httpRequest } from "node:http";
@@ -999,4 +1000,186 @@ export async function generateCommitMessage(diff, cfg, opts = {}) {
   }
   logMessage(`All ${MAX_ATTEMPTS} attempts failed (${lastError}), caller should use fallback`);
   return null;
+}
+
+// ============================================================
+//  VERSION BUMP — manifest registry, single-pass discovery, orchestration
+// ============================================================
+
+export function tomlReplace(content, sections, newVersion, old) {
+  const sectionRe = /^\s*\[([^\]]+)\]\s*$/;
+  const verRe = /^(\s*version\s*=\s*")([^"]+)(".*)$/;
+  const out = [];
+  let current = null;
+  let replaced = false;
+  for (const line of content.split(/(?<=\n)/)) {
+    const stripped = line.replace(/\r?\n$/, "");
+    const eol = line.slice(stripped.length);
+    const sm = stripped.match(sectionRe);
+    if (sm) { current = sm[1].trim(); out.push(line); continue; }
+    if (!replaced && sections.includes(current)) {
+      const vm = stripped.match(verRe);
+      if (vm && vm[2] === old) {
+        out.push(vm[1] + newVersion + vm[3] + eol);
+        replaced = true;
+        continue;
+      }
+    }
+    out.push(line);
+  }
+  if (!replaced) return [null, null];
+  return [out.join(""), old];
+}
+
+export function tomlHandle(content, newVersion, sections) {
+  const old = tomlRegexExtract(content, sections);
+  if (old === null) return [null, null];
+  if (newVersion === PEEK) return [null, old];
+  return tomlReplace(content, sections, newVersion, old);
+}
+
+export const MANIFEST_DEFINITIONS = [
+  { name: "package.json", patterns: ["package.json"], handler: jsonHandle },
+  { name: "composer.json", patterns: ["composer.json"], handler: jsonHandle },
+  { name: "Cargo.toml", patterns: ["Cargo.toml"], handler: (c, v) => tomlHandle(c, v, ["package"]) },
+  { name: "pyproject.toml", patterns: ["pyproject.toml"], handler: (c, v) => tomlHandle(c, v, ["project", "tool.poetry"]) },
+  { name: "Chart.yaml", patterns: ["Chart.yaml"], handler: helmHandle },
+  { name: "pubspec.yaml", patterns: ["pubspec.yaml"], handler: yamlHandle },
+  { name: "build.gradle", patterns: ["build.gradle"], handler: gradleHandle },
+  { name: "build.gradle.kts", patterns: ["build.gradle.kts"], handler: gradleHandle },
+  { name: "Version.props", patterns: ["Version.props", "Directory.Build.props"], handler: csprojHandle },
+  { name: "csproj", patterns: ["*.csproj"], handler: csprojHandle },
+  { name: "gemspec", patterns: ["*.gemspec"], handler: gemspecHandle },
+  { name: "setup.cfg", patterns: ["setup.cfg"], handler: setupcfgHandle },
+  { name: "VERSION", patterns: ["VERSION"], handler: plainHandle },
+  { name: "version.txt", patterns: ["version.txt"], handler: plainHandle },
+  { name: ".bumpversion.cfg", patterns: [".bumpversion.cfg"], handler: setupcfgHandle },
+];
+
+const SKIP_DIRS = new Set([
+  "node_modules", ".git", "__pycache__", ".venv", "venv", ".tox",
+  ".eggs", "dist", "build", ".git2", ".svn",
+]);
+
+function matchManifestPattern(name, pattern) {
+  return pattern.startsWith("*.") ? name.endsWith(pattern.slice(1)) : name === pattern;
+}
+
+// Single tree walk (skips SKIP_DIRS at the boundary instead of descending into
+// them like the Python rglob did — same result, far fewer syscalls).
+function walkFiles(root) {
+  const out = [];
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) {
+        if (!SKIP_DIRS.has(e.name)) stack.push(full);
+      } else if (e.isFile()) {
+        out.push(full);
+      }
+    }
+  }
+  return out;
+}
+
+export function discoverManifests(repoRoot) {
+  const allFiles = walkFiles(repoRoot);
+  const found = [];
+  const seen = new Set();
+  for (const def of MANIFEST_DEFINITIONS) {
+    const matches = allFiles
+      .filter((f) => def.patterns.some((p) => matchManifestPattern(basename(f), p)))
+      .sort();
+    for (const f of matches) {
+      if (!seen.has(f)) {
+        seen.add(f);
+        found.push({ path: f, def });
+      }
+    }
+  }
+  return found;
+}
+
+export function manifestGetVersion(content, def) {
+  return def.handler(content, PEEK)[1];
+}
+
+export function manifestSetVersion(content, newVersion, def) {
+  return def.handler(content, newVersion);
+}
+
+export function getLatestTagVersion(repoRoot) {
+  const out = git(["tag", "--sort=-version:refname"], repoRoot);
+  if (!out) return null;
+  for (const raw of out.split(/\r?\n/)) {
+    const tag = raw.trim().replace(/^v+/, "");
+    if (SEMVER_RE.test(tag)) return tag;
+  }
+  return null;
+}
+
+export function getChangedFilesInScope(repoRoot, manifestRelPath) {
+  const prefix = posixDirname(manifestRelPath);
+  if (prefix === "." || prefix === "") return new Set();
+  const out = git(["diff", "--cached", "--name-only"], repoRoot);
+  const prefixSlash = prefix + "/";
+  return new Set(out.split(/\r?\n/).filter((f) => f.startsWith(prefixSlash)));
+}
+
+export function shouldBumpManifest(manifestRelPath, repoRoot, message) {
+  const parsed = parseCommit(message);
+  if (["docs", "style", "test"].includes(parsed.type)) {
+    if (getChangedFilesInScope(repoRoot, manifestRelPath).size === 0) return false;
+  }
+  return true;
+}
+
+export function bumpProjectVersion(kind, message = "", repoRoot = findRepoRoot()) {
+  if (!repoRoot) return [];
+  const manifests = discoverManifests(repoRoot);
+  if (!manifests.length) {
+    logMessage("bump: no manifests found in repo");
+    return [];
+  }
+
+  const bumps = [];
+  for (const { path, def } of manifests) {
+    const relPath = relative(repoRoot, path).split(sep).join("/");
+    let content;
+    try {
+      content = readFileSync(path, "utf8");
+    } catch (e) {
+      logMessage(`bump: cannot read ${relPath}: ${e.message}`);
+      continue;
+    }
+    const oldVersion = manifestGetVersion(content, def);
+    if (oldVersion == null) {
+      logMessage(`bump: no version field in ${relPath}`);
+      continue;
+    }
+    if (!shouldBumpManifest(relPath, repoRoot, message)) {
+      logMessage(`bump: skipping ${relPath} (changes unrelated to this package)`);
+      continue;
+    }
+    const newVersion = bumpSemver(oldVersion, kind);
+    if (newVersion == null) {
+      logMessage(`bump: cannot parse version '${oldVersion}' in ${relPath} as semver`);
+      continue;
+    }
+    const [newContent] = manifestSetVersion(content, newVersion, def);
+    if (newContent == null) continue;
+    try {
+      writeFileSync(path, newContent, "utf8");
+    } catch (e) {
+      logMessage(`bump: cannot write ${relPath}: ${e.message}`);
+      continue;
+    }
+    logMessage(`bump: ${relPath} ${oldVersion} ${newVersion} (${kind})`);
+    bumps.push([relPath, oldVersion, newVersion]);
+  }
+  return bumps;
 }
