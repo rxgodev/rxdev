@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { spawnSync, spawn } from "child_process";
-import { existsSync, writeFileSync, readFileSync, mkdirSync } from "fs";
+import { existsSync, writeFileSync, readFileSync, mkdirSync, rmSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import readline from "readline";
-import { homedir } from "os";
+import { homedir, tmpdir } from "os";
 import updateNotifier from "update-notifier";
 import { unlinkSync } from "fs";
 import { createHash } from "crypto";
@@ -425,7 +425,7 @@ async function applyTemplateToProjects(templateName) {
     },
   ]);
 
-  if (selected.includes("__cancel__") || selected.length === 0) {
+  if (selected.length === 0) {
     console.log("↩️  Cancelled.");
     return;
   }
@@ -848,11 +848,7 @@ async function configInteractive() {
         ]);
         const githooks = join(target, ".githooks");
         if (existsSync(githooks)) {
-          if (process.platform === "win32") {
-            spawnSync("cmd", ["/c", "rmdir", "/s", "/q", githooks]);
-          } else {
-            spawnSync("rm", ["-rf", githooks]);
-          }
+          rmSync(githooks, { recursive: true, force: true });
         }
         spawnSync("git", ["config", "--unset", "core.hooksPath"], { stdio: "ignore", cwd: target });
         unregisterProject(target);
@@ -939,11 +935,7 @@ function uninstall() {
 
   const githooks = join(process.cwd(), ".githooks");
   if (existsSync(githooks)) {
-    if (process.platform === "win32") {
-      spawnSync("cmd", ["/c", "rmdir", "/s", "/q", githooks]);
-    } else {
-      spawnSync("rm", ["-rf", githooks]);
-    }
+    rmSync(githooks, { recursive: true, force: true });
     console.log("✅ Removed .githooks directory");
   }
 
@@ -1048,6 +1040,7 @@ async function filterHistory() {
       if (operation === "back") return;
 
       let args = ["filter-repo", "--force"];
+      let replaceTextFile = null;
 
       if (operation === "remove-file") {
         const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
@@ -1092,7 +1085,14 @@ async function filterHistory() {
         { type: "input", name: "replace", message: "Replace with:" },
       ]);
       if (!search.trim()) continue;
-      args.push("--replace-text", `<${search.trim()}>:${replace.trim()}`);
+      // git-filter-repo --replace-text expects a FILE of expressions, not an inline string.
+      // Format: `literal:SEARCH==>REPLACEMENT` (omit `==>` to default to ***REMOVED***).
+      const s = search.trim();
+      const r = replace.trim();
+      const expr = r ? `literal:${s}==>${r}` : `literal:${s}`;
+      replaceTextFile = join(tmpdir(), `neuro-commit-replace-${process.pid}.txt`);
+      writeFileSync(replaceTextFile, expr + "\n");
+      args.push("--replace-text", replaceTextFile);
     }
 
     console.log(`\n${red}${bold}⚠️  WARNING: This will REWRITE git history!${reset}`);
@@ -1114,6 +1114,7 @@ async function filterHistory() {
 
     console.log(`\n🔄 Rewriting history...\n`);
     const result = spawnSync("git", args, { stdio: "inherit" });
+    if (replaceTextFile) { try { unlinkSync(replaceTextFile); } catch {} }
     if (result.status !== 0) {
       console.error("\n❌ History rewrite failed.");
       process.exit(1);
