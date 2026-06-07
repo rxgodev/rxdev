@@ -8,6 +8,15 @@ import { dirname, join } from "node:path";
 import { createServer } from "node:http";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
+
+function tmpGitRepo() {
+  const root = mkdtempSync(join(tmpdir(), "nc-git-"));
+  spawnSync("git", ["init", "-q"], { cwd: root });
+  spawnSync("git", ["config", "user.email", "t@t.dev"], { cwd: root });
+  spawnSync("git", ["config", "user.name", "tester"], { cwd: root });
+  return root;
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const aic = await import(join(here, "..", ".githooks", "ai_commit.mjs"));
@@ -453,5 +462,76 @@ test("bumpProjectVersion: bumps package.json + pyproject.toml", () => {
     assert.ok(readFileSync(join(root, "pyproject.toml"), "utf8").includes('version = "1.3.0"'));
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── slice 5: main flow + subcommands ──
+
+test("composeMessage: bump footer + co-author", () => {
+  const out = aic.composeMessage("feat: x", {
+    bumps: [["package.json", "1.0.0", "1.1.0"]], kind: "minor", addCoauthor: true,
+  });
+  assert.ok(out.startsWith("feat: x"));
+  assert.ok(out.includes("Bump version (minor):"));
+  assert.ok(out.includes("package.json: 1.0.0 → 1.1.0"));
+  assert.ok(out.includes("Co-authored-by: NeuroCommit"));
+  assert.equal(aic.composeMessage("fix: y", {}), "fix: y");
+});
+
+test("checkConflictingHooks: detects .husky, clean repo is null", () => {
+  const root = mkdtempSync(join(tmpdir(), "nc-conf-"));
+  try {
+    assert.equal(aic.checkConflictingHooks(root), null);
+    mkdirSync(join(root, ".husky"));
+    assert.ok(aic.checkConflictingHooks(root).includes(".husky"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("buildPrInfo: error when no commits ahead of base (no LLM)", async () => {
+  const info = await aic.buildPrInfo("HEAD", aic.resolveConfig({ provider: "ollama" }, {}));
+  assert.ok(info.error && /No commits/.test(info.error));
+});
+
+test("buildSplitPlan: error when nothing staged (no LLM)", async () => {
+  const repo = tmpGitRepo();
+  const cwd0 = process.cwd();
+  try {
+    process.chdir(repo);
+    const plan = await aic.buildSplitPlan(aic.resolveConfig({ provider: "ollama" }, {}));
+    assert.ok(/No staged changes/.test(plan.error || ""));
+  } finally {
+    process.chdir(cwd0);
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("main: end-to-end writes the generated message into the commit file", async () => {
+  const repo = tmpGitRepo();
+  const server = sseServer([
+    'data: {"choices":[{"delta":{"content":"feat: add greeting"}}]}\n\n',
+    "data: [DONE]\n\n",
+  ]);
+  const port = await listen(server);
+  const cwd0 = process.cwd();
+  try {
+    writeFileSync(join(repo, "hello.txt"), "hi there\n");
+    spawnSync("git", ["add", "hello.txt"], { cwd: repo });
+    process.chdir(repo);
+    const cfg = aic.resolveConfig(
+      { provider: "custom", apiUrl: `http://127.0.0.1:${port}/v1`, coauthor: true, bumpVersion: false },
+      {},
+    );
+    const msgFile = join(repo, "MSG");
+    writeFileSync(msgFile, "");
+    await aic.main(msgFile, cfg, { echo: false });
+    const written = readFileSync(msgFile, "utf8");
+    assert.ok(written.includes("feat: add greeting"), written);
+    assert.ok(written.includes("Co-authored-by: NeuroCommit"));
+  } finally {
+    process.chdir(cwd0);
+    server.close();
+    rmSync(repo, { recursive: true, force: true });
   }
 });

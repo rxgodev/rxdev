@@ -22,7 +22,7 @@ import {
 import { homedir } from "node:os";
 import { join, dirname, basename, relative, sep } from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 
@@ -1182,4 +1182,303 @@ export function bumpProjectVersion(kind, message = "", repoRoot = findRepoRoot()
     bumps.push([relPath, oldVersion, newVersion]);
   }
   return bumps;
+}
+
+// ============================================================
+//  CONFLICT DETECTION
+// ============================================================
+
+function isDir(p) {
+  try { return statSync(p).isDirectory(); } catch { return false; }
+}
+
+export function checkConflictingHooks(repoRoot) {
+  const conflicts = [];
+  if (isDir(join(repoRoot, ".husky"))) {
+    conflicts.push(".husky directory detected — conflicts with NeuroCommit hooks. Delete it or run `npx husky uninstall`.");
+  }
+  if (existsSync(join(repoRoot, "lefthook.yml")) || existsSync(join(repoRoot, "lefthook.yaml"))) {
+    conflicts.push("lefthook config detected — may conflict with NeuroCommit hooks.");
+  }
+  if (existsSync(join(repoRoot, ".pre-commit-config.yaml"))) {
+    conflicts.push(".pre-commit-config.yaml detected — may conflict with core.hooksPath.");
+  }
+  return conflicts.length ? conflicts.join("\n") : null;
+}
+
+// ============================================================
+//  SUBCOMMANDS — scan / release / pr / split
+// ============================================================
+
+export function scanStagedSecrets() {
+  return scanDiffForSecrets(git(["diff", "--cached", "--no-color", "--unified=0"]));
+}
+
+export function detectDefaultBranch() {
+  const ref = git(["symbolic-ref", "refs/remotes/origin/HEAD"]).trim();
+  if (ref) return ref.split("/").pop();
+  for (const b of ["main", "master"]) {
+    if (git(["rev-parse", "--verify", "--quiet", b]).trim()) return b;
+  }
+  return "main";
+}
+
+export function collectCommits(revRange) {
+  const out = git(["log", revRange, "--no-merges", "--pretty=format:%h%x1f%s%x1f%b%x1e"]);
+  const commits = [];
+  for (const rec of out.split("\x1e")) {
+    const r = rec.replace(/^\n+|\n+$/g, "");
+    if (!r.trim()) continue;
+    const fields = r.split("\x1f");
+    if (fields.length < 2) continue;
+    commits.push({
+      hash: fields[0].trim(),
+      subject: fields[1].trim(),
+      body: (fields[2] || "").trim(),
+    });
+  }
+  return commits;
+}
+
+export function buildReleaseInfo(todayStr) {
+  const repoRoot = findRepoRoot() || process.cwd();
+  const lastTag = git(["describe", "--tags", "--abbrev=0"]).trim();
+  const revRange = lastTag ? `${lastTag}..HEAD` : "HEAD";
+  const commits = collectCommits(revRange);
+  const { groups, breaking, bump } = groupCommits(commits);
+
+  // Highest known version (tag or manifest), so a repo that tags less often
+  // than it bumps its manifest never regresses.
+  let current = getLatestTagVersion(repoRoot);
+  for (const { path, def } of discoverManifests(repoRoot)) {
+    try {
+      const v = manifestGetVersion(readFileSync(path, "utf8"), def);
+      if (v) current = semverMax(current, v);
+    } catch {}
+  }
+  current = current || "0.0.0";
+  const nextv = bumpSemver(current, bump) || current;
+  const date = todayStr || new Date().toISOString().slice(0, 10);
+  return {
+    from: lastTag || null,
+    current,
+    next: nextv,
+    bump,
+    count: commits.length,
+    breaking,
+    changelog: renderChangelog(nextv, groups, breaking, date),
+    has_tags: !!lastTag,
+  };
+}
+
+const PR_SYSTEM_PROMPT =
+  "You write concise GitHub pull request descriptions. Output ONLY a JSON object with " +
+  'keys "title" and "body". title: one concise line (<72 chars), conventional style, no ' +
+  "trailing period. body: GitHub-flavored markdown with a one-paragraph '## Summary', a " +
+  "'## Changes' bullet list, and an optional '## Notes'. Do not wrap the JSON in code fences.";
+
+export async function buildPrInfo(base, cfg) {
+  base = base || detectDefaultBranch();
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+  const commits = collectCommits(`${base}..HEAD`);
+  if (!commits.length) {
+    return { error: `No commits on '${branch}' ahead of '${base}'.`, base, branch };
+  }
+  const diffstat = git(["diff", "--stat", `${base}..HEAD`]).slice(0, 2000);
+  const commitText = commits.map((c) => `- ${c.subject}` + (c.body ? `\n  ${c.body}` : "")).join("\n");
+  const user = `Base branch: ${base}\nHead branch: ${branch}\n\nCommits:\n${commitText}\n\nDiff stat:\n${diffstat}`;
+
+  let data;
+  try {
+    const raw = await callLlm(
+      [{ role: "system", content: PR_SYSTEM_PROMPT }, { role: "user", content: user }],
+      cfg, { echo: false, clean: false, temperature: 0.3, maxTokens: 900 },
+    );
+    data = extractJson(raw);
+  } catch (e) {
+    return { error: e.message, base, branch };
+  }
+  if (!data || typeof data !== "object" || !("title" in data) || !("body" in data)) {
+    data = { title: commits[0].subject, body: "## Changes\n" + commitText };
+  }
+  return { ...data, base, branch, count: commits.length };
+}
+
+const SPLIT_SYSTEM_PROMPT =
+  "You split a set of staged changes into a minimal set of logical, independently-" +
+  "reviewable git commits using Conventional Commits. Output ONLY a JSON array; each item " +
+  'is {"message": "type(scope): subject", "files": ["path", ...], "reason": "short why"}. ' +
+  "Every input file must appear in exactly one group. If the changes are cohesive, return a " +
+  "single group. Use lowercase imperative subjects with no trailing period.";
+
+export async function buildSplitPlan(cfg) {
+  const staged = git(["diff", "--cached", "--name-only"]).split(/\r?\n/).filter((s) => s.trim());
+  if (!staged.length) {
+    return { error: "No staged changes. Stage files first with 'git add'.", groups: [], staged: [] };
+  }
+  const parts = staged.map((f) => `### ${f}\n${git(["diff", "--cached", "--unified=0", "--", f]).slice(0, 700)}`);
+  const user = ("Staged files and their diffs:\n\n" + parts.join("\n\n")).slice(0, 6000);
+
+  let data;
+  try {
+    const raw = await callLlm(
+      [{ role: "system", content: SPLIT_SYSTEM_PROMPT }, { role: "user", content: user }],
+      cfg, { echo: false, clean: false, temperature: 0.1, maxTokens: 900 },
+    );
+    data = extractJson(raw);
+  } catch (e) {
+    return { error: e.message, groups: [], staged };
+  }
+  let groups = Array.isArray(data) ? data : (data && Array.isArray(data.groups) ? data.groups : null);
+  if (!groups || !groups.length) {
+    return { error: "Could not parse a split plan from the model.", groups: [], staged };
+  }
+  const assigned = [];
+  const clean = [];
+  for (const g of groups) {
+    if (!g || typeof g !== "object") continue;
+    const files = (g.files || []).filter((f) => staged.includes(f) && !assigned.includes(f));
+    if (!files.length) continue;
+    assigned.push(...files);
+    clean.push({
+      message: String(g.message || "chore: update").trim(),
+      files,
+      reason: String(g.reason || "").trim(),
+    });
+  }
+  const unassigned = staged.filter((f) => !assigned.includes(f));
+  return { groups: clean, staged, unassigned };
+}
+
+export async function runSubcommand(argv, cfg) {
+  const mode = argv[0];
+  const opt = (name) => {
+    const i = argv.indexOf(name);
+    return i !== -1 ? argv[i + 1] : undefined;
+  };
+  try {
+    if (mode === "--scan") {
+      const findings = scanStagedSecrets();
+      process.stdout.write(JSON.stringify({ findings, count: findings.length }));
+      return findings.length ? 2 : 0;
+    }
+    if (mode === "--release") {
+      process.stdout.write(JSON.stringify(buildReleaseInfo()));
+      return 0;
+    }
+    if (mode === "--pr") {
+      process.stdout.write(JSON.stringify(await buildPrInfo(opt("--base"), cfg)));
+      return 0;
+    }
+    if (mode === "--split") {
+      process.stdout.write(JSON.stringify(await buildSplitPlan(cfg)));
+      return 0;
+    }
+    process.stdout.write(JSON.stringify({ error: `unknown mode: ${mode}` }));
+    return 1;
+  } catch (e) {
+    process.stdout.write(JSON.stringify({ error: e.message }));
+    return 1;
+  }
+}
+
+// ============================================================
+//  COMMIT MESSAGE COMPOSITION + MAIN FLOW
+// ============================================================
+
+const COAUTHOR_TRAILER = "Co-authored-by: NeuroCommit <autocommitrxgo@gmail.com>";
+
+export function composeMessage(message, { bumps = [], kind = "patch", addCoauthor = false } = {}) {
+  let out = message;
+  if (bumps.length) {
+    const footer = [`Bump version (${kind}):`, ...bumps.map(([f, o, n]) => `  ${f}: ${o} → ${n}`)];
+    out += "\n\n" + footer.join("\n");
+  }
+  if (addCoauthor) out += "\n\n" + COAUTHOR_TRAILER;
+  return out;
+}
+
+export function writeErrorToCommit(msgFile, errMsg) {
+  try {
+    writeFileSync(msgFile, `# NeuroCommit: ${errMsg}\n`, "utf8");
+  } catch {}
+}
+
+export async function main(commitMsgFile, cfg, opts = {}) {
+  const { echo = true } = opts;
+  logMessage("\n--- HOOK STARTED ---");
+
+  let existing = "";
+  try { existing = readFileSync(commitMsgFile, "utf8").trim(); } catch {}
+  if (existing && !existing.startsWith("#")) {
+    logMessage("User-provided commit message detected. Skipping AI generation.");
+    return 0;
+  }
+
+  if (echo) process.stdout.write(`[+] NeuroCommit v${NEURO_COMMIT_VERSION} started\n`);
+
+  const repoRoot = findRepoRoot();
+  if (repoRoot) {
+    const conflict = checkConflictingHooks(repoRoot);
+    if (conflict) {
+      logMessage(`Conflict: ${conflict}`);
+      writeErrorToCommit(commitMsgFile, `Conflict detected:\n${conflict}`);
+      return 0;
+    }
+  }
+
+  const { diff, allIgnored } = getStagedDiff();
+  if (!diff) {
+    if (allIgnored) {
+      writeErrorToCommit(commitMsgFile, "All staged files are ignored (listed in .commitignore)");
+    } else {
+      logMessage("Exit: No staged changes found.");
+    }
+    return 0;
+  }
+
+  let message = await generateCommitMessage(diff.slice(0, MAX_DIFF_LENGTH), cfg, { echo });
+  if (message === null) {
+    message = generateFallbackMessage(diff.slice(0, MAX_DIFF_LENGTH));
+    logMessage(`Fallback message generated (${message.length} chars)`);
+  }
+
+  let bumps = [];
+  let kind = "patch";
+  if (cfg.bumpVersion && !process.env.NEURO_COMMIT_SKIP_BUMP) {
+    kind = determineBumpKind(message);
+    bumps = bumpProjectVersion(kind, message, repoRoot);
+    if (bumps.length) {
+      for (const [f, o, n] of bumps) {
+        if (echo) process.stdout.write(`[+] Bumped ${f}: ${o} → ${n} (${kind})\n`);
+      }
+      // Race-free: stage the bumped manifests so they land in THIS commit.
+      // (Does not apply to partial commits, e.g. `git commit <path>`.)
+      for (const [rel] of bumps) git(["add", "--", join(repoRoot, rel)], repoRoot);
+    }
+  }
+
+  message = composeMessage(message, { bumps, kind, addCoauthor: cfg.addCoauthor });
+
+  const dir = dirname(commitMsgFile);
+  if (dir && !existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(commitMsgFile, message, "utf8");
+  logMessage("Message written to commit file.");
+  logMessage("--- HOOK FINISHED ---\n");
+  return 0;
+}
+
+// ── Script entrypoint (inert when imported, e.g. by tests) ──
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  const cfg = resolveConfig(loadUserConfig());
+  const arg = process.argv[2];
+  if (arg && arg.startsWith("--")) {
+    runSubcommand(process.argv.slice(2), cfg).then((code) => process.exit(code));
+  } else {
+    const commitMsgFile = arg || ".git/COMMIT_EDITMSG";
+    main(commitMsgFile, cfg)
+      .then((code) => process.exit(code ?? 0))
+      .catch((e) => { logMessage("FATAL: " + e.message); process.exit(0); });
+  }
 }
