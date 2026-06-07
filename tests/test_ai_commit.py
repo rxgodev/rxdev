@@ -173,5 +173,85 @@ class TestFallback(unittest.TestCase):
         self.assertIn("app.py", msg)
 
 
+class TestSecretScan(unittest.TestCase):
+    def test_detects_and_attributes(self):
+        diff = (
+            "diff --git a/cfg.py b/cfg.py\n"
+            '+AWS = "AKIAIOSFODNN7EXAMPLE"\n'
+            "+normal = 42\n"
+            "diff --git a/x.txt b/x.txt\n"
+            '+token = "ghp_0123456789012345678901234567890123AB"\n'
+        )
+        findings = aic.scan_diff_for_secrets(diff)
+        types = {f["type"] for f in findings}
+        files = {f["file"] for f in findings}
+        self.assertIn("AWS access key id", types)
+        self.assertIn("GitHub token", types)
+        self.assertEqual(files, {"cfg.py", "x.txt"})
+
+    def test_private_key_block(self):
+        diff = "diff --git a/k b/k\n+-----BEGIN RSA PRIVATE KEY-----\n"
+        self.assertTrue(any(f["type"] == "Private key block" for f in aic.scan_diff_for_secrets(diff)))
+
+    def test_clean_diff(self):
+        self.assertEqual(aic.scan_diff_for_secrets("diff --git a/a b/a\n+hello world\n"), [])
+
+    def test_masking_hides_full_secret(self):
+        findings = aic.scan_diff_for_secrets('diff --git a/a b/a\n+x = "AKIAIOSFODNN7EXAMPLE"\n')
+        self.assertNotIn("AKIAIOSFODNN7EXAMPLE", findings[0]["preview"])
+
+
+class TestExtractJson(unittest.TestCase):
+    def test_plain(self):
+        self.assertEqual(aic._extract_json('{"a": 1}'), {"a": 1})
+
+    def test_fenced(self):
+        self.assertEqual(aic._extract_json('```json\n{"a": 1}\n```'), {"a": 1})
+
+    def test_prose_wrapped(self):
+        self.assertEqual(aic._extract_json("Sure! Here:\n{\"a\": 1}\nDone"), {"a": 1})
+
+    def test_array(self):
+        self.assertEqual(aic._extract_json('[{"x": 1}, {"y": 2}]'), [{"x": 1}, {"y": 2}])
+
+    def test_garbage(self):
+        self.assertIsNone(aic._extract_json("not json at all"))
+
+
+class TestSemverMax(unittest.TestCase):
+    def test_max(self):
+        self.assertEqual(aic._semver_max("2.19.3", "2.0.0"), "2.19.3")
+        self.assertEqual(aic._semver_max("2.0.0", "2.19.3"), "2.19.3")
+        self.assertEqual(aic._semver_max(None, "1.0.0"), "1.0.0")
+        self.assertEqual(aic._semver_max("1.0.0", None), "1.0.0")
+        self.assertEqual(aic._semver_max("1.2.3", "1.2.3"), "1.2.3")
+
+
+class TestChangelog(unittest.TestCase):
+    COMMITS = [
+        {"hash": "aaa1111", "subject": "feat(api): add oauth", "body": ""},
+        {"hash": "bbb2222", "subject": "fix: handle timeout", "body": ""},
+        {"hash": "ccc3333", "subject": "feat!: drop legacy", "body": ""},
+        {"hash": "ddd4444", "subject": "chore: bump deps", "body": ""},
+    ]
+
+    def test_grouping_and_bump(self):
+        groups, breaking, bump = aic._group_commits(self.COMMITS)
+        self.assertEqual(bump, "major")          # feat! => breaking
+        self.assertEqual(len(groups["feat"]), 2)
+        self.assertIn("fix", groups)
+        self.assertNotIn("chore", groups)        # chore omitted from changelog
+        self.assertEqual(len(breaking), 1)
+
+    def test_render(self):
+        groups, breaking, _ = aic._group_commits(self.COMMITS)
+        md = aic._render_changelog("3.0.0", groups, breaking, "2026-01-01")
+        self.assertIn("## [3.0.0] - 2026-01-01", md)
+        self.assertIn("### ⚠ BREAKING CHANGES", md)
+        self.assertIn("### Features", md)
+        self.assertIn("**api:** add oauth", md)
+        self.assertIn("### Bug Fixes", md)
+
+
 if __name__ == "__main__":
     unittest.main()
