@@ -309,7 +309,14 @@ def get_staged_diff():
         return "", False
 
 
-def call_llm(messages):
+def call_llm(messages, echo=True, clean=True, temperature=0.0, max_tokens=None):
+    """Call the configured OpenAI-compatible provider.
+
+    echo:  stream tokens to stdout live (commit flow). Off for subcommands
+           whose stdout is captured/parsed by the CLI.
+    clean: run the commit-message cleaner on the result. Off for raw output
+           (PR bodies, JSON split plans).
+    """
     if PROVIDER_NEEDS_KEY and not API_KEY:
         raise Exception(
             f"API key for provider '{PROVIDER}' is not set. Run 'qq config' to set "
@@ -321,8 +328,10 @@ def call_llm(messages):
         "model": GROQ_MODEL,
         "messages": messages,
         "stream": True,
-        "temperature": 0.0,
+        "temperature": temperature,
     }
+    if max_tokens:
+        payload["max_tokens"] = max_tokens
     headers = {
         "Content-Type": "application/json",
         "User-Agent": f"neuro-commit/{NEURO_COMMIT_VERSION}",
@@ -354,12 +363,15 @@ def call_llm(messages):
                         if "content" in delta:
                             content = delta["content"]
                             response_text += content
-                            sys.stdout.buffer.write(content.encode("utf-8"))
-                            sys.stdout.buffer.flush()
+                            if echo:
+                                sys.stdout.buffer.write(content.encode("utf-8"))
+                                sys.stdout.buffer.flush()
                     except (json.JSONDecodeError, KeyError, IndexError):
                         pass
-            print(flush=True)
-            return _clean_llm_response(response_text.strip())
+            if echo:
+                print(flush=True)
+            text = response_text.strip()
+            return _clean_llm_response(text) if clean else text
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         if e.code == 429:
@@ -1216,6 +1228,327 @@ def check_conflicting_hooks(repo_root: str) -> str | None:
 
 
 # ============================================================
+#  CLI SUBCOMMANDS — scan / release / pr / split
+#  (invoked by the Node CLI; each prints a single JSON object/array)
+# ============================================================
+
+
+def _git(args, cwd=None):
+    try:
+        r = subprocess.run(
+            ["git", *args],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore",
+            cwd=cwd,
+        )
+        return r.stdout if r.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def _extract_json(text):
+    """Best-effort parse of a JSON object/array possibly wrapped in prose/fences."""
+    if not text:
+        return None
+    t = text.strip()
+    t = re.sub(r"^```(?:json)?\s*", "", t)
+    t = re.sub(r"\s*```$", "", t).strip()
+    try:
+        return json.loads(t)
+    except Exception:
+        pass
+    for opener, closer in (("[", "]"), ("{", "}")):
+        i, j = t.find(opener), t.rfind(closer)
+        if i != -1 and j > i:
+            try:
+                return json.loads(t[i:j + 1])
+            except Exception:
+                continue
+    return None
+
+
+def detect_default_branch():
+    ref = _git(["symbolic-ref", "refs/remotes/origin/HEAD"]).strip()
+    if ref:
+        return ref.rsplit("/", 1)[-1]
+    for b in ("main", "master"):
+        if _git(["rev-parse", "--verify", "--quiet", b]).strip():
+            return b
+    return "main"
+
+
+# --- secret scanning (deterministic; secrets must never be sent to an LLM) ---
+
+SECRET_PATTERNS = [
+    ("AWS access key id", re.compile(r"AKIA[0-9A-Z]{16}")),
+    ("AWS secret access key", re.compile(r"(?i)aws_secret_access_key\s*[=:]\s*['\"]?[A-Za-z0-9/+=]{40}")),
+    ("GitHub token", re.compile(r"gh[pousr]_[A-Za-z0-9]{36,}")),
+    ("GitHub fine-grained PAT", re.compile(r"github_pat_[A-Za-z0-9_]{60,}")),
+    ("Google API key", re.compile(r"AIza[0-9A-Za-z\-_]{35}")),
+    ("Slack token", re.compile(r"xox[baprs]-[0-9A-Za-z-]{10,}")),
+    ("Stripe secret key", re.compile(r"sk_live_[0-9A-Za-z]{24,}")),
+    ("Private key block", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----")),
+    ("JSON Web Token", re.compile(r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
+    ("Hardcoded secret assignment", re.compile(r"(?i)(api[_-]?key|secret|token|passwd|password)\s*[=:]\s*['\"][^'\"]{8,}['\"]")),
+]
+
+
+def scan_diff_for_secrets(diff_text: str):
+    findings = []
+    current_file = None
+    for line in diff_text.splitlines():
+        if line.startswith("diff --git"):
+            parts = line.split()
+            if parts:
+                current_file = parts[-1]
+                if current_file.startswith("b/"):
+                    current_file = current_file[2:]
+        elif line.startswith("+") and not line.startswith("+++"):
+            added = line[1:]
+            for name, pat in SECRET_PATTERNS:
+                m = pat.search(added)
+                if m:
+                    s = m.group(0)
+                    masked = (s[:4] + "…" + s[-4:]) if len(s) > 12 else "…"
+                    findings.append({"file": current_file, "type": name, "preview": masked})
+                    break
+    return findings
+
+
+def scan_staged_secrets():
+    return scan_diff_for_secrets(_git(["diff", "--cached", "--no-color", "--unified=0"]))
+
+
+# --- changelog / release ---
+
+SECTION_ORDER = [
+    ("feat", "Features"),
+    ("fix", "Bug Fixes"),
+    ("perf", "Performance"),
+    ("refactor", "Refactoring"),
+    ("docs", "Documentation"),
+    ("revert", "Reverts"),
+]
+SECTION_KEYS = {k for k, _ in SECTION_ORDER}
+
+
+def _collect_commits(rev_range: str):
+    out = _git(["log", rev_range, "--no-merges", "--pretty=format:%h%x1f%s%x1f%b%x1e"])
+    commits = []
+    for rec in out.split("\x1e"):
+        rec = rec.strip("\n")
+        if not rec.strip():
+            continue
+        fields = rec.split("\x1f")
+        if len(fields) < 2:
+            continue
+        commits.append({
+            "hash": fields[0].strip(),
+            "subject": fields[1].strip(),
+            "body": (fields[2] if len(fields) > 2 else "").strip(),
+        })
+    return commits
+
+
+def _group_commits(commits):
+    groups = {}
+    breaking = []
+    rank = {"patch": 1, "minor": 2, "major": 3}
+    bump = "patch"
+    for c in commits:
+        parsed = parse_commit(c["subject"])
+        full = c["subject"] + ("\n\n" + c["body"] if c["body"] else "")
+        kind = determine_bump_kind(full)
+        if rank[kind] > rank[bump]:
+            bump = kind
+        if parsed["breaking"] or parsed["footer_breaking"]:
+            breaking.append(f"{parsed['description'] or c['subject']} ({c['hash']})")
+        t = parsed["type"]
+        if t in SECTION_KEYS and parsed["description"]:
+            groups.setdefault(t, []).append({
+                "scope": parsed["scope"],
+                "desc": parsed["description"],
+                "hash": c["hash"],
+            })
+    return groups, breaking, bump
+
+
+def _render_changelog(version: str, groups, breaking, date_str: str) -> str:
+    lines = [f"## [{version}] - {date_str}", ""]
+    if breaking:
+        lines.append("### ⚠ BREAKING CHANGES")
+        lines.extend(f"- {b}" for b in breaking)
+        lines.append("")
+    for key, title in SECTION_ORDER:
+        items = groups.get(key)
+        if not items:
+            continue
+        lines.append(f"### {title}")
+        for it in items:
+            scope = f"**{it['scope']}:** " if it["scope"] else ""
+            lines.append(f"- {scope}{it['desc']} ({it['hash']})")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _semver_max(a, b):
+    if not a:
+        return b
+    if not b:
+        return a
+    pa, pb = parse_semver(a), parse_semver(b)
+    if not pa:
+        return b
+    if not pb:
+        return a
+    ta = (pa["major"], pa["minor"], pa["patch"])
+    tb = (pb["major"], pb["minor"], pb["patch"])
+    return a if ta >= tb else b
+
+
+def build_release_info():
+    import datetime
+
+    repo_root = find_repo_root() or Path.cwd()
+    last_tag = _git(["describe", "--tags", "--abbrev=0"]).strip()
+    rev_range = f"{last_tag}..HEAD" if last_tag else "HEAD"
+    commits = _collect_commits(rev_range)
+    groups, breaking, bump = _group_commits(commits)
+
+    # Base the next version on the highest known version (tag or manifest), so a
+    # repo that tags less often than it bumps its manifest never regresses.
+    current = get_latest_tag_version(repo_root)
+    for path, mdef in discover_manifests(repo_root):
+        try:
+            v = mdef.get_version(path.read_text(encoding="utf-8"))
+        except Exception:
+            v = None
+        if v:
+            current = _semver_max(current, v)
+    current = current or "0.0.0"
+    nextv = bump_semver(current, bump) or current
+    changelog = _render_changelog(nextv, groups, breaking, datetime.date.today().isoformat())
+    return {
+        "from": last_tag or None,
+        "current": current,
+        "next": nextv,
+        "bump": bump,
+        "count": len(commits),
+        "breaking": breaking,
+        "changelog": changelog,
+        "has_tags": bool(last_tag),
+    }
+
+
+# --- pull-request description (LLM) ---
+
+def build_pr_info(base=None):
+    base = base or detect_default_branch()
+    branch = _git(["rev-parse", "--abbrev-ref", "HEAD"]).strip()
+    rev_range = f"{base}..HEAD"
+    commits = _collect_commits(rev_range)
+    if not commits:
+        return {"error": f"No commits on '{branch}' ahead of '{base}'.", "base": base, "branch": branch}
+
+    diffstat = _git(["diff", "--stat", rev_range])[:2000]
+    commit_text = "\n".join(
+        f"- {c['subject']}" + (f"\n  {c['body']}" if c["body"] else "") for c in commits
+    )
+    system = (
+        "You write concise GitHub pull request descriptions. Output ONLY a JSON object with "
+        'keys "title" and "body". title: one concise line (<72 chars), conventional style, no '
+        "trailing period. body: GitHub-flavored markdown with a one-paragraph '## Summary', a "
+        "'## Changes' bullet list, and an optional '## Notes'. Do not wrap the JSON in code fences."
+    )
+    user = f"Base branch: {base}\nHead branch: {branch}\n\nCommits:\n{commit_text}\n\nDiff stat:\n{diffstat}"
+    raw = call_llm(
+        [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        echo=False, clean=False, temperature=0.3, max_tokens=900,
+    )
+    data = _extract_json(raw)
+    if not isinstance(data, dict) or "title" not in data or "body" not in data:
+        data = {"title": commits[0]["subject"], "body": "## Changes\n" + commit_text}
+    data.update({"base": base, "branch": branch, "count": len(commits)})
+    return data
+
+
+# --- commit splitting (LLM proposes groups; the CLI executes) ---
+
+def build_split_plan():
+    staged = [f for f in _git(["diff", "--cached", "--name-only"]).split("\n") if f.strip()]
+    if not staged:
+        return {"error": "No staged changes. Stage files first with 'git add'.", "groups": [], "staged": []}
+
+    parts = []
+    for f in staged:
+        d = _git(["diff", "--cached", "--unified=0", "--", f])
+        parts.append(f"### {f}\n{d[:700]}")
+    system = (
+        "You split a set of staged changes into a minimal set of logical, independently-"
+        "reviewable git commits using Conventional Commits. Output ONLY a JSON array; each item "
+        'is {"message": "type(scope): subject", "files": ["path", ...], "reason": "short why"}. '
+        "Every input file must appear in exactly one group. If the changes are cohesive, return a "
+        "single group. Use lowercase imperative subjects with no trailing period."
+    )
+    user = ("Staged files and their diffs:\n\n" + "\n\n".join(parts))[:6000]
+    raw = call_llm(
+        [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        echo=False, clean=False, temperature=0.1, max_tokens=900,
+    )
+    data = _extract_json(raw)
+    groups = data if isinstance(data, list) else (data.get("groups") if isinstance(data, dict) else None)
+    if not isinstance(groups, list) or not groups:
+        return {"error": "Could not parse a split plan from the model.", "groups": [], "staged": staged}
+
+    assigned = []
+    clean_groups = []
+    for g in groups:
+        if not isinstance(g, dict):
+            continue
+        files = [f for f in (g.get("files") or []) if f in staged and f not in assigned]
+        if not files:
+            continue
+        assigned.extend(files)
+        clean_groups.append({
+            "message": str(g.get("message", "chore: update")).strip(),
+            "files": files,
+            "reason": str(g.get("reason", "")).strip(),
+        })
+    unassigned = [f for f in staged if f not in assigned]
+    return {"groups": clean_groups, "staged": staged, "unassigned": unassigned}
+
+
+def run_subcommand(argv):
+    mode = argv[0]
+    opts = argv[1:]
+
+    def opt(name, default=None):
+        if name in opts:
+            i = opts.index(name)
+            return opts[i + 1] if i + 1 < len(opts) else default
+        return default
+
+    try:
+        if mode == "--scan":
+            findings = scan_staged_secrets()
+            print(json.dumps({"findings": findings, "count": len(findings)}))
+            return 2 if findings else 0
+        if mode == "--release":
+            print(json.dumps(build_release_info()))
+            return 0
+        if mode == "--pr":
+            print(json.dumps(build_pr_info(opt("--base"))))
+            return 0
+        if mode == "--split":
+            print(json.dumps(build_split_plan()))
+            return 0
+        print(json.dumps({"error": f"unknown mode: {mode}"}))
+        return 1
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
+        return 1
+
+
+# ============================================================
 #  MAIN
 # ============================================================
 
@@ -1313,6 +1646,10 @@ def main():
 
 
 if __name__ == "__main__":
+    # `--<mode>` routes to a CLI subcommand (scan/release/pr/split); anything else
+    # is the commit-message file path passed by the prepare-commit-msg hook.
+    if len(sys.argv) > 1 and sys.argv[1].startswith("--"):
+        sys.exit(run_subcommand(sys.argv[1:]))
     # Note: the log is size-capped + rotated in log_message() instead of being
     # wiped each run, so a crash from a previous run stays available to inspect.
     main()

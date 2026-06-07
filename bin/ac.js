@@ -1396,6 +1396,15 @@ async function quickFlow() {
     console.log(`${green}✅ ${filesToStage.length} file(s) staged${reset}\n`);
   }
 
+  // ── Secret scan before committing ──
+  const secrets = scanSecrets();
+  if (secrets.length > 0) {
+    console.log(`${yellow}🚨 ${secrets.length} potential secret(s) in staged changes:${reset}`);
+    for (const f of secrets) console.log(`   • ${f.type} — ${f.file} (${f.preview})`);
+    const carryOn = await askYesNo("Commit anyway?");
+    if (!carryOn) { console.log(`\n${bold}↩️  Aborted — unstage the secrets and retry.${reset}`); return; }
+  }
+
   // ================================================================
   //  STEP 2 — Generate
   // ================================================================
@@ -1586,6 +1595,200 @@ async function quickFlow() {
   console.log(`${green}✅ Pushed successfully${reset}\n`);
 }
 
+// === SCAN / RELEASE / PR / SPLIT (delegate heavy logic to the Python hook) ===
+
+function runPyMode(modeArgs) {
+  const py = checkPython();
+  const script = join(SOURCE_GITHOOKS_DIR, "ai_commit.py");
+  const res = spawnSync(py, [script, ...modeArgs], {
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  let data = null;
+  try {
+    data = JSON.parse((res.stdout || "").trim());
+  } catch {}
+  return { res, data };
+}
+
+function scanSecrets() {
+  const { data } = runPyMode(["--scan"]);
+  return data && Array.isArray(data.findings) ? data.findings : [];
+}
+
+function scanCommand() {
+  const findings = scanSecrets();
+  if (!findings.length) {
+    console.log("\n✅ No secrets detected in staged changes.\n");
+    return;
+  }
+  console.log(`\n🚨 ${findings.length} potential secret(s) in staged changes:\n`);
+  for (const f of findings) {
+    console.log(`  • ${f.type} — ${f.file}  (${f.preview})`);
+  }
+  console.log("\n   Unstage or remove these before committing.");
+  console.log("   Already committed? Use 'qq filter' to purge from history.\n");
+}
+
+async function releaseCommand() {
+  const { data } = runPyMode(["--release"]);
+  if (!data || data.error) {
+    console.error(`\n❌ ${data?.error || "Could not compute release."}`);
+    process.exit(1);
+  }
+  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout.trim();
+
+  console.log(`\n🏷️  Release\n`);
+  console.log(`   Since:   ${data.from || "(no tags — summarizing all history)"}`);
+  console.log(`   Current: ${data.current}`);
+  console.log(`   Bump:    ${data.bump}  →  ${data.next}`);
+  console.log(`   Commits: ${data.count}\n`);
+  console.log("──────── CHANGELOG entry ────────\n");
+  console.log(data.changelog);
+  console.log("─────────────────────────────────\n");
+
+  if (data.count === 0) {
+    console.log("Nothing to release since the last tag.\n");
+    return;
+  }
+
+  const proceed = await askYesNo(`Write CHANGELOG.md and create tag v${data.next}?`);
+  if (!proceed) {
+    console.log("↩️  Cancelled.\n");
+    return;
+  }
+
+  const clPath = join(gitRoot, "CHANGELOG.md");
+  const titleBlock = "# Changelog\n\nAll notable changes to this project are documented here.\n";
+  const entry = data.changelog.trim() + "\n";
+  let out;
+  if (existsSync(clPath)) {
+    const existing = readFileSync(clPath, "utf8");
+    const idx = existing.indexOf("\n## ");
+    if (idx !== -1) {
+      out = existing.slice(0, idx + 1) + "\n" + entry + "\n" + existing.slice(idx + 1);
+    } else {
+      out = existing.trimEnd() + "\n\n" + entry;
+    }
+  } else {
+    out = titleBlock + "\n" + entry;
+  }
+  writeFileSync(clPath, out);
+  console.log("✅ CHANGELOG.md updated");
+
+  spawnSync("git", ["add", "--", clPath], { stdio: "pipe" });
+  const tag = `v${data.next}`;
+  const commitRes = spawnSync("git", ["commit", "-m", `chore(release): ${tag}`], {
+    stdio: "inherit",
+    env: { ...process.env, NEURO_COMMIT_SKIP_BUMP: "1", GIT_EDITOR: "true" },
+  });
+  if (commitRes.status !== 0) {
+    console.error("❌ Release commit failed (nothing staged?).");
+    process.exit(1);
+  }
+  const tagRes = spawnSync("git", ["tag", "-a", tag, "-m", tag], { stdio: "inherit" });
+  if (tagRes.status !== 0) {
+    console.error(`❌ Failed to create tag ${tag} (already exists?).`);
+    process.exit(1);
+  }
+  console.log(`✅ Committed and tagged ${tag}`);
+
+  const doPush = await askYesNo("Push commit and tag to origin?");
+  if (doPush) {
+    const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).stdout.trim();
+    spawnSync("git", ["push", "origin", branch], { stdio: "inherit" });
+    spawnSync("git", ["push", "origin", tag], { stdio: "inherit" });
+    console.log("✅ Pushed.\n");
+  } else {
+    console.log(`\nℹ️  When ready: git push && git push origin ${tag}\n`);
+  }
+}
+
+async function prCommand() {
+  const baseIdx = args.indexOf("--base");
+  const base = baseIdx !== -1 ? args[baseIdx + 1] : null;
+  console.log("\n💬 Generating pull request description...\n");
+  const { data } = runPyMode(base ? ["--pr", "--base", base] : ["--pr"]);
+  if (!data || data.error) {
+    console.error(`\n❌ ${data?.error || "PR generation failed."}`);
+    process.exit(1);
+  }
+  console.log(`📌 Title: ${data.title}\n`);
+  console.log(data.body);
+  console.log("");
+
+  const hasGh = spawnSync("gh", ["--version"], { stdio: "pipe" }).status === 0;
+  if (hasGh) {
+    const create = await askYesNo(`Create the PR with gh (base: ${data.base})?`);
+    if (create) {
+      const tmp = join(tmpdir(), `neuro-commit-pr-${process.pid}.md`);
+      writeFileSync(tmp, data.body);
+      const r = spawnSync("gh", ["pr", "create", "--base", data.base, "--title", data.title, "--body-file", tmp], { stdio: "inherit" });
+      try { unlinkSync(tmp); } catch {}
+      if (r.status !== 0) console.error("❌ gh pr create failed.");
+    }
+  } else {
+    console.log("ℹ️  Install GitHub CLI (gh) to open the PR directly from here.\n");
+  }
+}
+
+async function splitCommand() {
+  console.log("\n✂️  Analyzing staged changes...\n");
+  const { data } = runPyMode(["--split"]);
+  if (!data || data.error) {
+    console.error(`\n❌ ${data?.error || "Split failed."}`);
+    process.exit(1);
+  }
+  const groups = data.groups || [];
+  if (!groups.length) {
+    console.log("ℹ️  No split plan was produced.\n");
+    return;
+  }
+
+  console.log(`Proposed ${groups.length} commit(s):\n`);
+  groups.forEach((g, i) => {
+    console.log(`  ${i + 1}. ${g.message}`);
+    if (g.reason) console.log(`      ↳ ${g.reason}`);
+    g.files.forEach((f) => console.log(`        - ${f}`));
+    console.log("");
+  });
+  if (data.unassigned?.length) {
+    console.log(`⚠️  Left staged (unassigned): ${data.unassigned.join(", ")}\n`);
+  }
+
+  const apply = await askYesNo("Apply this split? (creates the commits above)");
+  if (!apply) {
+    console.log("↩️  Staging left unchanged.\n");
+    return;
+  }
+
+  const staged = data.staged || [];
+  const reStageAll = () => spawnSync("git", ["add", "--", ...staged], { stdio: "pipe" });
+  for (const g of groups) {
+    spawnSync("git", ["reset", "-q", "--", ...staged], { stdio: "pipe" });
+    const addRes = spawnSync("git", ["add", "--", ...g.files], { stdio: "pipe" });
+    if (addRes.status !== 0) {
+      console.error("❌ Failed to stage a group — aborting and restoring staging.");
+      reStageAll();
+      process.exit(1);
+    }
+    const c = spawnSync("git", ["commit", "-m", g.message], {
+      stdio: "inherit",
+      env: { ...process.env, NEURO_COMMIT_SKIP_BUMP: "1", GIT_EDITOR: "true" },
+    });
+    if (c.status !== 0) {
+      console.error("❌ A commit failed — aborting and restoring staging.");
+      reStageAll();
+      process.exit(1);
+    }
+    console.log(`✅ ${g.message}`);
+  }
+  if (data.unassigned?.length) {
+    spawnSync("git", ["add", "--", ...data.unassigned], { stdio: "pipe" });
+  }
+  console.log(`\n✅ Created ${groups.length} commit(s).\n`);
+}
+
 function showHelp() {
   console.log(`${boldCyan}NeuroCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
@@ -1596,6 +1799,10 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}init${resetColor}          Install AI commit hook
   ${boldCyan}config${resetColor}        Configure model, language, key, prompt, types, co-author & more
   ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
+  ${boldCyan}split${resetColor}         Split staged changes into multiple logical commits
+  ${boldCyan}scan${resetColor}          Scan staged changes for secrets/credentials
+  ${boldCyan}pr${resetColor}            Generate a pull request title + description
+  ${boldCyan}release${resetColor}       Generate CHANGELOG entry, bump version & tag
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
   ${boldCyan}doctor${resetColor}        Diagnose setup (Python, deps, hooks, provider, key)
@@ -1655,6 +1862,18 @@ async function mainCmd() {
       break;
     case "go":
       await quickFlow();
+      break;
+    case "split":
+      await splitCommand();
+      break;
+    case "scan":
+      scanCommand();
+      break;
+    case "pr":
+      await prCommand();
+      break;
+    case "release":
+      await releaseCommand();
       break;
     case "update":
       console.log("Updating NeuroCommit...\n");

@@ -142,7 +142,11 @@ That's it. `qq go` guides you through every step:
 
 | Command          | Description |
 |------------------|-------------|
-| `qq go`          | **QuickFlow** — stage → generate → review → push (recommended) |
+| `qq go`          | **QuickFlow** — stage → scan for secrets → generate → review → push (recommended) |
+| `qq split`       | Split staged changes into multiple logical, Conventional-Commit-shaped commits |
+| `qq scan`        | Scan staged changes for leaked secrets/credentials (deterministic, no LLM) |
+| `qq pr`          | Generate a pull request title + description from the branch's commits |
+| `qq release`     | Build a CHANGELOG entry from commits since the last tag, then commit & tag |
 | `qq init`        | Install the AI commit hook in the current repository |
 | `qq config`      | Configure API key, model, language, co-author, auto-bump, projects, and templates |
 | `qq status`      | Show integration status for the current repository |
