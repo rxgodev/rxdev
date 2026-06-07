@@ -7,7 +7,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Version](https://img.shields.io/badge/version-2.18.1-8250df)](https://github.com/rxgodev/neuro-commit/releases)
 [![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
-[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
 [![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
@@ -180,12 +180,12 @@ qq config
 
 | 文档 | 描述 |
 |------|------|
-| [架构](./architecture.md) | Node.js CLI + Python 钩子架构概览 |
-| [自动递增](./auto-bump.md) | 15+ 种清单格式的智能版本递增 |
-| [模板和项目](./templates.md) | 多仓库管理和共享钩子模板 |
+| [架构](../architecture.md) | Node.js CLI + Python 钩子架构概览 |
+| [自动递增](../auto-bump.md) | 15+ 种清单格式的智能版本递增 |
+| [模板和项目](../templates.md) | 多仓库管理和共享钩子模板 |
 
 ---
 
 ## 许可证
 
-**MIT** — 详见 [LICENSE](./LICENSE)。
+**MIT** — 详见 [LICENSE](../../LICENSE)。
