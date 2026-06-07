@@ -8,10 +8,20 @@
 // each managed repo's .githooks/, so it may only use Node built-ins. The single
 // Python dependency (pathspec) is replaced by an inline matcher in a later slice.
 //
-// Slice 1 (done): the pure logic layer — semver, conventional-commit parsing,
+// Slice 1: the pure logic layer — semver, conventional-commit parsing,
 // validation, response cleaning, manifest version handlers, changelog grouping,
 // secret scanning, JSON extraction, the fallback generator, provider registry,
-// and system-prompt building. Mirrors tests/test_ai_commit.py 1:1.
+// and system-prompt building.
+// Slice 2: config/provider resolution, a zero-dependency .commitignore matcher
+// (replacing pathspec), staged-diff extraction, and rotating logs.
+
+import {
+  readFileSync, existsSync, mkdirSync, appendFileSync, renameSync, statSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import { join, dirname } from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 export const NEURO_COMMIT_VERSION = "2.19.3";
 
@@ -573,4 +583,252 @@ export function generateFallbackMessage(diff) {
   }
 
   return `${subject}\n\n${bodyParts.join("\n")}`;
+}
+
+// ============================================================
+//  .commitignore MATCHER (zero-dependency replacement for pathspec)
+//  Implements the gitignore subset relevant to .commitignore:
+//  negation (!), dir-only (trailing /), anchoring (leading or internal /),
+//  *, ?, **, and [...] character classes. Last matching pattern wins.
+// ============================================================
+
+function globToRegexBody(glob) {
+  let re = "";
+  const n = glob.length;
+  let i = 0;
+  while (i < n) {
+    const c = glob[i];
+    if (c === "*") {
+      if (glob[i + 1] === "*") {
+        let j = i;
+        while (glob[j] === "*") j++;
+        const prevChar = i > 0 ? glob[i - 1] : "";
+        const nextChar = j < n ? glob[j] : "";
+        const atStart = i === 0;
+        const atEnd = j >= n;
+        if ((atStart || prevChar === "/") && nextChar === "/") {
+          re += "(?:.*/)?"; // "**/" → zero or more path segments
+          i = j + 1; // also consume the following "/"
+          continue;
+        }
+        if (prevChar === "/" && atEnd) {
+          re += ".*"; // "/**" at end → everything below
+          i = j;
+          continue;
+        }
+        re += ".*"; // bare ** not bounded by slashes
+        i = j;
+        continue;
+      }
+      re += "[^/]*";
+      i++;
+      continue;
+    }
+    if (c === "?") {
+      re += "[^/]";
+      i++;
+      continue;
+    }
+    if (c === "[") {
+      let cls = "[";
+      i++;
+      if (glob[i] === "!") { cls += "^"; i++; }
+      if (glob[i] === "]") { cls += "\\]"; i++; }
+      while (i < n && glob[i] !== "]") {
+        if (glob[i] === "\\") { cls += "\\" + (glob[i + 1] ?? ""); i += 2; }
+        else { cls += glob[i]; i++; }
+      }
+      cls += "]";
+      i++; // skip closing ]
+      re += cls;
+      continue;
+    }
+    re += c.replace(/[.*+?^${}()|[\]\\]/, "\\$&");
+    i++;
+  }
+  return re;
+}
+
+function compilePattern(raw) {
+  let pattern = raw;
+  let negate = false;
+  if (pattern.startsWith("!")) { negate = true; pattern = pattern.slice(1); }
+  let dirOnly = false;
+  if (pattern.endsWith("/")) { dirOnly = true; pattern = pattern.slice(0, -1); }
+  let anchored = false;
+  if (pattern.startsWith("/")) { anchored = true; pattern = pattern.slice(1); }
+  if (pattern.includes("/")) anchored = true;
+
+  const body = globToRegexBody(pattern);
+  const prefix = anchored ? "^" : "(?:^|.*/)";
+  const suffix = dirOnly ? "/.*$" : "(?:/.*)?$";
+  return { re: new RegExp(prefix + body + suffix), negate };
+}
+
+export class CommitignoreMatcher {
+  constructor(patterns) {
+    this.compiled = [];
+    for (const p of patterns) {
+      const t = p.trim();
+      if (!t || t.startsWith("#")) continue;
+      try {
+        this.compiled.push(compilePattern(t));
+      } catch {
+        // ignore unparseable pattern rather than break the commit flow
+      }
+    }
+  }
+
+  ignores(path) {
+    let ignored = false;
+    for (const { re, negate } of this.compiled) {
+      if (re.test(path)) ignored = !negate;
+    }
+    return ignored;
+  }
+}
+
+export function readCommitignore(text) {
+  const out = [];
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim();
+    if (t && !t.startsWith("#")) out.push(t);
+  }
+  return out;
+}
+
+// ============================================================
+//  CONFIG / PROVIDER RESOLUTION
+// ============================================================
+
+export function resolveConfig(userConfig = {}, env = process.env) {
+  const provider = String(userConfig.provider || DEFAULT_PROVIDER).toLowerCase();
+  const providerDef = PROVIDERS[provider] || {
+    url: PROVIDERS[DEFAULT_PROVIDER].url,
+    env: "NEURO_COMMIT_API_KEY",
+    defaultModel: DEFAULT_GROQ_MODEL,
+    needsKey: false, // custom/unknown provider: don't block, let the endpoint decide
+  };
+  const apiKey =
+    userConfig.apiKey ||
+    env[providerDef.env] ||
+    env.NEURO_COMMIT_API_KEY ||
+    "";
+  const customTypes = Array.isArray(userConfig.customTypes) ? userConfig.customTypes : [];
+  const allTypes = [...new Set([...DEFAULT_VALID_TYPES, ...customTypes])];
+  const typesStr = [...allTypes].sort().join(", ");
+  const language = userConfig.language || "ru";
+  const customPrompt = userConfig.prompt || "";
+
+  return {
+    provider,
+    apiUrl: userConfig.apiUrl || providerDef.url,
+    apiKey,
+    needsKey: providerDef.needsKey,
+    providerEnv: providerDef.env,
+    model: userConfig.model || providerDef.defaultModel,
+    addCoauthor: userConfig.coauthor !== undefined ? userConfig.coauthor : true,
+    bumpVersion: userConfig.bumpVersion || false,
+    customTypes,
+    validTypes: allTypes,
+    language,
+    systemPrompt: buildSystemPrompt(typesStr, language, customPrompt),
+  };
+}
+
+// ============================================================
+//  IO — config file, logging, git, staged diff
+//  (No side effects at import time, unlike the Python module.)
+// ============================================================
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CONFIG_DIR = join(homedir(), ".config", "ai-commit");
+const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+const LOG_FILE = join(__dirname, "..", "ai_commit_debug.log");
+const MAX_LOG_BYTES = 512 * 1024;
+
+export function loadUserConfig() {
+  if (existsSync(CONFIG_FILE)) {
+    try {
+      return JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
+    } catch (e) {
+      process.stderr.write(`Failed to load config: ${e.message}\n`);
+    }
+  }
+  return { coauthor: true, bumpVersion: false };
+}
+
+export function logMessage(message) {
+  try {
+    if (existsSync(LOG_FILE) && statSync(LOG_FILE).size > MAX_LOG_BYTES) {
+      try { renameSync(LOG_FILE, LOG_FILE + ".1"); } catch {}
+    }
+    appendFileSync(LOG_FILE, message + "\n", "utf8");
+  } catch {
+    // logging must never break the commit flow
+  }
+}
+
+export function git(args, cwd) {
+  try {
+    const r = spawnSync("git", args, { encoding: "utf8", cwd, maxBuffer: 64 * 1024 * 1024 });
+    return r.status === 0 ? (r.stdout || "") : "";
+  } catch {
+    return "";
+  }
+}
+
+export function findRepoRoot() {
+  const out = git(["rev-parse", "--show-toplevel"]).trim();
+  return out || null;
+}
+
+export function filterDiffLines(rawDiff, matcher) {
+  const filtered = [];
+  let currentFile = null;
+  for (const line of rawDiff.split(/\r?\n/)) {
+    if (line.startsWith("diff --git")) {
+      const parts = line.split(/\s+/);
+      if (parts.length >= 3) {
+        currentFile = parts[parts.length - 1];
+        if (currentFile.startsWith("b/")) currentFile = currentFile.slice(2);
+        if (matcher.ignores(currentFile)) { currentFile = null; continue; }
+        filtered.push("\n# File: " + currentFile);
+      }
+    } else if (
+      currentFile &&
+      (line.startsWith("+") || line.startsWith("-")) &&
+      !line.startsWith("+++") &&
+      !line.startsWith("---")
+    ) {
+      if (line.length > 1) filtered.push(line);
+    }
+  }
+  return filtered.join("\n").trim();
+}
+
+export function getStagedDiff() {
+  const nameOnly = git(["diff", "--cached", "--name-only"]);
+  const stagedFiles = nameOnly.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (!stagedFiles.length) return { diff: "", allIgnored: false };
+
+  let patterns = [];
+  if (existsSync(".commitignore")) {
+    try { patterns = readCommitignore(readFileSync(".commitignore", "utf8")); } catch {}
+  }
+  const matcher = new CommitignoreMatcher(patterns);
+
+  const relevant = stagedFiles.filter((f) => !matcher.ignores(f));
+  logMessage(`Staged files: ${JSON.stringify(stagedFiles)}`);
+  logMessage(`Relevant files: ${JSON.stringify(relevant)}`);
+  if (!relevant.length) return { diff: "", allIgnored: true };
+
+  const raw = git(["diff", "--cached", "--no-color", "--unified=0", ...relevant]);
+  let diffText = filterDiffLines(raw, matcher);
+
+  if (!diffText && relevant.length) {
+    const fileList = relevant.map((f) => `  - ${f}`).join("\n");
+    diffText = `Files changed (binary or no text diff):\n${fileList}`;
+  }
+  return { diff: diffText, allIgnored: false };
 }

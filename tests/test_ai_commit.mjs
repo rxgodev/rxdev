@@ -227,3 +227,87 @@ test("buildSystemPrompt", () => {
   assert.ok(p.includes("Valid types: feat, fix"));
   assert.equal(aic.buildSystemPrompt("feat, fix", "en", "use {types}"), "use feat, fix");
 });
+
+// ── slice 2 ──
+
+test("readCommitignore: strips comments and blanks", () => {
+  const text = "# comment\n\n.githooks/\n  ai_commit.py  \n# another\n.env\n";
+  assert.deepEqual(aic.readCommitignore(text), [".githooks/", "ai_commit.py", ".env"]);
+});
+
+test("CommitignoreMatcher: bare name, dir, glob, anchor, negation", () => {
+  const m = new aic.CommitignoreMatcher([
+    ".githooks/", "ai_commit.py", ".env", "*.log", "/root.txt", "!keep.log",
+  ]);
+  assert.equal(m.ignores(".githooks/ai_commit.py"), true);
+  assert.equal(m.ignores("src/ai_commit.py"), true);   // bare name at any depth
+  assert.equal(m.ignores(".env"), true);
+  assert.equal(m.ignores("a/b.log"), true);            // *.log anywhere
+  assert.equal(m.ignores("keep.log"), false);          // negated after *.log
+  assert.equal(m.ignores("root.txt"), true);           // anchored at root
+  assert.equal(m.ignores("sub/root.txt"), false);      // anchored: not nested
+  assert.equal(m.ignores("src/app.js"), false);
+});
+
+test("CommitignoreMatcher: ** double-star", () => {
+  const m = new aic.CommitignoreMatcher(["**/node_modules/", "build/**"]);
+  assert.equal(m.ignores("a/b/node_modules/x.js"), true);
+  assert.equal(m.ignores("node_modules/x.js"), true);
+  assert.equal(m.ignores("build/out/app.js"), true);
+  assert.equal(m.ignores("src/app.js"), false);
+});
+
+test("resolveConfig: defaults (groq)", () => {
+  const c = aic.resolveConfig({}, {});
+  assert.equal(c.provider, "groq");
+  assert.ok(c.apiUrl.includes("groq.com"));
+  assert.equal(c.needsKey, true);
+  assert.equal(c.model, "llama-3.1-8b-instant");
+  assert.equal(c.addCoauthor, true);
+  assert.equal(c.bumpVersion, false);
+  assert.equal(c.language, "ru");
+  assert.equal(c.apiKey, "");
+});
+
+test("resolveConfig: ollama needs no key", () => {
+  const c = aic.resolveConfig({ provider: "ollama" }, {});
+  assert.equal(c.needsKey, false);
+  assert.ok(c.apiUrl.includes("11434"));
+  assert.equal(c.model, "llama3.1");
+});
+
+test("resolveConfig: key from env, then config wins", () => {
+  assert.equal(aic.resolveConfig({ provider: "openai" }, { OPENAI_API_KEY: "sk-env" }).apiKey, "sk-env");
+  assert.equal(aic.resolveConfig({ provider: "openai", apiKey: "sk-cfg" }, { OPENAI_API_KEY: "sk-env" }).apiKey, "sk-cfg");
+});
+
+test("resolveConfig: custom provider + apiUrl, custom types", () => {
+  const c = aic.resolveConfig({ provider: "custom", apiUrl: "http://x/v1/chat/completions", customTypes: ["hotfix"] }, {});
+  assert.equal(c.apiUrl, "http://x/v1/chat/completions");
+  assert.equal(c.needsKey, false);
+  assert.ok(c.validTypes.includes("hotfix"));
+  assert.ok(c.systemPrompt.includes("hotfix"));
+});
+
+test("filterDiffLines: keeps +/- under # File, drops ignored files", () => {
+  const raw = [
+    "diff --git a/src/app.js b/src/app.js",
+    "index abc..def 100644",
+    "--- a/src/app.js",
+    "+++ b/src/app.js",
+    "@@ -1 +1 @@",
+    "-old line",
+    "+new line",
+    "diff --git a/secret.env b/secret.env",
+    "--- a/secret.env",
+    "+++ b/secret.env",
+    "+API_TOKEN=leak",
+  ].join("\n");
+  const m = new aic.CommitignoreMatcher(["*.env"]);
+  const out = aic.filterDiffLines(raw, m);
+  assert.ok(out.includes("# File: src/app.js"));
+  assert.ok(out.includes("-old line"));
+  assert.ok(out.includes("+new line"));
+  assert.ok(!out.includes("secret.env"));
+  assert.ok(!out.includes("API_TOKEN"));
+});
