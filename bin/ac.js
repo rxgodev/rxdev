@@ -321,7 +321,7 @@ async function askYesNo(question) {
 async function promptSelect(options, message) {
   const inquirer = await import("inquirer");
   const { choice } = await inquirer.default.prompt([
-    { type: "list", name: "choice", message, choices: options, pageSize: 20 },
+    { type: "list", name: "choice", message, choices: options, pageSize: 20, loop: false },
   ]);
   return choice;
 }
@@ -619,31 +619,57 @@ function listProjects() {
 // === FILE TREE HELPERS ===
 
 function buildFileTree(files, prefix = "  ") {
-  const tree = {};
+  const choices = [];
+
+  function addDir(dirPath, subFiles, indent) {
+    const subdirs = {};
+    const localFiles = [];
+
+    for (const f of subFiles) {
+      const idx = f.indexOf("/");
+      if (idx === -1) {
+        localFiles.push(f);
+      } else {
+        const sub = f.slice(0, idx);
+        if (!subdirs[sub]) subdirs[sub] = [];
+        subdirs[sub].push(f.slice(idx + 1));
+      }
+    }
+
+    for (const name of Object.keys(subdirs).sort()) {
+      const fullPath = dirPath + "/" + name;
+      choices.push({ name: `${indent}📁 ${name}/`, value: `__dir__${fullPath}` });
+      addDir(fullPath, subdirs[name], indent + prefix);
+    }
+
+    for (const f of localFiles.sort()) {
+      choices.push({ name: `${indent}${f}`, value: dirPath + "/" + f });
+    }
+  }
+
+  const topdirs = {};
   const rootFiles = [];
 
   for (const f of files) {
-    const parts = f.split("/");
-    if (parts.length === 1) {
+    const idx = f.indexOf("/");
+    if (idx === -1) {
       rootFiles.push(f);
     } else {
-      const dir = parts[0];
-      if (!tree[dir]) tree[dir] = [];
-      tree[dir].push(f);
+      const dir = f.slice(0, idx);
+      if (!topdirs[dir]) topdirs[dir] = [];
+      topdirs[dir].push(f.slice(idx + 1));
     }
   }
 
-  const choices = [];
-  const seenDirs = Object.keys(tree).sort();
-  for (const dir of seenDirs) {
+  for (const dir of Object.keys(topdirs).sort()) {
     choices.push({ name: `📁 ${dir}/`, value: `__dir__${dir}` });
-    for (const f of tree[dir].sort()) {
-      choices.push({ name: `${prefix}${f.slice(dir.length + 1)}`, value: f });
-    }
+    addDir(dir, topdirs[dir], prefix);
   }
+
   for (const f of rootFiles.sort()) {
     choices.push({ name: f, value: f });
   }
+
   return choices;
 }
 
@@ -662,6 +688,146 @@ function expandDirSelections(selected, allFiles) {
 
 function addBackChoice(choices) {
   return [...choices, { name: "⬅️  Back", value: "__back__" }];
+}
+
+async function showFileTreePicker(allFiles, alreadyStaged, message, keepDirValues = false, allLabel) {
+  const headerItems = allLabel ? [
+    { value: "__all__", label: allLabel, isDir: false },
+    { value: "__sep__", label: "─".repeat(30), isDir: false },
+  ] : [];
+
+  const tree = buildFileTree(allFiles);
+  const items = [
+    ...headerItems,
+    ...tree.map(c => ({
+      value: c.value,
+      label: c.name,
+      isDir: c.value.startsWith("__dir__"),
+    })),
+  ];
+
+  const dirFiles = {};
+  for (const item of items) {
+    if (item.isDir) {
+      const dirPath = item.value.slice(7);
+      dirFiles[item.value] = allFiles.filter(f => f.startsWith(dirPath + "/"));
+    }
+  }
+
+  const checked = new Set();
+  for (const item of items) {
+    if (!item.isDir && item.value !== "__all__" && item.value !== "__sep__" && alreadyStaged.includes(item.value)) {
+      checked.add(item.value);
+    }
+  }
+
+  let cursor = 0;
+  let scrollOffset = 0;
+  const height = Math.min(20, (process.stdout.rows || 24) - 4);
+
+  return new Promise((resolve) => {
+    readline.emitKeypressEvents(process.stdin);
+    const origRaw = process.stdin.isRaw || false;
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+
+    console.log(`\n${message}\n`);
+    let firstRender = true;
+    draw();
+
+    function draw() {
+      if (!firstRender) {
+        const visible = Math.min(height, items.length - scrollOffset);
+        for (let i = 0; i < visible + 1; i++) {
+          process.stdout.write("\x1b[2K\x1b[1A");
+        }
+        process.stdout.write("\x1b[2K\r");
+      }
+      firstRender = false;
+      if (cursor < scrollOffset) scrollOffset = cursor;
+      if (cursor >= scrollOffset + height) scrollOffset = cursor - height + 1;
+      const end = Math.min(scrollOffset + height, items.length);
+      for (let i = scrollOffset; i < end; i++) {
+        const item = items[i];
+        const ptr = i === cursor ? "\x1b[7m❯\x1b[27m" : " ";
+        let mark;
+        if (item.isDir) {
+          const files = dirFiles[item.value] || [];
+          const cnt = files.filter(f => checked.has(f)).length;
+          if (cnt === 0) mark = "◻";
+          else if (cnt === files.length) mark = "◼";
+          else mark = "▣";
+        } else {
+          mark = checked.has(item.value) ? "◼" : "◻";
+        }
+        process.stdout.write(`${ptr} ${mark} ${item.label}\n`);
+      }
+      if (items.length > end) process.stdout.write(`  \x1b[2m... ${items.length - end} more\x1b[22m\n`);
+      else process.stdout.write("\n");
+    }
+
+    function onSubmit() {
+      process.stdin.setRawMode(origRaw);
+      process.stdin.pause();
+      process.stdin.removeAllListeners("keypress");
+      const selected = [...checked].filter(v => !v.startsWith("__dir__") && v !== "__all__" && v !== "__sep__");
+      if (keepDirValues) {
+        const dirs = items.filter(i => i.isDir && (dirFiles[i.value] || []).every(f => checked.has(f))).map(i => i.value);
+        resolve([...new Set([...selected, ...dirs])]);
+      } else {
+        resolve(selected);
+      }
+    }
+
+    function onKeypress(str, key) {
+      if (!key) return;
+      if (key.name === "up" || (key.ctrl && key.name === "p")) {
+        if (cursor > 0) cursor--;
+        draw();
+      } else if (key.name === "down" || (key.ctrl && key.name === "n")) {
+        if (cursor < items.length - 1) cursor++;
+        draw();
+      } else if (key.name === "space") {
+        const item = items[cursor];
+        if (item.value === "__sep__") { draw(); return; }
+        if (item.value === "__all__") {
+          const allOn = checked.has("__all__");
+          if (allOn) {
+            checked.clear();
+          } else {
+            for (const other of items) {
+              if (other.value !== "__all__" && other.value !== "__sep__" && !other.isDir) {
+                checked.add(other.value);
+              }
+            }
+            checked.add("__all__");
+          }
+        } else if (item.isDir) {
+          const files = dirFiles[item.value] || [];
+          if (files.every(f => checked.has(f))) {
+            for (const f of files) checked.delete(f);
+          } else {
+            for (const f of files) checked.add(f);
+          }
+        } else {
+          if (checked.has(item.value)) checked.delete(item.value);
+          else checked.add(item.value);
+        }
+        draw();
+      } else if (key.name === "return" || key.name === "enter") {
+        onSubmit();
+      } else if (key.name === "escape") {
+        process.stdin.setRawMode(origRaw);
+        process.stdin.pause();
+        process.stdin.removeAllListeners("keypress");
+        resolve([]);
+      } else if (key.ctrl && key.name === "c") {
+        process.exit(0);
+      }
+    }
+
+    process.stdin.on("keypress", onKeypress);
+  });
 }
 
 // === CONFIG INTERACTION ===
@@ -838,19 +1004,13 @@ async function configInteractive() {
   }
 
   if (mainAction === "language") {
-    const inquirer = await import("inquirer");
-    const { lang } = await inquirer.default.prompt([
-      {
-        type: "list",
-        name: "lang",
-        message: "Select commit message language:",
-        choices: Object.entries(LANGUAGES).map(([code, name]) => ({
-          name: `${name} (${code})`,
-          value: code,
-        })),
-        default: config.language || "ru",
-      },
-    ]);
+    const lang = await promptSelect(
+      Object.entries(LANGUAGES).map(([code, name]) => ({
+        name: `${name} (${code})`,
+        value: code,
+      })),
+      "Select commit message language:",
+    );
     config.language = lang;
     saveConfig(config);
     console.log(`✅ Language set to ${LANGUAGES[lang]}.\n`);
@@ -915,15 +1075,10 @@ async function configInteractive() {
       if (allProjects.length === 0) {
         console.log("📭 No managed projects found.");
       } else {
-        const dInq = await import("inquirer");
-        const { target } = await dInq.default.prompt([
-          {
-            type: "list",
-            name: "target",
-            message: "Select project to disable hook:",
-            choices: allProjects.map(p => ({ name: `${p.split(/[\\/]/).pop()} → ${p}`, value: p })),
-          },
-        ]);
+        const target = await promptSelect(
+          allProjects.map(p => ({ name: `${p.split(/[\\/]/).pop()} → ${p}`, value: p })),
+          "Select project to disable hook:",
+        );
         const githooks = join(target, ".githooks");
         if (existsSync(githooks)) {
           rmSync(githooks, { recursive: true, force: true });
@@ -1191,18 +1346,14 @@ async function filterHistory() {
   const inq = await import("inquirer");
 
   while (true) {
-      const { operation } = await inq.default.prompt([
-        {
-          type: "list",
-          name: "operation",
-          message: "Select operation:",
-          choices: [
-            { name: "🗑️  Remove file/folder from history", value: "remove-file" },
-            { name: "🔑 Replace text in history (e.g. secret key)", value: "replace-text" },
-            { name: "⬅️  Back", value: "back" },
-          ],
-        },
-      ]);
+      const operation = await promptSelect(
+        [
+          { name: "🗑️  Remove file/folder from history", value: "remove-file" },
+          { name: "🔑 Replace text in history (e.g. secret key)", value: "replace-text" },
+          { name: "⬅️  Back", value: "back" },
+        ],
+        "Select operation:",
+      );
 
       if (operation === "back") return;
 
@@ -1211,21 +1362,13 @@ async function filterHistory() {
 
       if (operation === "remove-file") {
         const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
-        const fInq = await import("inquirer");
-        const { filePaths } = await fInq.default.prompt([
-          {
-            type: "checkbox",
-            name: "filePaths",
-            message: "Select files/folders to remove from history (empty = back):",
-            choices: buildFileTree(allFiles),
-            pageSize: 20,
-          },
-        ]);
+        const filePaths = await showFileTreePicker(allFiles, [], "Select files/folders to remove from history:", true, null);
         if (!filePaths.length) continue;
         const expanded = expandDirSelections(filePaths, allFiles);
         for (const fp of expanded) args.push("--path", fp, "--invert-paths");
 
-        const { addGitignore } = await fInq.default.prompt([
+        const inqConfirm = await import("inquirer");
+        const { addGitignore } = await inqConfirm.default.prompt([
           { type: "confirm", name: "addGitignore", message: "Add to .gitignore?", default: true },
         ]);
         if (addGitignore) {
@@ -1343,51 +1486,23 @@ async function quickFlow() {
   const alreadyStaged = spawnSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
   const allChanged = [...new Set([...unstaged, ...alreadyStaged])];
 
-  const sInq = await import("inquirer");
-  const fileChoices = allChanged.length === 0 ? [] : [
-    { name: "📦 Stage all files", value: "__all__" },
-    { name: "─".repeat(30), value: "__sep__" },
-    ...buildFileTree(allChanged).map(c => ({
-      ...c,
-      checked: c.value.startsWith("__dir__") ? allChanged.filter(f => f === c.value.slice(7) || f.startsWith(c.value.slice(7) + "/")).every(f => alreadyStaged.includes(f)) : (c.value === "__all__" ? false : alreadyStaged.includes(c.value)),
-    })),
-  ];
-
   if (allChanged.length === 0) {
     console.log("ℹ️  No changed files found.\n");
   }
 
   let filesToStage = [];
 
-  while (true) {
-    const { selectedFiles } = allChanged.length === 0
-      ? { selectedFiles: [] }
-      : await sInq.default.prompt([
-          {
-            type: "checkbox",
-            name: "selectedFiles",
-            message: "Select files to stage:",
-            choices: addBackChoice(fileChoices),
-            pageSize: 20,
-          },
-        ]);
+  if (allChanged.length > 0) {
+    const selected = await showFileTreePicker(allChanged, alreadyStaged, "Select files to stage:", false, "📦 Stage all files");
 
-    if (selectedFiles.includes("__back__")) {
-      if (filesToStage.length === 0) return;
-      break;
+    if (selected.length === 0) return;
+
+    const hasAll = selected.some(v => v === "__all__");
+    if (hasAll) {
+      filesToStage = allChanged;
+    } else {
+      filesToStage = selected;
     }
-
-    if (selectedFiles.includes("__all__") || selectedFiles.includes("__sep__")) {
-      if (selectedFiles.length === 1 && selectedFiles[0] === "__all__") {
-        filesToStage = allChanged;
-        break;
-      }
-      if (selectedFiles.length === 1 && selectedFiles[0] === "__sep__") continue;
-    }
-
-    const filtered = selectedFiles.filter(f => f !== "__sep__" && f !== "__all__");
-    filesToStage = expandDirSelections(filtered, allChanged);
-    if (filesToStage.length > 0) break;
   }
 
   if (filesToStage.length > 0) {
@@ -1475,7 +1590,6 @@ async function quickFlow() {
   // ================================================================
   //  REVIEW LOOP
   // ================================================================
-  const inq = await import("inquirer");
 
   const showReview = () => {
     clearScreen();
@@ -1497,16 +1611,15 @@ async function quickFlow() {
   showReview();
 
   while (true) {
-    const { action } = await inq.default.prompt([
-      { type: "list", name: "action", message: "What next?",
-        choices: [
-          { name: `${green}✅  Push${reset}`, value: "push" },
-          { name: `${cyan}✏️   Edit message${reset}`, value: "edit" },
-          { name: `${yellow}🔄  Regenerate${reset}`, value: "regenerate" },
-          { name: `${bold}❌  Cancel${reset}`, value: "cancel" },
-        ], default: "push",
-      },
-    ]);
+    const action = await promptSelect(
+      [
+        { name: `${green}✅  Push${reset}`, value: "push" },
+        { name: `${cyan}✏️   Edit message${reset}`, value: "edit" },
+        { name: `${yellow}🔄  Regenerate${reset}`, value: "regenerate" },
+        { name: `${bold}❌  Cancel${reset}`, value: "cancel" },
+      ],
+      "What next?",
+    );
 
     if (action === "push") break;
     if (action === "cancel") {
@@ -1560,33 +1673,16 @@ async function quickFlow() {
   const allBranches = spawnSync("git", ["branch", "--format=%(refname:short)"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
   const currentBranch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).stdout.trim();
 
-  const inqPush = await import("inquirer");
   const remoteChoices = addBackChoice(
     remotes.length ? remotes.map(r => ({ name: r, value: r })) : [{ name: "origin", value: "origin" }]
   );
-  const { remote } = await inqPush.default.prompt([
-    {
-      type: "list",
-      name: "remote",
-      message: "Select remote:",
-      choices: remoteChoices,
-      default: remotes.includes("origin") ? "origin" : (remotes[0] || "origin"),
-    },
-  ]);
+  const remote = await promptSelect(remoteChoices, "Select remote:");
   if (remote === "__back__") return;
 
   const branchChoices = addBackChoice(
     allBranches.length ? allBranches.map(b => ({ name: b, value: b })) : [{ name: "main", value: "main" }]
   );
-  const { branch } = await inqPush.default.prompt([
-    {
-      type: "list",
-      name: "branch",
-      message: "Select branch:",
-      choices: branchChoices,
-      default: currentBranch || "main",
-    },
-  ]);
+  const branch = await promptSelect(branchChoices, "Select branch:");
   if (branch === "__back__") return;
 
   console.log(`\n⬆️  Pushing to ${remote}/${branch}...`);
