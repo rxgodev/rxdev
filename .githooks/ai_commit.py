@@ -25,7 +25,37 @@ CONFIG_DIR = Path.home() / ".config" / "ai-commit"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-API_URL = "https://api.groq.com/openai/v1/chat/completions"
+# OpenAI-compatible providers. All four speak the same chat-completions API,
+# so switching is just base URL + auth + model. Ollama runs locally (no key,
+# diffs never leave the machine).
+PROVIDERS = {
+    "groq": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "env": "GROQ_API_KEY",
+        "default_model": "llama-3.1-8b-instant",
+        "needs_key": True,
+    },
+    "openai": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "env": "OPENAI_API_KEY",
+        "default_model": "gpt-4o-mini",
+        "needs_key": True,
+    },
+    "openrouter": {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "env": "OPENROUTER_API_KEY",
+        "default_model": "openai/gpt-4o-mini",
+        "needs_key": True,
+    },
+    "ollama": {
+        "url": "http://localhost:11434/v1/chat/completions",
+        "env": "OLLAMA_API_KEY",
+        "default_model": "llama3.1",
+        "needs_key": False,
+    },
+}
+DEFAULT_PROVIDER = "groq"
+
 REQUEST_TIMEOUT = 60
 MAX_ATTEMPTS = 3
 MAX_DIFF_LENGTH = 3000
@@ -107,8 +137,22 @@ def load_user_config():
 USER_CONFIG = load_user_config()
 ADD_COAUTHOR = USER_CONFIG.get("coauthor", True)
 BUMP_VERSION = USER_CONFIG.get("bumpVersion", False)
-API_KEY = USER_CONFIG.get("apiKey", "")
-GROQ_MODEL = USER_CONFIG.get("model") or DEFAULT_GROQ_MODEL
+
+PROVIDER = (USER_CONFIG.get("provider") or DEFAULT_PROVIDER).lower()
+PROVIDER_DEF = PROVIDERS.get(PROVIDER) or {
+    "url": PROVIDERS[DEFAULT_PROVIDER]["url"],
+    "env": "NEURO_COMMIT_API_KEY",
+    "default_model": DEFAULT_GROQ_MODEL,
+    "needs_key": False,  # custom/unknown provider: don't block, let the endpoint decide
+}
+API_URL = USER_CONFIG.get("apiUrl") or PROVIDER_DEF["url"]
+API_KEY = (
+    USER_CONFIG.get("apiKey")
+    or os.environ.get(PROVIDER_DEF["env"], "")
+    or os.environ.get("NEURO_COMMIT_API_KEY", "")
+)
+PROVIDER_NEEDS_KEY = PROVIDER_DEF["needs_key"]
+GROQ_MODEL = USER_CONFIG.get("model") or PROVIDER_DEF["default_model"]
 CUSTOM_TYPES = set(USER_CONFIG.get("customTypes", []))
 CUSTOM_PROMPT = USER_CONFIG.get("prompt", "")
 LANGUAGE = USER_CONFIG.get("language", "ru")
@@ -151,11 +195,21 @@ def is_valid_commit_message(msg: str) -> bool:
 
 # === LOGGING ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "ai_commit_debug.log")
+MAX_LOG_BYTES = 512 * 1024  # keep one previous run for debugging, but bound growth
 
 
 def log_message(message: str) -> None:
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{message}\n")
+    try:
+        if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > MAX_LOG_BYTES:
+            try:
+                os.replace(LOG_FILE, LOG_FILE + ".1")
+            except OSError:
+                pass
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{message}\n")
+    except OSError:
+        # logging must never break the commit flow
+        pass
 
 
 def write_error_to_commit(msg_file, err_msg):
@@ -255,11 +309,12 @@ def get_staged_diff():
         return "", False
 
 
-def call_groq(messages):
-    if not API_KEY:
+def call_llm(messages):
+    if PROVIDER_NEEDS_KEY and not API_KEY:
         raise Exception(
-            "Groq API key is not set. Run 'qq config' to set your key "
-            "(get one free at https://console.groq.com)"
+            f"API key for provider '{PROVIDER}' is not set. Run 'qq config' to set "
+            f"your key, export {PROVIDER_DEF['env']}, or switch provider "
+            "(e.g. 'ollama' runs locally with no key)."
         )
 
     payload = {
@@ -270,9 +325,10 @@ def call_groq(messages):
     }
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {API_KEY}",
         "User-Agent": f"neuro-commit/{NEURO_COMMIT_VERSION}",
     }
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
 
     req = urllib.request.Request(
         API_URL,
@@ -307,11 +363,14 @@ def call_groq(messages):
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         if e.code == 429:
-            log_message(f"Groq rate limited: {body}")
-            raise Exception("Groq API rate limit exceeded. Wait a moment and retry.")
-        raise Exception(f"Groq API HTTP {e.code}: {body}")
+            log_message(f"{PROVIDER} rate limited: {body}")
+            raise Exception(f"{PROVIDER} API rate limit exceeded. Wait a moment and retry.")
+        raise Exception(f"{PROVIDER} API HTTP {e.code}: {body}")
     except urllib.error.URLError as e:
-        raise Exception(f"Groq API URL error: {e.reason}")
+        raise Exception(
+            f"{PROVIDER} API URL error: {e.reason} "
+            f"(is the endpoint {API_URL} reachable?)"
+        )
 
 
 def _normalize_type(text: str) -> str:
@@ -415,7 +474,7 @@ def generate_commit_message(diff):
         try:
             log_message(f"Calling Groq (attempt {attempt}/{MAX_ATTEMPTS})")
             print(f"[{attempt}/{MAX_ATTEMPTS}] Generating commit message...\n", flush=True)
-            message = call_groq(messages)
+            message = call_llm(messages)
 
             if not message or message.startswith("#") or len(message) < 10:
                 log_message(f"Response too short or invalid: {repr(message)}")
@@ -1254,6 +1313,6 @@ def main():
 
 
 if __name__ == "__main__":
-    if os.path.exists(LOG_FILE):
-        os.remove(LOG_FILE)
+    # Note: the log is size-capped + rotated in log_message() instead of being
+    # wiped each run, so a crash from a previous run stays available to inspect.
     main()

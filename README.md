@@ -146,6 +146,7 @@ That's it. `qq go` guides you through every step:
 | `qq init`        | Install the AI commit hook in the current repository |
 | `qq config`      | Configure API key, model, language, co-author, auto-bump, projects, and templates |
 | `qq status`      | Show integration status for the current repository |
+| `qq doctor`      | Diagnose your setup — Python, dependencies, hooks, provider, and API key |
 | `qq filter`      | Rewrite git history — remove files, secrets, or paths using git-filter-repo |
 | `qq uninstall`   | Remove the hook from the repository |
 | `qq version`     | Show version number |
@@ -163,11 +164,12 @@ qq config
 
 | Setting             | Description |
 |---------------------|-------------|
-| **Model**           | Switch between Llama 3.1 **8B** (faster, ~560 t/s) and **70B** (smarter, ~280 t/s) |
+| **Provider**        | Choose the LLM backend: **Groq** (default), **OpenAI**, **OpenRouter**, **Ollama** (local, no key, your diffs never leave the machine), or a custom OpenAI-compatible endpoint |
+| **Model**           | Pick a model for the chosen provider (Groq presets: Llama 3.1 **8B** ~560 t/s / **70B** ~280 t/s) |
 | **Language**        | Choose the language for the commit body: English, Russian, German, French, or Chinese |
 | **Custom prompt**   | Override the system prompt. Use `{types}` as a placeholder — it is replaced with the allowed commit types (e.g. `feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert` plus any custom types you add) |
 | **Custom types**    | Add extra Conventional Commits types beyond the built-in set (e.g. `hotfix, deps, i18n, ui, api, db`) |
-| **API key**         | Set or clear your Groq API key |
+| **API key**         | Set or clear the provider API key (or use the `GROQ_API_KEY` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` / `NEURO_COMMIT_API_KEY` env var). Not needed for Ollama |
 | **Co-author**       | Toggle the `Co-authored-by` trailer in commit messages |
 | **Auto-bump**       | Toggle automatic version bumps for 15+ manifest types (off by default) |
 | **Projects & Templates** | List integrated projects and manage shared `prepare-commit-msg` templates |
