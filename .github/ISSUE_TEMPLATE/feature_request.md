@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for rxcommit
+about: Suggest an idea for RXCommit
 title: ''
 labels: enhancement
 assignees: ''

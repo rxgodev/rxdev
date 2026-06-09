@@ -474,7 +474,7 @@ test("composeMessage: bump footer + co-author", () => {
   assert.ok(out.startsWith("feat: x"));
   assert.ok(out.includes("Bump version (minor):"));
   assert.ok(out.includes("package.json: 1.0.0 → 1.1.0"));
-  assert.ok(out.includes("Co-authored-by: rxcommit"));
+  assert.ok(out.includes("Co-authored-by: RXCommit"));
   assert.equal(aic.composeMessage("fix: y", {}), "fix: y");
 });
 
@@ -528,7 +528,7 @@ test("main: end-to-end writes the generated message into the commit file", async
     await aic.main(msgFile, cfg, { echo: false });
     const written = readFileSync(msgFile, "utf8");
     assert.ok(written.includes("feat: add greeting"), written);
-    assert.ok(written.includes("Co-authored-by: rxcommit"));
+    assert.ok(written.includes("Co-authored-by: RXCommit"));
   } finally {
     process.chdir(cwd0);
     server.close();

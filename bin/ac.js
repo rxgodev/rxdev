@@ -1101,7 +1101,7 @@ async function install() {
   }
   registerProject();
 
-  console.log("🎉 rxcommit installed successfully!");
+  console.log("🎉 RXCommit installed successfully!");
 }
 
 function uninstall() {
@@ -1115,7 +1115,7 @@ function uninstall() {
 
   unsetGitHooksPath();
   console.log("✅ Git hooks path reset.");
-  console.log("🗑️ rxcommit uninstalled!");
+  console.log("🗑️ RXCommit uninstalled!");
 }
 
 function showStatus() {
@@ -1150,7 +1150,7 @@ function showStatus() {
   const templateName = getTemplateForProject(root) || "—";
   const cfg = loadConfig();
 
-  console.log("\n🔍 rxcommit Status\n");
+  console.log("\n🔍 RXCommit Status\n");
   console.log(`📁 Git root:       ${root}`);
   console.log(
     `⚙️  Hooks path:     ${hooksConfigured ? "✅ .githooks" : "❌ not set"}`,
@@ -1180,7 +1180,7 @@ function doctor() {
   const bad = (s) => `❌ ${s}`;
   const warn = (s) => `⚠️  ${s}`;
 
-  console.log("\n🩺 rxcommit Doctor\n");
+  console.log("\n🩺 RXCommit Doctor\n");
 
   // Node version (the hook runtime; >= 18 required)
   const nodeMajor = parseInt(process.versions.node.split(".")[0], 10);
@@ -1378,7 +1378,7 @@ async function quickFlow() {
   // ── Header box (only boxed element) ──
   const showHeader = () => {
     clearScreen();
-    const lines = [`${bold}🚀  rxcommit QuickFlow®${reset}`];
+    const lines = [`${bold}🚀  RXCommit QuickFlow®${reset}`];
     const w = Math.max(...lines.map((l) => sa(l).length)) + 4;
     const o = "╭" + "─".repeat(w) + "╮\n" +
       "│" + " ".repeat(w) + "│\n" +
@@ -1806,7 +1806,7 @@ async function splitCommand() {
 }
 
 function showHelp() {
-  console.log(`${boldCyan}rxcommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
+  console.log(`${boldCyan}RXCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
 ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
   ${boldCyan}qq${resetColor} <command> [options]
@@ -1895,17 +1895,17 @@ async function mainCmd() {
       await releaseCommand();
       break;
     case "update":
-      console.log("Updating rxcommit...\n");
+      console.log("Updating RXCommit...\n");
       const isPnpm = __dirname.includes("pnpm") || process.env.PNPM_HOME;
       const pm = isPnpm ? "pnpm" : "npm";
       const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit", shell: true });
       if (upd.status === 0) {
-        console.log("\n✅ rxcommit updated successfully.");
+        console.log("\n✅ RXCommit updated successfully.");
       } else if (pm === "pnpm") {
         console.log("\n⚠️  pnpm update failed, trying npm...\n");
         const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit", shell: true });
         if (npmUpd.status === 0) {
-          console.log("\n✅ rxcommit updated successfully.");
+          console.log("\n✅ RXCommit updated successfully.");
         } else {
           console.log("\n❌ Update failed. Try manually:\n  pnpm add -g @rxgodev/rxcommit@latest\n  npm install -g @rxgodev/rxcommit@latest");
         }

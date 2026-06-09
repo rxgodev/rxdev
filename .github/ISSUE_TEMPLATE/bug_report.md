@@ -25,7 +25,7 @@ What should have happened instead.
 - OS: [e.g. Windows 11, macOS 14, Ubuntu 22.04]
 - Node.js version: [e.g. 22.0]
 - Python version: [e.g. 3.12]
-- rxcommit version: [e.g. 3.0.0]
+- RXCommit version: [e.g. 3.0.0]
 
 ## Additional Context
 

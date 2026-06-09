@@ -1,18 +1,18 @@
 <div align="center">
 
-# rxcommit
+# RXCommit
 
 **AI 驱动的 Git 提交生成器** — 暂存、生成、审查、推送，一条命令搞定。
 
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-3.0.0-8250df)](https://github.com/rxgodev/neuro-commit/releases)
+[![Version](https://img.shields.io/badge/version-3.0.0-8250df)](https://github.com/rxgodev/rxcommit/releases)
 [![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
 [![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
-[文档](https://github.com/rxgodev/neuro-commit#readme) · [报告错误](https://github.com/rxgodev/neuro-commit/issues) ·
-[English](https://github.com/rxgodev/neuro-commit/blob/main/README.md)
+[文档](https://github.com/rxgodev/rxcommit#readme) · [报告错误](https://github.com/rxgodev/rxcommit/issues) ·
+[English](https://github.com/rxgodev/rxcommit/blob/main/README.md)
 
 </div>
 

@@ -1,18 +1,18 @@
 <div align="center">
 
-# rxcommit
+# RXCommit
 
 **AI-генератор коммитов** — стейдж, генерация, ревью, пуш в одной команде.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-3.0.0-8250df)](https://github.com/rxgodev/neuro-commit/releases)
+[![Version](https://img.shields.io/badge/version-3.0.0-8250df)](https://github.com/rxgodev/rxcommit/releases)
 [![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
 [![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
-[Документация](https://github.com/rxgodev/neuro-commit#readme) · [Сообщить об ошибке](https://github.com/rxgodev/neuro-commit/issues) ·
-[English](https://github.com/rxgodev/neuro-commit/blob/main/README.md)
+[Документация](https://github.com/rxgodev/rxcommit#readme) · [Сообщить об ошибке](https://github.com/rxgodev/rxcommit/issues) ·
+[English](https://github.com/rxgodev/rxcommit/blob/main/README.md)
 
 </div>
 

@@ -1,4 +1,4 @@
-# Contributing to rxcommit
+# Contributing to RXCommit
 
 Thank you for considering contributing! Here's how to get started.
 
@@ -6,7 +6,7 @@ Thank you for considering contributing! Here's how to get started.
 
 ```bash
 # Clone the repo
-git clone https://github.com/rxgodev/neuro-commit.git
+git clone https://github.com/rxgodev/rxcommit.git
 cd neuro-commit
 
 # Install dependencies
@@ -40,7 +40,7 @@ node bin/ac.js --help
 
 ## Reporting Issues
 
-Open an issue at https://github.com/rxgodev/neuro-commit/issues with:
+Open an issue at https://github.com/rxgodev/rxcommit/issues with:
 - A clear description of the problem
 - Steps to reproduce
 - Expected vs actual behavior

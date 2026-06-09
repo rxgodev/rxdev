@@ -32,10 +32,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rxgodev/neuro-commit.git"
+    "url": "git+https://github.com/rxgodev/rxcommit.git"
   },
   "bugs": {
-    "url": "https://github.com/rxgodev/neuro-commit/issues"
+    "url": "https://github.com/rxgodev/rxcommit/issues"
   },
-  "homepage": "https://github.com/rxgodev/neuro-commit#readme"
+  "homepage": "https://github.com/rxgodev/rxcommit#readme"
 }

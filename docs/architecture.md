@@ -1,6 +1,6 @@
 # Architecture
 
-rxcommit consists of two runtime layers that work together to generate AI-powered commit messages.
+RXCommit consists of two runtime layers that work together to generate AI-powered commit messages.
 
 ## Overview
 
