@@ -1725,7 +1725,7 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}release${resetColor}       Generate CHANGELOG entry, bump version & tag
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
-  ${boldCyan}doctor${resetColor}        Diagnose setup (Python, deps, hooks, provider, key)
+  ${boldCyan}doctor${resetColor}        Diagnose setup (Node, hooks, provider, key)
   ${boldCyan}filter${resetColor}        Rewrite git history (remove secrets, files, etc.)
   ${boldCyan}version${resetColor}       Show version number
   ${boldCyan}update${resetColor}        Show update instructions`);

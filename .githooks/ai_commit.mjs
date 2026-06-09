@@ -1,19 +1,19 @@
-// neuro-commit — Node port of the prepare-commit-msg hook (WORK IN PROGRESS).
+// neuro-commit — the prepare-commit-msg hook (Node, zero dependencies).
 //
-// This file is being ported from ai_commit.py slice by slice. It is NOT yet
-// wired into prepare-commit-msg — the Python hook (ai_commit.py) remains the
-// active hook until this port is complete and fully validated.
+// Invoked by .githooks/prepare-commit-msg as `node ai_commit.mjs "$1"`. It
+// generates a Conventional Commit message from the staged diff via any
+// OpenAI-compatible provider, with optional version bumping and secret scanning.
 //
-// Design rule: ZERO external dependencies. The hook is copied standalone into
-// each managed repo's .githooks/, so it may only use Node built-ins. The single
-// Python dependency (pathspec) is replaced by an inline matcher in a later slice.
+// Design rule: ZERO external dependencies. The file is copied standalone into
+// each managed repo's .githooks/, so it uses Node built-ins only — including a
+// self-contained .commitignore matcher (replacing Python's pathspec).
 //
-// Slice 1: the pure logic layer — semver, conventional-commit parsing,
-// validation, response cleaning, manifest version handlers, changelog grouping,
-// secret scanning, JSON extraction, the fallback generator, provider registry,
-// and system-prompt building.
-// Slice 2: config/provider resolution, a zero-dependency .commitignore matcher
-// (replacing pathspec), staged-diff extraction, and rotating logs.
+// It also exposes subcommands consumed in-process by the CLI:
+//   --scan | --release | --pr | --split   (also runnable directly via node).
+//
+// Contents: semver, conventional-commit parsing, validation/cleaning, manifest
+// version handlers, changelog, secret scanning, the provider registry + streaming
+// LLM call, config/diff IO, version-bump orchestration, and the main() flow.
 
 import {
   readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync,
@@ -40,7 +40,7 @@ const validTypes = new Set(DEFAULT_VALID_TYPES);
 
 const PEEK = "__PEEK__";
 
-// ── OpenAI-compatible providers (mirror of PROVIDERS in ai_commit.py) ──
+// ── OpenAI-compatible providers (mirrored in bin/ac.js for the config UI) ──
 export const PROVIDERS = {
   groq: {
     url: "https://api.groq.com/openai/v1/chat/completions",

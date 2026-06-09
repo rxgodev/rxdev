@@ -38,7 +38,7 @@ NeuroCommit consists of two runtime layers that work together to generate AI-pow
                 │  spawns (git commit → prepare-commit-msg hook)
                 ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Python Hook  (.githooks/ai_commit.py)           │
+│              Node Hook  (.githooks/ai_commit.mjs)           │
 │                                                              │
 │  - Reads staged diff via git                                 │
 │  - Calls Groq API (streaming)                                │
@@ -58,7 +58,7 @@ The CLI is the user-facing entry point. It is a single-file ESM module (~1160 li
 
 | Command | Responsibility |
 |---------|---------------|
-| `qq init` | Install Python dependencies, copy hooks to `.githooks/`, set `core.hooksPath`, create `.commitignore`, register project |
+| `qq init` | Copy hooks to `.githooks/`, set `core.hooksPath`, create `.commitignore`, register project |
 | `qq go` | **QuickFlow** — the flagship workflow. Interactive session: stage → generate → review → push. Eliminates context-switching between git commands |
 | `qq config` | Interactive menu for model, prompt, API key, co-author, auto-bump, custom types, projects & templates |
 | `qq status` | Check hook installation state, API key status, auto-bump config |
@@ -66,13 +66,13 @@ The CLI is the user-facing entry point. It is a single-file ESM module (~1160 li
 
 ### Auto-update Mechanism
 
-On every `qq` command (except `uninstall`), the CLI:
+On `qq update` (only — not on every command), the CLI:
 
 1. Reads `~/.config/ai-commit/managed-projects.json` for registered projects
-2. For each project, compares the installed `ai_commit.py` hash/version with the bundled one
-3. If outdated, replaces the hook file and updates its `.sha256` checksum
+2. For each project, compares the installed `ai_commit.mjs` hash/version with the bundled one
+3. If outdated (and unmodified locally), replaces the hook file and updates its `.sha256` checksum
 
-This ensures all managed projects stay in sync with the latest hook version.
+This keeps managed projects in sync without silently rewriting other repos' hooks when you run an unrelated command.
 
 ### Configuration Storage
 
@@ -99,7 +99,7 @@ qq go
  │   → Show staged file count
  │
  ├── Step 2: Generate ───────────────────────────────
- │   → git commit --quiet (triggers ai_commit.py hook)
+ │   → git commit --quiet (triggers ai_commit.mjs hook)
  │   → AI streams message to stdout in real-time
  │   → Read generated message from .git/COMMIT_EDITMSG
  │   → Display in a clean review UI
@@ -136,19 +136,19 @@ qq go
 
 ---
 
-## Layer 2: Python Hook (`ai_commit.py`)
+## Layer 2: Node Hook (`ai_commit.mjs`)
 
-A Python 3.8+ script that runs as a `prepare-commit-msg` Git hook. It is single-file (~1230 lines) with no external dependencies except `pathspec` (installed automatically by `qq init`).
+A Node.js (ESM) script that runs as a `prepare-commit-msg` Git hook. It is single-file with **zero external dependencies** (Node built-ins only — including a self-contained `.commitignore` matcher), so it needs no install step beyond Node 18+.
 
 ### Execution Flow
 
 1. **Read commit file** — if non-empty (user-provided message), skip AI generation
 2. **Check for .husky** — refuses to run alongside husky
-3. **Get staged diff** — `git diff --cached` filtered through `.commitignore` (via `pathspec`)
+3. **Get staged diff** — `git diff --cached` filtered through `.commitignore` (via a built-in matcher)
 4. **Call Groq API** — streaming response with up to 3 retry attempts
 5. **Validate** — checks Conventional Commits format, retries if invalid
 6. **Fallback** — if all API attempts fail, generates a deterministic message based on file extensions and paths
-7. **Auto-bump** (opt-in) — discovers manifests, bumps version, amends commit
+7. **Auto-bump** (opt-in) — discovers manifests, bumps the version, and stages them so they land in the commit
 8. **Co-author** — appends `Co-authored-by` trailer
 9. **Write commit file** — saves the final message
 
@@ -191,14 +191,14 @@ The chain is:
 
 1. `qq init` sets `git config core.hooksPath .githooks`
 2. On `git commit`, Git executes `.githooks/prepare-commit-msg`
-3. The shell script runs `python .githooks/ai_commit.py "$1"`
-4. `ai_commit.py` writes the generated message to the commit file
+3. The shell script runs `node .githooks/ai_commit.mjs "$1"`
+4. `ai_commit.mjs` writes the generated message to the commit file
 5. Git opens the editor (or skips it if `GIT_EDITOR=true`)
 
 ## Dependency Summary
 
 | Layer | Runtime | External Dependencies |
 |-------|---------|-----------------------|
-| CLI | Node.js ≥ 22 | `inquirer`, `update-notifier` |
-| Hook | Python 3.8+ | `pathspec` (auto-installed) |
-| API | — | Groq account (free tier available) |
+| CLI | Node.js ≥ 18 | `inquirer`, `update-notifier` |
+| Hook | Node.js ≥ 18 | none (built-ins only) |
+| API | — | provider account (Groq free tier, or local Ollama) |

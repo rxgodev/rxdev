@@ -180,7 +180,7 @@ qq config
 
 | 文档 | 描述 |
 |------|------|
-| [架构](../architecture.md) | Node.js CLI + Python 钩子架构概览 |
+| [架构](../architecture.md) | Node.js CLI + Node 钩子架构概览 |
 | [自动递增](../auto-bump.md) | 15+ 种清单格式的智能版本递增 |
 | [模板和项目](../templates.md) | 多仓库管理和共享钩子模板 |
 

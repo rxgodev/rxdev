@@ -26,7 +26,7 @@ Templates are named `prepare-commit-msg` scripts stored in `~/.config/ai-commit/
 
 ```sh
 #!/bin/sh
-python .githooks/ai_commit.py "$1"
+node .githooks/ai_commit.mjs "$1"
 ```
 
 ### Managing Templates
@@ -42,7 +42,7 @@ Access via `qq config → Projects & Templates → Templates`.
 
 The script must:
 - Start with `#!/bin/sh`
-- Contain `python .githooks/ai_commit.py "$1"` (or equivalent)
+- Contain `node .githooks/ai_commit.mjs "$1"` (or equivalent)
 
 #### Apply a Template
 
@@ -69,11 +69,11 @@ The script must:
 # Template "strict-lint" applied to project A
 #!/bin/sh
 npm run lint || exit 1
-python .githooks/ai_commit.py "$1"
+node .githooks/ai_commit.mjs "$1"
 
 # Template "default" applied to project B
 #!/bin/sh
-python .githooks/ai_commit.py "$1"
+node .githooks/ai_commit.mjs "$1"
 ```
 
 ### Custom Pre-Hook Logic
@@ -84,7 +84,7 @@ python .githooks/ai_commit.py "$1"
 if [ "$2" = "merge" ]; then
   exit 0
 fi
-python .githooks/ai_commit.py "$1"
+node .githooks/ai_commit.mjs "$1"
 ```
 
 ## Data Storage

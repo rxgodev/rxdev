@@ -180,7 +180,7 @@ Modifiez `.commitignore` (syntaxe identique à `.gitignore`) pour exclure des fi
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](../architecture.md) | Aperçu de l'architecture CLI Node.js + hook Python |
+| [Architecture](../architecture.md) | Aperçu de l'architecture CLI Node.js + hook Node |
 | [Auto-incrémentation](../auto-bump.md) | Incrémentation intelligente de version pour 15+ formats de manifest |
 | [Modèles et projets](../templates.md) | Gestion multi-dépôts et modèles de hooks partagés |
 
