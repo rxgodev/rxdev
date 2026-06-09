@@ -39,7 +39,11 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm install --no-audit --no-fund
       - name: Syntax check
-        run: node --check bin/ac.js
+        run: |
+          node --check bin/ac.js
+          node --check .githooks/ai_commit.mjs
+      - name: Hook unit tests
+        run: node --test tests/test_ai_commit.mjs
       - name: CLI smoke test
         run: |
           node bin/ac.js version
