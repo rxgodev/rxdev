@@ -6,27 +6,25 @@ labels: bug
 assignees: ''
 ---
 
-## Describe the Bug
+## Bug
 
-A clear and concise description of the bug.
+A clear description of the bug.
 
-## To Reproduce
+## Steps to Reproduce
 
-Steps to reproduce:
 1. Run `qq ...`
 2. See error
 
-## Expected Behavior
+## Expected
 
 What should have happened instead.
 
 ## Environment
 
-- OS: [e.g. Windows 11, macOS 14, Ubuntu 22.04]
-- Node.js version: [e.g. 22.0]
-- Python version: [e.g. 3.12]
-- RXCommit version: [e.g. 3.0.0]
+- OS:
+- Node.js version:
+- RXCommit version:
 
-## Additional Context
+## Details
 
-Add any other context, logs, or screenshots.
+Logs, screenshots, or anything else.
