@@ -150,7 +150,7 @@ That's it. `qq go` guides you through every step:
 | `qq init`        | Install the AI commit hook in the current repository |
 | `qq config`      | Configure API key, model, language, co-author, auto-bump, projects, and templates |
 | `qq status`      | Show integration status for the current repository |
-| `qq doctor`      | Diagnose your setup — Python, dependencies, hooks, provider, and API key |
+| `qq doctor`      | Diagnose your setup — Node, hooks, provider, and API key |
 | `qq filter`      | Rewrite git history — remove files, secrets, or paths using git-filter-repo |
 | `qq uninstall`   | Remove the hook from the repository |
 | `qq version`     | Show version number |
@@ -188,7 +188,7 @@ Edit `.commitignore` (which follows `.gitignore` syntax) to exclude files from t
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](./docs/architecture.md) | High-level overview of the Node.js CLI + Python hook architecture |
+| [Architecture](./docs/architecture.md) | High-level overview of the Node.js CLI + git-hook architecture |
 | [Auto-bump](./docs/auto-bump.md) | Smart version bumping for 15+ manifest formats |
 | [Templates & Projects](./docs/templates.md) | Multi-repository management and shared hook templates |
 

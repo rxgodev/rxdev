@@ -48,6 +48,7 @@ if (update?.latest && update.latest !== pkg.version) {
 
 const DEFAULT_COMMITIGNORE = `# Auto-commit configuration files
 .githooks/
+ai_commit.mjs
 ai_commit.py
 ai_commit_debug.log
 .env
@@ -68,7 +69,7 @@ const DEFAULT_CONFIG = {
   provider: "groq",
 };
 
-// OpenAI-compatible providers (mirror of PROVIDERS in ai_commit.py).
+// OpenAI-compatible providers (mirror of PROVIDERS in ai_commit.mjs).
 const PROVIDERS = {
   groq: { label: "Groq (fast, free tier)", env: "GROQ_API_KEY", defaultModel: "llama-3.1-8b-instant" },
   openai: { label: "OpenAI", env: "OPENAI_API_KEY", defaultModel: "gpt-4o-mini" },
@@ -159,16 +160,19 @@ function writePyWithHash(path, content) {
 }
 
 function getPyVersion(content) {
-  const m = content.match(/^NEURO_COMMIT_VERSION\s*=\s*"([^"]+)"/m);
+  // Matches both the Python (`NEURO_COMMIT_VERSION = "x"`) and the Node
+  // (`export const NEURO_COMMIT_VERSION = "x"`) hook forms.
+  const m = content.match(/NEURO_COMMIT_VERSION\s*=\s*["']([^"']+)["']/);
   return m ? m[1] : null;
 }
 
 function semverGt(a, b) {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
+  // Tolerate prerelease/non-numeric segments (e.g. "19-beta") instead of NaN.
+  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
   for (let i = 0; i < 3; i++) {
-    if (pa[i] > pb[i]) return true;
-    if (pa[i] < pb[i]) return false;
+    if ((pa[i] || 0) > (pb[i] || 0)) return true;
+    if ((pa[i] || 0) < (pb[i] || 0)) return false;
   }
   return false;
 }
@@ -178,9 +182,9 @@ function updateProjectHooks(projectPath) {
   if (!existsSync(githooksDir)) return false;
   let updated = false;
 
-  // Update ai_commit.py with version/hash check
-  const pySrc = join(SOURCE_GITHOOKS_DIR, "ai_commit.py");
-  const pyDst = join(githooksDir, "ai_commit.py");
+  // Update ai_commit.mjs with version/hash check
+  const pySrc = join(SOURCE_GITHOOKS_DIR, "ai_commit.mjs");
+  const pyDst = join(githooksDir, "ai_commit.mjs");
   if (existsSync(pySrc)) {
     const latest = readFileSync(pySrc, "utf8");
     if (!existsSync(pyDst)) {
@@ -207,12 +211,12 @@ function updateProjectHooks(projectPath) {
     }
   }
 
-  // Restore prepare-commit-msg if it's broken (missing call to ai_commit.py)
+  // Restore prepare-commit-msg if it's broken (missing call to ai_commit.mjs)
   const hookSrc = join(SOURCE_GITHOOKS_DIR, "prepare-commit-msg");
   const hookDst = join(githooksDir, "prepare-commit-msg");
   if (existsSync(hookSrc) && existsSync(hookDst)) {
     const installed = readFileSync(hookDst, "utf8");
-    if (!installed.includes('ai_commit.py')) {
+    if (!installed.includes('ai_commit.mjs')) {
       writeFileSync(hookDst, readFileSync(hookSrc, "utf8"));
       if (process.platform !== "win32") {
         spawnSync("chmod", ["+x", hookDst]);
@@ -226,67 +230,9 @@ function updateProjectHooks(projectPath) {
 
 // === UTILS ===
 
-function checkPython() {
-  for (const cmd of ["python3", "python"]) {
-    try {
-      if (spawnSync(cmd, ["--version"], { stdio: "pipe" }).status === 0)
-        return cmd;
-    } catch {}
-  }
-  console.error("❌ Python 3.8+ is required but not found.");
-  process.exit(1);
-}
-
-function installPythonDeps() {
-  const pythonCmd = checkPython();
-
-  const result = spawnSync(pythonCmd, ["-c", "import pathspec"], {
-    stdio: "pipe",
-  });
-
-  if (result.status !== 0) {
-    const isVenv = process.env.VIRTUAL_ENV || process.env.CONDA_PREFIX;
-
-    if (isVenv) {
-      const venvName = (process.env.VIRTUAL_ENV || process.env.CONDA_PREFIX)
-        .split(/[\\/]/)
-        .pop();
-      console.error(`\n❌ Missing dependency: pathspec`);
-      console.error(`\n   You're in venv "${venvName}". Install manually:\n`);
-      console.error(`   pip install pathspec\n`);
-      process.exit(1);
-    }
-
-    // Не в venv — устанавливаем сами
-    console.log("📦 Installing pathspec...");
-    const install = spawnSync(
-      pythonCmd,
-      ["-m", "pip", "install", "--quiet", "pathspec"],
-      {
-        stdio: "inherit",
-      },
-    );
-
-    if (install.status !== 0) {
-      console.error("❌ Failed to install pathspec. Try: pip install pathspec");
-      process.exit(1);
-    }
-  }
-
-  const filterRepo = spawnSync("git", ["filter-repo", "--version"], { stdio: "pipe" });
-  if (filterRepo.status !== 0) {
-    console.log("📦 Installing git-filter-repo...");
-    const install = spawnSync(
-      pythonCmd,
-      ["-m", "pip", "install", "--quiet", "git-filter-repo"],
-      { stdio: "inherit" },
-    );
-    if (install.status !== 0) {
-      console.error("❌ Failed to install git-filter-repo. Try: pip install git-filter-repo");
-      process.exit(1);
-    }
-  }
-}
+// The commit hook is now pure Node (ai_commit.mjs) — no Python/pathspec needed.
+// git-filter-repo is only required for `qq filter`, which checks for it lazily
+// (see checkFilterRepo) and points the user at `pip install git-filter-repo`.
 
 function setGitHooksPath() {
   if (
@@ -362,7 +308,7 @@ function saveTemplates(templates) {
 async function askForScript(initial) {
   const inquirer = await import("inquirer");
   const defaultContent =
-    initial || '#!/bin/sh\npython .githooks/ai_commit.py "$1"';
+    initial || '#!/bin/sh\nnode .githooks/ai_commit.mjs "$1"';
   while (true) {
     const { script } = await inquirer.default.prompt([
       {
@@ -397,16 +343,13 @@ function validatePreCommitScript(script) {
     return "First line must be: #!/bin/sh";
   }
 
-  const hasCall = lines.some(
-    (line) =>
-      line.includes('python .githooks/ai_commit.py "$1"') ||
-      line.includes('python .githooks/ai_commit.py "\$1"') ||
-      // also allow single quotes or no quotes (less strict)
-      /python\s+\.githooks\/ai_commit\.py\s+"\$1"/.test(line),
+  const hasCall = lines.some((line) =>
+    /node\s+\.githooks\/ai_commit\.mjs\s+"\$1"/.test(line) ||
+    line.includes("node .githooks/ai_commit.mjs"),
   );
 
   if (!hasCall) {
-    return 'Script must contain: python .githooks/ai_commit.py "$1"';
+    return 'Script must contain: node .githooks/ai_commit.mjs "$1"';
   }
 
   return null;
@@ -1121,12 +1064,10 @@ async function install() {
     process.exit(1);
   }
 
-  installPythonDeps();
-
   const githooksDir = join(process.cwd(), ".githooks");
   if (!existsSync(githooksDir)) mkdirSync(githooksDir, { recursive: true });
 
-  for (const file of ["ai_commit.py", "prepare-commit-msg"]) {
+  for (const file of ["ai_commit.mjs", "prepare-commit-msg"]) {
     const src = join(SOURCE_GITHOOKS_DIR, file);
     const dst = join(githooksDir, file);
     if (!existsSync(src)) {
@@ -1134,7 +1075,7 @@ async function install() {
       process.exit(1);
     }
     const content = readFileSync(src, "utf8");
-    if (file === "ai_commit.py") {
+    if (file === "ai_commit.mjs") {
       writePyWithHash(dst, content);
     } else {
       writeFileSync(dst, content);
@@ -1241,29 +1182,11 @@ function doctor() {
 
   console.log("\n🩺 NeuroCommit Doctor\n");
 
-  // Python + version
-  let pyCmd = null;
-  let pyVer = null;
-  for (const c of ["python3", "python"]) {
-    const r = spawnSync(c, ["-c", "import sys;print('%d.%d' % sys.version_info[:2])"], { encoding: "utf8" });
-    if (r.status === 0) { pyCmd = c; pyVer = r.stdout.trim(); break; }
-  }
-  if (pyCmd) {
-    const [maj, min] = pyVer.split(".").map(Number);
-    console.log(maj > 3 || (maj === 3 && min >= 8)
-      ? ok(`Python: ${pyCmd} ${pyVer}`)
-      : bad(`Python ${pyVer} is too old — need >= 3.8`));
-  } else {
-    console.log(bad("Python 3.8+ not found"));
-  }
-
-  // pathspec dependency
-  if (pyCmd) {
-    const r = spawnSync(pyCmd, ["-c", "import pathspec"], { stdio: "pipe" });
-    console.log(r.status === 0
-      ? ok("Dependency: pathspec")
-      : bad("pathspec missing — run 'qq init' or 'pip install pathspec'"));
-  }
+  // Node version (the hook runtime; >= 18 required)
+  const nodeMajor = parseInt(process.versions.node.split(".")[0], 10);
+  console.log(nodeMajor >= 18
+    ? ok(`Node: ${process.version}`)
+    : bad(`Node ${process.version} is too old — need >= 18`));
 
   // git-filter-repo (optional, only for `qq filter`)
   const fr = spawnSync("git", ["filter-repo", "--version"], { stdio: "pipe" });
@@ -1288,18 +1211,18 @@ function doctor() {
   const hookFile = join(gitRoot, ".githooks", "prepare-commit-msg");
   console.log(existsSync(hookFile) ? ok("Hook: prepare-commit-msg present") : bad("Hook missing — run 'qq init'"));
 
-  const pyFile = join(gitRoot, ".githooks", "ai_commit.py");
+  const pyFile = join(gitRoot, ".githooks", "ai_commit.mjs");
   if (existsSync(pyFile)) {
     const hashPath = hashFilePath(pyFile);
     if (existsSync(hashPath)) {
       const stored = readFileSync(hashPath, "utf8").trim();
       const cur = fileHash(readFileSync(pyFile, "utf8"));
-      console.log(stored === cur ? ok("Hook: ai_commit.py integrity OK") : warn("ai_commit.py changed since install (hash mismatch)"));
+      console.log(stored === cur ? ok("Hook: ai_commit.mjs integrity OK") : warn("ai_commit.mjs changed since install (hash mismatch)"));
     } else {
-      console.log(warn("ai_commit.py present but no .sha256 sidecar"));
+      console.log(warn("ai_commit.mjs present but no .sha256 sidecar"));
     }
   } else {
-    console.log(bad("ai_commit.py missing — run 'qq init'"));
+    console.log(bad("ai_commit.mjs missing — run 'qq init'"));
   }
 
   // provider / key
@@ -1478,7 +1401,6 @@ async function quickFlow() {
   //  STEP 1 — Stage
   // ================================================================
   showHeader();
-  installPythonDeps();
 
   console.log(`\n${sep(`${bold}📂  Stage Changes${reset}`)}\n`);
 
@@ -1512,7 +1434,7 @@ async function quickFlow() {
   }
 
   // ── Secret scan before committing ──
-  const secrets = scanSecrets();
+  const secrets = await scanSecrets();
   if (secrets.length > 0) {
     console.log(`${yellow}🚨 ${secrets.length} potential secret(s) in staged changes:${reset}`);
     for (const f of secrets) console.log(`   • ${f.type} — ${f.file} (${f.preview})`);
@@ -1691,29 +1613,24 @@ async function quickFlow() {
   console.log(`${green}✅ Pushed successfully${reset}\n`);
 }
 
-// === SCAN / RELEASE / PR / SPLIT (delegate heavy logic to the Python hook) ===
+// === SCAN / RELEASE / PR / SPLIT (in-process via the Node hook module) ===
 
-function runPyMode(modeArgs) {
-  const py = checkPython();
-  const script = join(SOURCE_GITHOOKS_DIR, "ai_commit.py");
-  const res = spawnSync(py, [script, ...modeArgs], {
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  let data = null;
-  try {
-    data = JSON.parse((res.stdout || "").trim());
-  } catch {}
-  return { res, data };
+let _hookModule = null;
+async function hook() {
+  if (!_hookModule) _hookModule = await import(join(SOURCE_GITHOOKS_DIR, "ai_commit.mjs"));
+  return _hookModule;
+}
+function hookConfig(aic) {
+  return aic.resolveConfig(aic.loadUserConfig());
 }
 
-function scanSecrets() {
-  const { data } = runPyMode(["--scan"]);
-  return data && Array.isArray(data.findings) ? data.findings : [];
+async function scanSecrets() {
+  const aic = await hook();
+  return aic.scanStagedSecrets();
 }
 
-function scanCommand() {
-  const findings = scanSecrets();
+async function scanCommand() {
+  const findings = await scanSecrets();
   if (!findings.length) {
     console.log("\n✅ No secrets detected in staged changes.\n");
     return;
@@ -1727,7 +1644,8 @@ function scanCommand() {
 }
 
 async function releaseCommand() {
-  const { data } = runPyMode(["--release"]);
+  const aic = await hook();
+  const data = aic.buildReleaseInfo();
   if (!data || data.error) {
     console.error(`\n❌ ${data?.error || "Could not compute release."}`);
     process.exit(1);
@@ -1804,7 +1722,8 @@ async function prCommand() {
   const baseIdx = args.indexOf("--base");
   const base = baseIdx !== -1 ? args[baseIdx + 1] : null;
   console.log("\n💬 Generating pull request description...\n");
-  const { data } = runPyMode(base ? ["--pr", "--base", base] : ["--pr"]);
+  const aic = await hook();
+  const data = await aic.buildPrInfo(base, hookConfig(aic));
   if (!data || data.error) {
     console.error(`\n❌ ${data?.error || "PR generation failed."}`);
     process.exit(1);
@@ -1830,7 +1749,8 @@ async function prCommand() {
 
 async function splitCommand() {
   console.log("\n✂️  Analyzing staged changes...\n");
-  const { data } = runPyMode(["--split"]);
+  const aic = await hook();
+  const data = await aic.buildSplitPlan(hookConfig(aic));
   if (!data || data.error) {
     console.error(`\n❌ ${data?.error || "Split failed."}`);
     process.exit(1);
@@ -1901,7 +1821,7 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}release${resetColor}       Generate CHANGELOG entry, bump version & tag
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
-  ${boldCyan}doctor${resetColor}        Diagnose setup (Python, deps, hooks, provider, key)
+  ${boldCyan}doctor${resetColor}        Diagnose setup (Node, hooks, provider, key)
   ${boldCyan}filter${resetColor}        Rewrite git history (remove secrets, files, etc.)
   ${boldCyan}version${resetColor}       Show version number
   ${boldCyan}update${resetColor}        Show update instructions`);
@@ -1923,8 +1843,11 @@ if (filteredArgs.includes("--help") || filteredArgs.includes("-h")) {
   process.exit(0);
 }
 
-// === AUTO-UPDATE HOOKS (only for real commands, not flags or read-only diagnostics) ===
-if (cmd !== "uninstall" && cmd !== "update" && cmd !== "doctor" && cmd !== "status") {
+// === AUTO-UPDATE MANAGED PROJECTS' HOOKS ===
+// Only on an explicit `qq update`. Previously this ran on almost every command,
+// silently rewriting the hooks of OTHER managed repos whenever the user ran qq
+// anywhere — surprising and, across a runtime switch, actively harmful.
+if (cmd === "update") {
   const projects = getManagedProjects().filter((p) => existsSync(p));
   let updatedCount = 0;
   for (const proj of projects) {
@@ -1963,7 +1886,7 @@ async function mainCmd() {
       await splitCommand();
       break;
     case "scan":
-      scanCommand();
+      await scanCommand();
       break;
     case "pr":
       await prCommand();

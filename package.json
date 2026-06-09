@@ -25,9 +25,6 @@
     "bin/",
     ".githooks/"
   ],
-  "scripts": {
-    "prepack": "python -c \"import shutil; shutil.rmtree('.githooks/__pycache__', ignore_errors=True)\""
-  },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/rxgodev"
   },

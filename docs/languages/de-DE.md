@@ -180,7 +180,7 @@ Bearbeiten Sie `.commitignore` (Syntax wie `.gitignore`), um Dateien vom an das 
 
 | Dokument | Beschreibung |
 |----------|--------------|
-| [Architektur](../architecture.md) | Überblick über die Node.js CLI + Python-Hook-Architektur |
+| [Architektur](../architecture.md) | Überblick über die Node.js CLI + Node-Hook-Architektur |
 | [Auto-Bump](../auto-bump.md) | Intelligente Versionserhöhung für 15+ Manifestformate |
 | [Vorlagen und Projekte](../templates.md) | Multi-Repository-Verwaltung und gemeinsame Hook-Vorlagen |
 
