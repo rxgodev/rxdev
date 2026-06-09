@@ -1,12 +1,12 @@
 # Templates & Multi-Project Management
 
-NeuroCommit supports managing several repositories from a single installation, with shared `prepare-commit-msg` hook templates.
+rxcommit supports managing several repositories from a single installation, with shared `prepare-commit-msg` hook templates.
 
 ## Managed Projects
 
 When you run `qq init` in a repository, it is registered in `~/.config/ai-commit/managed-projects.json`. This enables:
 
-- **Auto-update** — hooks are automatically updated across all registered projects when NeuroCommit is upgraded
+- **Auto-update** — hooks are automatically updated across all registered projects when rxcommit is upgraded
 - **Status overview** — `qq status` shows integration state for the current repository
 - **Template application** — templates can be applied to any subset of managed projects
 

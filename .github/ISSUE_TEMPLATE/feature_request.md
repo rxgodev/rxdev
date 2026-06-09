@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for NeuroCommit
+about: Suggest an idea for rxcommit
 title: ''
 labels: enhancement
 assignees: ''

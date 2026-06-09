@@ -1,4 +1,4 @@
-// neuro-commit — the prepare-commit-msg hook (Node, zero dependencies).
+// rxcommit — the prepare-commit-msg hook (Node, zero dependencies).
 //
 // Invoked by .githooks/prepare-commit-msg as `node ai_commit.mjs "$1"`. It
 // generates a Conventional Commit message from the staged diff via any
@@ -880,7 +880,7 @@ export function callLlm(messages, cfg, opts = {}) {
 
   const headers = {
     "Content-Type": "application/json",
-    "User-Agent": `neuro-commit/${NEURO_COMMIT_VERSION}`,
+    "User-Agent": `rxcommit/${NEURO_COMMIT_VERSION}`,
     "Content-Length": Buffer.byteLength(body),
   };
   if (cfg.apiKey) headers["Authorization"] = `Bearer ${cfg.apiKey}`;
@@ -1195,10 +1195,10 @@ function isDir(p) {
 export function checkConflictingHooks(repoRoot) {
   const conflicts = [];
   if (isDir(join(repoRoot, ".husky"))) {
-    conflicts.push(".husky directory detected — conflicts with NeuroCommit hooks. Delete it or run `npx husky uninstall`.");
+    conflicts.push(".husky directory detected — conflicts with rxcommit hooks. Delete it or run `npx husky uninstall`.");
   }
   if (existsSync(join(repoRoot, "lefthook.yml")) || existsSync(join(repoRoot, "lefthook.yaml"))) {
-    conflicts.push("lefthook config detected — may conflict with NeuroCommit hooks.");
+    conflicts.push("lefthook config detected — may conflict with rxcommit hooks.");
   }
   if (existsSync(join(repoRoot, ".pre-commit-config.yaml"))) {
     conflicts.push(".pre-commit-config.yaml detected — may conflict with core.hooksPath.");
@@ -1386,7 +1386,7 @@ export async function runSubcommand(argv, cfg) {
 //  COMMIT MESSAGE COMPOSITION + MAIN FLOW
 // ============================================================
 
-const COAUTHOR_TRAILER = "Co-authored-by: NeuroCommit <autocommitrxgo@gmail.com>";
+const COAUTHOR_TRAILER = "Co-authored-by: rxcommit <autocommitrxgo@gmail.com>";
 
 export function composeMessage(message, { bumps = [], kind = "patch", addCoauthor = false } = {}) {
   let out = message;
@@ -1400,7 +1400,7 @@ export function composeMessage(message, { bumps = [], kind = "patch", addCoautho
 
 export function writeErrorToCommit(msgFile, errMsg) {
   try {
-    writeFileSync(msgFile, `# NeuroCommit: ${errMsg}\n`, "utf8");
+    writeFileSync(msgFile, `# rxcommit: ${errMsg}\n`, "utf8");
   } catch {}
 }
 
@@ -1415,7 +1415,7 @@ export async function main(commitMsgFile, cfg, opts = {}) {
     return 0;
   }
 
-  if (echo) process.stdout.write(`[+] NeuroCommit v${NEURO_COMMIT_VERSION} started\n`);
+  if (echo) process.stdout.write(`[+] rxcommit v${NEURO_COMMIT_VERSION} started\n`);
 
   const repoRoot = findRepoRoot();
   if (repoRoot) {

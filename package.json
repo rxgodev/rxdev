@@ -1,18 +1,20 @@
 {
-  "name": "@rxgodev/neuro-commit",
-  "version": "2.19.3",
+  "name": "rxcommit",
+  "version": "3.0.0",
   "description": "AI-powered commit message generator",
   "keywords": [
     "git",
     "commit",
     "ai",
     "cli",
-    "conventional-commits"
+    "conventional-commits",
+    "rxcommit"
   ],
   "license": "MIT",
   "type": "module",
   "bin": {
-    "qq": "./bin/ac.js"
+    "qq": "./bin/ac.js",
+    "rxcommit": "./bin/ac.js"
   },
   "dependencies": {
     "inquirer": "^9.0.0",

@@ -1,11 +1,11 @@
 <div align="center">
 
-# NeuroCommit
+# rxcommit
 
 **AI-powered Git commit generator** — stage, generate, review, push in one command.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-2.19.3-8250df)](https://github.com/rxgodev/neuro-commit/releases)
+[![Version](https://img.shields.io/badge/version-3.0.0-8250df)](https://github.com/rxgodev/neuro-commit/releases)
 [![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
@@ -88,17 +88,17 @@ Enter your GitHub username and a [personal access token](https://github.com/sett
 
 **npm:**
 ```bash
-npm install -g @rxgodev/neuro-commit@latest
+npm install -g rxcommit@latest
 ```
 
 **pnpm:**
 ```bash
-pnpm add -g @rxgodev/neuro-commit@latest
+pnpm add -g rxcommit@latest
 ```
 
 **yarn:**
 ```bash
-yarn global add @rxgodev/neuro-commit@latest
+yarn global add rxcommit@latest
 ```
 
 ### 3. Configure your API key

@@ -1,6 +1,6 @@
 # Architecture
 
-NeuroCommit consists of two runtime layers that work together to generate AI-powered commit messages.
+rxcommit consists of two runtime layers that work together to generate AI-powered commit messages.
 
 ## Overview
 

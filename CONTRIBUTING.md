@@ -1,4 +1,4 @@
-# Contributing to NeuroCommit
+# Contributing to rxcommit
 
 Thank you for considering contributing! Here's how to get started.
 

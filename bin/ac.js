@@ -29,7 +29,7 @@ if (update?.latest && update.latest !== pkg.version) {
 
   const lines = [
     `Update available: ${RED}${pkg.version}${RST} → ${GREEN}${update.latest}${RST}`,
-    `${DIM}pnpm add -g @rxgodev/neuro-commit@${update.latest}${RST}`,
+    `${DIM}pnpm add -g rxcommit@${update.latest}${RST}`,
   ];
 
   const maxWidth = Math.max(...lines.map((l) => s(l).length)) + 8;
@@ -1101,7 +1101,7 @@ async function install() {
   }
   registerProject();
 
-  console.log("🎉 NeuroCommit installed successfully!");
+  console.log("🎉 rxcommit installed successfully!");
 }
 
 function uninstall() {
@@ -1115,7 +1115,7 @@ function uninstall() {
 
   unsetGitHooksPath();
   console.log("✅ Git hooks path reset.");
-  console.log("🗑️ NeuroCommit uninstalled!");
+  console.log("🗑️ rxcommit uninstalled!");
 }
 
 function showStatus() {
@@ -1150,7 +1150,7 @@ function showStatus() {
   const templateName = getTemplateForProject(root) || "—";
   const cfg = loadConfig();
 
-  console.log("\n🔍 NeuroCommit Status\n");
+  console.log("\n🔍 rxcommit Status\n");
   console.log(`📁 Git root:       ${root}`);
   console.log(
     `⚙️  Hooks path:     ${hooksConfigured ? "✅ .githooks" : "❌ not set"}`,
@@ -1180,7 +1180,7 @@ function doctor() {
   const bad = (s) => `❌ ${s}`;
   const warn = (s) => `⚠️  ${s}`;
 
-  console.log("\n🩺 NeuroCommit Doctor\n");
+  console.log("\n🩺 rxcommit Doctor\n");
 
   // Node version (the hook runtime; >= 18 required)
   const nodeMajor = parseInt(process.versions.node.split(".")[0], 10);
@@ -1323,7 +1323,7 @@ async function filterHistory() {
       const s = search.trim();
       const r = replace.trim();
       const expr = r ? `literal:${s}==>${r}` : `literal:${s}`;
-      replaceTextFile = join(tmpdir(), `neuro-commit-replace-${process.pid}.txt`);
+      replaceTextFile = join(tmpdir(), `rxcommit-replace-${process.pid}.txt`);
       writeFileSync(replaceTextFile, expr + "\n");
       args.push("--replace-text", replaceTextFile);
     }
@@ -1378,7 +1378,7 @@ async function quickFlow() {
   // ── Header box (only boxed element) ──
   const showHeader = () => {
     clearScreen();
-    const lines = [`${bold}🚀  NeuroCommit QuickFlow®${reset}`];
+    const lines = [`${bold}🚀  rxcommit QuickFlow®${reset}`];
     const w = Math.max(...lines.map((l) => sa(l).length)) + 4;
     const o = "╭" + "─".repeat(w) + "╮\n" +
       "│" + " ".repeat(w) + "│\n" +
@@ -1736,7 +1736,7 @@ async function prCommand() {
   if (hasGh) {
     const create = await askYesNo(`Create the PR with gh (base: ${data.base})?`);
     if (create) {
-      const tmp = join(tmpdir(), `neuro-commit-pr-${process.pid}.md`);
+      const tmp = join(tmpdir(), `rxcommit-pr-${process.pid}.md`);
       writeFileSync(tmp, data.body);
       const r = spawnSync("gh", ["pr", "create", "--base", data.base, "--title", data.title, "--body-file", tmp], { stdio: "inherit" });
       try { unlinkSync(tmp); } catch {}
@@ -1806,7 +1806,7 @@ async function splitCommand() {
 }
 
 function showHelp() {
-  console.log(`${boldCyan}NeuroCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
+  console.log(`${boldCyan}rxcommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
 ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
   ${boldCyan}qq${resetColor} <command> [options]
@@ -1895,22 +1895,22 @@ async function mainCmd() {
       await releaseCommand();
       break;
     case "update":
-      console.log("Updating NeuroCommit...\n");
+      console.log("Updating rxcommit...\n");
       const isPnpm = __dirname.includes("pnpm") || process.env.PNPM_HOME;
       const pm = isPnpm ? "pnpm" : "npm";
-      const upd = spawnSync(pm, ["add", "-g", "@rxgodev/neuro-commit@latest"], { stdio: "inherit", shell: true });
+      const upd = spawnSync(pm, ["add", "-g", "rxcommit@latest"], { stdio: "inherit", shell: true });
       if (upd.status === 0) {
-        console.log("\n✅ NeuroCommit updated successfully.");
+        console.log("\n✅ rxcommit updated successfully.");
       } else if (pm === "pnpm") {
         console.log("\n⚠️  pnpm update failed, trying npm...\n");
-        const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/neuro-commit@latest"], { stdio: "inherit", shell: true });
+        const npmUpd = spawnSync("npm", ["install", "-g", "rxcommit@latest"], { stdio: "inherit", shell: true });
         if (npmUpd.status === 0) {
-          console.log("\n✅ NeuroCommit updated successfully.");
+          console.log("\n✅ rxcommit updated successfully.");
         } else {
-          console.log("\n❌ Update failed. Try manually:\n  pnpm add -g @rxgodev/neuro-commit@latest\n  npm install -g @rxgodev/neuro-commit@latest");
+          console.log("\n❌ Update failed. Try manually:\n  pnpm add -g rxcommit@latest\n  npm install -g rxcommit@latest");
         }
       } else {
-        console.log(`\n❌ Update failed. Try manually:\n  npm install -g @rxgodev/neuro-commit@latest`);
+        console.log(`\n❌ Update failed. Try manually:\n  npm install -g rxcommit@latest`);
       }
       break;
     case "version":
