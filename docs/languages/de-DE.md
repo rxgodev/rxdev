@@ -88,17 +88,17 @@ Geben Sie Ihren GitHub-Benutzernamen und ein [persönliches Zugriffstoken](https
 
 **npm:**
 ```bash
-npm install -g rxcommit@latest
+npm install -g @rxgodev/rxcommit@latest
 ```
 
 **pnpm:**
 ```bash
-pnpm add -g rxcommit@latest
+pnpm add -g @rxgodev/rxcommit@latest
 ```
 
 **yarn:**
 ```bash
-yarn global add rxcommit@latest
+yarn global add @rxgodev/rxcommit@latest
 ```
 
 ### 3. API-Schlüssel konfigurieren

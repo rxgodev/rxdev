@@ -1,5 +1,5 @@
 {
-  "name": "rxcommit",
+  "name": "@rxgodev/rxcommit",
   "version": "3.0.0",
   "description": "AI-powered commit message generator",
   "keywords": [
@@ -13,8 +13,8 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "qq": "./bin/ac.js",
-    "rxcommit": "./bin/ac.js"
+    "qq": "bin/ac.js",
+    "rxcommit": "bin/ac.js"
   },
   "dependencies": {
     "inquirer": "^9.0.0",

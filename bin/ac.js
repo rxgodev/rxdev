@@ -29,7 +29,7 @@ if (update?.latest && update.latest !== pkg.version) {
 
   const lines = [
     `Update available: ${RED}${pkg.version}${RST} → ${GREEN}${update.latest}${RST}`,
-    `${DIM}pnpm add -g rxcommit@${update.latest}${RST}`,
+    `${DIM}pnpm add -g @rxgodev/rxcommit@${update.latest}${RST}`,
   ];
 
   const maxWidth = Math.max(...lines.map((l) => s(l).length)) + 8;
@@ -1898,19 +1898,19 @@ async function mainCmd() {
       console.log("Updating rxcommit...\n");
       const isPnpm = __dirname.includes("pnpm") || process.env.PNPM_HOME;
       const pm = isPnpm ? "pnpm" : "npm";
-      const upd = spawnSync(pm, ["add", "-g", "rxcommit@latest"], { stdio: "inherit", shell: true });
+      const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit", shell: true });
       if (upd.status === 0) {
         console.log("\n✅ rxcommit updated successfully.");
       } else if (pm === "pnpm") {
         console.log("\n⚠️  pnpm update failed, trying npm...\n");
-        const npmUpd = spawnSync("npm", ["install", "-g", "rxcommit@latest"], { stdio: "inherit", shell: true });
+        const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit", shell: true });
         if (npmUpd.status === 0) {
           console.log("\n✅ rxcommit updated successfully.");
         } else {
-          console.log("\n❌ Update failed. Try manually:\n  pnpm add -g rxcommit@latest\n  npm install -g rxcommit@latest");
+          console.log("\n❌ Update failed. Try manually:\n  pnpm add -g @rxgodev/rxcommit@latest\n  npm install -g @rxgodev/rxcommit@latest");
         }
       } else {
-        console.log(`\n❌ Update failed. Try manually:\n  npm install -g rxcommit@latest`);
+        console.log(`\n❌ Update failed. Try manually:\n  npm install -g @rxgodev/rxcommit@latest`);
       }
       break;
     case "version":
