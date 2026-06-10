@@ -8,12 +8,4 @@ assignees: ''
 
 ## Problem
 
-What problem does this solve?
-
-## Solution
-
-Describe the feature you'd like.
-
-## Alternatives
-
-Any other approaches you've considered.
+What pain point or workflow gap does this address?

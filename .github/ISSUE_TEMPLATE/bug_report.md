@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help us improve
+about: Something in RXCommit isn't working as expected
 title: ''
 labels: bug
 assignees: ''
@@ -8,11 +8,11 @@ assignees: ''
 
 ## Bug
 
-A clear description of the bug.
+What's going wrong? Include the exact `qq` command you ran and the output or error message.
 
 ## Steps to Reproduce
 
-1. Run `qq ...`
+1. `qq init` (or whatever command)
 2. See error
 
 ## Expected
@@ -23,8 +23,9 @@ What should have happened instead.
 
 - OS:
 - Node.js version:
-- RXCommit version:
+- RXCommit version (`qq version`):
+- Provider (groq, openai, ollama, etc):
 
-## Details
+## Logs
 
-Logs, screenshots, or anything else.
+Output from `qq doctor` and/or the contents of `ai_commit_debug.log` if it exists.
