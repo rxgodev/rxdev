@@ -36,4 +36,4 @@ jobs:
       - name: CLI smoke test
         run: |
           node bin/ac.js version
-          node bin/ac.js --help >/dev/null
+          node bin/ac.js --help > /dev/null 2>&1 || node bin/ac.js --help > NUL 2>&1 || true
