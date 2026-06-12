@@ -8,6 +8,9 @@ node_modules/
 .npmrc
 npmrc
 
+# RXCommit debug log
+ai_commit_debug.log
+
 # C extensions
 *.so
 

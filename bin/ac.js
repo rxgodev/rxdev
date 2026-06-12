@@ -7,7 +7,7 @@ import readline from "readline";
 import { homedir, tmpdir } from "os";
 import updateNotifier from "update-notifier";
 import { unlinkSync } from "fs";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -273,9 +273,15 @@ async function promptSelect(options, message) {
 }
 
 function spawnAsync(cmd, args, options = {}) {
-  return new Promise((resolve) => {
-    const proc = spawn(cmd, args, { ...options, stdio: "ignore" });
-    proc.on("close", resolve);
+  const { timeout = 30000, ...spawnOpts } = options;
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, args, { ...spawnOpts, stdio: "ignore" });
+    const timer = setTimeout(() => {
+      proc.kill();
+      reject(new Error(`spawn ${cmd} timed out after ${timeout}ms`));
+    }, timeout);
+    proc.on("error", (e) => { clearTimeout(timer); reject(e); });
+    proc.on("close", (code) => { clearTimeout(timer); resolve(code); });
   });
 }
 
@@ -1323,7 +1329,7 @@ async function filterHistory() {
       const s = search.trim();
       const r = replace.trim();
       const expr = r ? `literal:${s}==>${r}` : `literal:${s}`;
-      replaceTextFile = join(tmpdir(), `rxcommit-replace-${process.pid}.txt`);
+      replaceTextFile = join(tmpdir(), `rxcommit-replace-${randomBytes(8).toString("hex")}.txt`);
       writeFileSync(replaceTextFile, expr + "\n");
       args.push("--replace-text", replaceTextFile);
     }
@@ -1718,9 +1724,8 @@ async function releaseCommand() {
   }
 }
 
-async function prCommand() {
-  const baseIdx = args.indexOf("--base");
-  const base = baseIdx !== -1 ? args[baseIdx + 1] : null;
+async function prCommand(baseArg) {
+  const base = baseArg || null;
   console.log("\n💬 Generating pull request description...\n");
   const aic = await hook();
   const data = await aic.buildPrInfo(base, hookConfig(aic));
@@ -1736,7 +1741,7 @@ async function prCommand() {
   if (hasGh) {
     const create = await askYesNo(`Create the PR with gh (base: ${data.base})?`);
     if (create) {
-      const tmp = join(tmpdir(), `rxcommit-pr-${process.pid}.md`);
+      const tmp = join(tmpdir(), `rxcommit-pr-${randomBytes(8).toString("hex")}.md`);
       writeFileSync(tmp, data.body);
       const r = spawnSync("gh", ["pr", "create", "--base", data.base, "--title", data.title, "--body-file", tmp], { stdio: "inherit" });
       try { unlinkSync(tmp); } catch {}
@@ -1888,9 +1893,12 @@ async function mainCmd() {
     case "scan":
       await scanCommand();
       break;
-    case "pr":
-      await prCommand();
+    case "pr": {
+      const baseIdx = args.indexOf("--base");
+      const base = baseIdx !== -1 ? args[baseIdx + 1] : null;
+      await prCommand(base);
       break;
+    }
     case "release":
       await releaseCommand();
       break;
@@ -1898,12 +1906,12 @@ async function mainCmd() {
       console.log("Updating RXCommit...\n");
       const isPnpm = __dirname.includes("pnpm") || process.env.PNPM_HOME;
       const pm = isPnpm ? "pnpm" : "npm";
-      const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit", shell: true });
+      const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit" });
       if (upd.status === 0) {
         console.log("\n✅ RXCommit updated successfully.");
       } else if (pm === "pnpm") {
         console.log("\n⚠️  pnpm update failed, trying npm...\n");
-        const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit", shell: true });
+        const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit" });
         if (npmUpd.status === 0) {
           console.log("\n✅ RXCommit updated successfully.");
         } else {

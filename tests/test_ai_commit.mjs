@@ -3,7 +3,7 @@
 // Run with:  node --test tests/test_ai_commit.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { createServer } from "node:http";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
@@ -19,7 +19,8 @@ function tmpGitRepo() {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-const aic = await import(join(here, "..", ".githooks", "ai_commit.mjs"));
+const aicPath = join(here, "..", ".githooks", "ai_commit.mjs");
+const aic = await import(pathToFileURL(aicPath).href);
 
 // Local SSE server helpers for callLlm tests (no network, no keys).
 function sseServer(chunks) {

@@ -755,7 +755,7 @@ export function resolveConfig(userConfig = {}, env = process.env) {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONFIG_DIR = join(homedir(), ".config", "ai-commit");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
-const LOG_FILE = join(__dirname, "..", "ai_commit_debug.log");
+const LOG_FILE = join(homedir(), ".config", "ai-commit", "ai_commit_debug.log");
 const MAX_LOG_BYTES = 512 * 1024;
 
 export function loadUserConfig() {
@@ -1479,6 +1479,6 @@ if (isMain) {
     const commitMsgFile = arg || ".git/COMMIT_EDITMSG";
     main(commitMsgFile, cfg)
       .then((code) => process.exit(code ?? 0))
-      .catch((e) => { logMessage("FATAL: " + e.message); process.exit(0); });
+      .catch((e) => { logMessage("FATAL: " + e.message); process.exit(1); });
   }
 }
