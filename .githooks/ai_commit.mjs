@@ -684,8 +684,8 @@ export class CommitignoreMatcher {
       if (!t || t.startsWith("#")) continue;
       try {
         this.compiled.push(compilePattern(t));
-      } catch {
-        // ignore unparseable pattern rather than break the commit flow
+      } catch (e) {
+        logMessage("WARN: unparseable .commitignore pattern: " + t + " (" + e.message + ")");
       }
     }
   }
@@ -824,8 +824,10 @@ export function getStagedDiff() {
   if (!stagedFiles.length) return { diff: "", allIgnored: false };
 
   let patterns = [];
-  if (existsSync(".commitignore")) {
-    try { patterns = readCommitignore(readFileSync(".commitignore", "utf8")); } catch {}
+  const repoRoot = findRepoRoot();
+  const commitignorePath = repoRoot ? join(repoRoot, ".commitignore") : ".commitignore";
+  if (existsSync(commitignorePath)) {
+    try { patterns = readCommitignore(readFileSync(commitignorePath, "utf8")); } catch {}
   }
   const matcher = new CommitignoreMatcher(patterns);
 
@@ -928,8 +930,8 @@ export function callLlm(messages, cfg, opts = {}) {
               text += content;
               if (echo) process.stdout.write(content);
             }
-          } catch {
-            // ignore malformed SSE chunks
+          } catch (e) {
+            logMessage("WARN: malformed SSE chunk: " + e.message);
           }
         };
 

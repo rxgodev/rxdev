@@ -1928,6 +1928,11 @@ async function mainCmd() {
       showHelp();
   }
 }
+process.on("unhandledRejection", (e) => {
+  console.error(`\n❌ Unhandled error: ${e.message || e}`);
+  process.exit(1);
+});
+
 mainCmd().catch((e) => {
   console.error(`\n❌ Error: ${e.message}`);
   process.exit(1);
