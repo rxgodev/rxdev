@@ -15,24 +15,39 @@
 // version handlers, changelog, secret scanning, the provider registry + streaming
 // LLM call, config/diff IO, version-bump orchestration, and the main() flow.
 
-import {
-  readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync,
-  appendFileSync, renameSync, statSync,
-} from "node:fs";
-import { homedir } from "node:os";
-import { join, dirname, basename, relative, sep } from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
+import { homedir } from "node:os";
+import { basename, dirname, join, relative, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const NEURO_COMMIT_VERSION = "2.19.3";
 
 export const DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant";
 
 export const DEFAULT_VALID_TYPES = [
-  "feat", "fix", "chore", "docs", "style",
-  "refactor", "perf", "test", "build", "ci", "revert",
+  "feat",
+  "fix",
+  "chore",
+  "docs",
+  "style",
+  "refactor",
+  "perf",
+  "test",
+  "build",
+  "ci",
+  "revert",
 ];
 
 // Mutable in later slices (custom types from config); fixed for now.
@@ -104,8 +119,8 @@ function buildTypeRegexStr(types) {
 }
 
 const TYPE_REGEX_STR = buildTypeRegexStr(validTypes);
-const TYPE_REGEX = new RegExp("^(?:" + TYPE_REGEX_STR + ")", "i");
-const COMMIT_RE = new RegExp("^(?:" + TYPE_REGEX_STR + ")(?:\\([^)]*\\))?\\s*:", "i");
+const _TYPE_REGEX = new RegExp(`^(?:${TYPE_REGEX_STR})`, "i");
+const _COMMIT_RE = new RegExp(`^(?:${TYPE_REGEX_STR})(?:\\([^)]*\\))?\\s*:`, "i");
 
 export function buildSystemPrompt(typesStr, language, customPrompt = "") {
   if (customPrompt) return customPrompt.replace("{types}", typesStr);
@@ -140,9 +155,12 @@ export function isValidCommitMessage(msg, types = validTypes) {
 }
 
 export function normalizeType(text, typeRegexStr = TYPE_REGEX_STR) {
-  const m = text.match(new RegExp("^(" + typeRegexStr + ")", "i"));
+  const m = text.match(new RegExp(`^(${typeRegexStr})`, "i"));
   if (m) {
-    const rest = text.slice(m[0].length).replace(/^[: ]+/, "").trim();
+    const rest = text
+      .slice(m[0].length)
+      .replace(/^[: ]+/, "")
+      .trim();
     const sm = rest.match(/^\(([^)]*)\)\s*:\s*(.*)/);
     if (sm) return `${m[1].toLowerCase()}(${sm[1]}): ${sm[2].trim()}`;
     return `${m[1].toLowerCase()}: ${rest}`;
@@ -151,26 +169,58 @@ export function normalizeType(text, typeRegexStr = TYPE_REGEX_STR) {
 }
 
 const SKIP_PREFIXES = [
-  "commit message", "response", "output", "result",
-  "explanation", "changes", "summary", "diff", "analysis",
-  "here is", "here's", "based on", "it appears", "a suitable",
-  "the diff shows", "looking at", "in this commit",
+  "commit message",
+  "response",
+  "output",
+  "result",
+  "explanation",
+  "changes",
+  "summary",
+  "diff",
+  "analysis",
+  "here is",
+  "here's",
+  "based on",
+  "it appears",
+  "a suitable",
+  "the diff shows",
+  "looking at",
+  "in this commit",
 ];
 
 const STOP_PREFIXES = [
-  "however", "alternatively", "if you want", "it's worth noting",
-  "the feat", "the fix", "the chore", "the docs", "the style",
-  "the refactor", "the test", "the build", "the ci", "the revert",
-  "or, if you", "or you could", "note:", "note that",
-  "this commit message", "this commit follows",
-  "in this case", "the conventional",
-  "by the way", "as an alternative",
-  "the diff shows", "type(scope)", "type(scope):",
+  "however",
+  "alternatively",
+  "if you want",
+  "it's worth noting",
+  "the feat",
+  "the fix",
+  "the chore",
+  "the docs",
+  "the style",
+  "the refactor",
+  "the test",
+  "the build",
+  "the ci",
+  "the revert",
+  "or, if you",
+  "or you could",
+  "note:",
+  "note that",
+  "this commit message",
+  "this commit follows",
+  "in this case",
+  "the conventional",
+  "by the way",
+  "as an alternative",
+  "the diff shows",
+  "type(scope)",
+  "type(scope):",
 ];
 
 export function cleanLlmResponse(text, typeRegexStr = TYPE_REGEX_STR) {
-  const typeRegex = new RegExp("^(?:" + typeRegexStr + ")", "i");
-  const commitRe = new RegExp("^(?:" + typeRegexStr + ")(?:\\([^)]*\\))?\\s*:", "i");
+  const typeRegex = new RegExp(`^(?:${typeRegexStr})`, "i");
+  const commitRe = new RegExp(`^(?:${typeRegexStr})(?:\\([^)]*\\))?\\s*:`, "i");
 
   text = text.replace(/\*{1,2}/g, "").replace(/`{1,3}/g, "");
   const lines = text.trim().split("\n");
@@ -213,7 +263,7 @@ export function cleanLlmResponse(text, typeRegexStr = TYPE_REGEX_STR) {
   if (!subject) return "chore: update files";
 
   subject = normalizeType(subject, typeRegexStr).replace(/\.+$/, "");
-  if (subject.length > 150) subject = subject.slice(0, 147) + "...";
+  if (subject.length > 150) subject = `${subject.slice(0, 147)}...`;
 
   const body = bodyParts.join("\n").trim();
   return body ? `${subject}\n\n${body}` : subject;
@@ -227,8 +277,11 @@ export function parseCommit(message) {
   const subject = message.trim().split("\n")[0].trim();
   const m = subject.match(/^([a-z]+)(?:\(([^)]*)\))?(!)?:\s*(.+)$/);
   const result = {
-    type: null, scope: null, breaking: false,
-    description: null, footer_breaking: false,
+    type: null,
+    scope: null,
+    breaking: false,
+    description: null,
+    footer_breaking: false,
   };
   if (m) {
     result.type = m[1];
@@ -270,9 +323,16 @@ export function parseSemver(version) {
 export function bumpSemver(version, kind) {
   const p = parseSemver(version);
   if (!p) return null;
-  if (kind === "major") { p.major += 1; p.minor = 0; p.patch = 0; }
-  else if (kind === "minor") { p.minor += 1; p.patch = 0; }
-  else if (kind === "patch") { p.patch += 1; }
+  if (kind === "major") {
+    p.major += 1;
+    p.minor = 0;
+    p.patch = 0;
+  } else if (kind === "minor") {
+    p.minor += 1;
+    p.patch = 0;
+  } else if (kind === "patch") {
+    p.patch += 1;
+  }
   let r = `${p.major}.${p.minor}.${p.patch}`;
   if (p.prerelease) r += `-${p.prerelease}`;
   if (p.build) r += `+${p.build}`;
@@ -316,7 +376,7 @@ export function jsonHandle(content, newVersion) {
     if (old === undefined || old === null) return [null, null];
     if (newVersion === PEEK) return [null, old];
     data.version = newVersion;
-    return [JSON.stringify(data, null, 2) + "\n", old];
+    return [`${JSON.stringify(data, null, 2)}\n`, old];
   } catch {
     return [null, null];
   }
@@ -328,7 +388,10 @@ export function tomlRegexExtract(content, sections) {
   let current = null;
   for (const line of content.split(/\r?\n/)) {
     const sm = line.match(sectionRe);
-    if (sm) { current = sm[1].trim(); continue; }
+    if (sm) {
+      current = sm[1].trim();
+      continue;
+    }
     if (sections.includes(current)) {
       const vm = line.match(verRe);
       if (vm) return vm[1];
@@ -347,7 +410,7 @@ export function plainHandle(content, newVersion) {
   const old = lines[0].trim();
   if (!/^\d+\.\d+\.\d+/.test(old)) return [null, null];
   if (newVersion === PEEK) return [null, old];
-  return [newVersion + "\n", old];
+  return [`${newVersion}\n`, old];
 }
 
 export function gradleHandle(content, newVersion) {
@@ -406,7 +469,7 @@ export function groupCommits(commits) {
   let bump = "patch";
   for (const c of commits) {
     const parsed = parseCommit(c.subject);
-    const full = c.subject + (c.body ? "\n\n" + c.body : "");
+    const full = c.subject + (c.body ? `\n\n${c.body}` : "");
     const kind = determineBumpKind(full);
     if (rank[kind] > rank[bump]) bump = kind;
     if (parsed.breaking || parsed.footer_breaking) {
@@ -414,7 +477,8 @@ export function groupCommits(commits) {
     }
     const t = parsed.type;
     if (SECTION_KEYS.has(t) && parsed.description) {
-      (groups[t] ||= []).push({ scope: parsed.scope, desc: parsed.description, hash: c.hash });
+      if (!groups[t]) groups[t] = [];
+      groups[t].push({ scope: parsed.scope, desc: parsed.description, hash: c.hash });
     }
   }
   return { groups, breaking, bump };
@@ -429,7 +493,7 @@ export function renderChangelog(version, groups, breaking, dateStr) {
   }
   for (const [key, title] of SECTION_ORDER) {
     const items = groups[key];
-    if (!items || !items.length) continue;
+    if (!items?.length) continue;
     lines.push(`### ${title}`);
     for (const it of items) {
       const scope = it.scope ? `**${it.scope}:** ` : "";
@@ -437,7 +501,7 @@ export function renderChangelog(version, groups, breaking, dateStr) {
     }
     lines.push("");
   }
-  return lines.join("\n").replace(/\s+$/, "") + "\n";
+  return `${lines.join("\n").replace(/\s+$/, "")}\n`;
 }
 
 // ============================================================
@@ -454,7 +518,10 @@ export const SECRET_PATTERNS = [
   ["Stripe secret key", /sk_live_[0-9A-Za-z]{24,}/],
   ["Private key block", /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/],
   ["JSON Web Token", /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
-  ["Hardcoded secret assignment", /(api[_-]?key|secret|token|passwd|password)\s*[=:]\s*['"][^'"]{8,}['"]/i],
+  [
+    "Hardcoded secret assignment",
+    /(api[_-]?key|secret|token|passwd|password)\s*[=:]\s*['"][^'"]{8,}['"]/i,
+  ],
 ];
 
 export function scanDiffForSecrets(diffText) {
@@ -490,11 +557,17 @@ export function scanDiffForSecrets(diffText) {
 export function extractJson(text) {
   if (!text) return null;
   let t = String(text).trim();
-  t = t.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "").trim();
+  t = t
+    .replace(/^```(?:json)?\s*/, "")
+    .replace(/\s*```$/, "")
+    .trim();
   try {
     return JSON.parse(t);
   } catch {}
-  for (const [open, close] of [["[", "]"], ["{", "}"]]) {
+  for (const [open, close] of [
+    ["[", "]"],
+    ["{", "}"],
+  ]) {
     const i = t.indexOf(open);
     const j = t.lastIndexOf(close);
     if (i !== -1 && j > i) {
@@ -511,13 +584,27 @@ export function extractJson(text) {
 // ============================================================
 
 const FALLBACK_EXT_TYPES = [
-  [".js", "feat"], [".ts", "feat"], [".jsx", "feat"], [".tsx", "feat"],
-  [".json", "config"], [".toml", "config"], [".yaml", "config"], [".yml", "config"],
-  [".md", "docs"], [".css", "style"], [".scss", "style"], [".html", "feat"],
+  [".js", "feat"],
+  [".ts", "feat"],
+  [".jsx", "feat"],
+  [".tsx", "feat"],
+  [".json", "config"],
+  [".toml", "config"],
+  [".yaml", "config"],
+  [".yml", "config"],
+  [".md", "docs"],
+  [".css", "style"],
+  [".scss", "style"],
+  [".html", "feat"],
 ];
 const FALLBACK_TYPE_MAP = {
-  feat: "feat", fix: "fix", docs: "docs", style: "style",
-  refactor: "refactor", test: "test", config: "chore",
+  feat: "feat",
+  fix: "fix",
+  docs: "docs",
+  style: "style",
+  refactor: "refactor",
+  test: "test",
+  config: "chore",
 };
 const FALLBACK_SKIP_DIRS = new Set(["src", "lib", "app", "tests", ".githooks"]);
 
@@ -545,7 +632,9 @@ export function generateFallbackMessage(diff) {
 
     // .py: feat if the path hints at a new feature, else refactor
     if (lower.endsWith(".py")) {
-      const ptype = ["feat", "add", "impl", "new"].some((kw) => lower.includes(kw)) ? "feat" : "refactor";
+      const ptype = ["feat", "add", "impl", "new"].some((kw) => lower.includes(kw))
+        ? "feat"
+        : "refactor";
       parsedType = ptype;
     } else {
       for (const [pattern, ptype] of FALLBACK_EXT_TYPES) {
@@ -568,7 +657,8 @@ export function generateFallbackMessage(diff) {
 
   if (seenScopes.size) {
     parsedScope = [...seenScopes].sort(
-      (a, b) => files.filter((f) => f.includes(b)).length - files.filter((f) => f.includes(a)).length,
+      (a, b) =>
+        files.filter((f) => f.includes(b)).length - files.filter((f) => f.includes(a)).length,
     )[0];
   }
 
@@ -583,7 +673,8 @@ export function generateFallbackMessage(diff) {
   const dirChanges = {};
   for (const f of files) {
     const dirName = posixDirname(f) || ".";
-    (dirChanges[dirName] ||= []).push(posixBasename(f));
+    if (!dirChanges[dirName]) dirChanges[dirName] = [];
+    dirChanges[dirName].push(posixBasename(f));
   }
   const bodyParts = [];
   for (const directory of Object.keys(dirChanges).sort()) {
@@ -643,11 +734,22 @@ function globToRegexBody(glob) {
     if (c === "[") {
       let cls = "[";
       i++;
-      if (glob[i] === "!") { cls += "^"; i++; }
-      if (glob[i] === "]") { cls += "\\]"; i++; }
+      if (glob[i] === "!") {
+        cls += "^";
+        i++;
+      }
+      if (glob[i] === "]") {
+        cls += "\\]";
+        i++;
+      }
       while (i < n && glob[i] !== "]") {
-        if (glob[i] === "\\") { cls += "\\" + (glob[i + 1] ?? ""); i += 2; }
-        else { cls += glob[i]; i++; }
+        if (glob[i] === "\\") {
+          cls += `\\${glob[i + 1] ?? ""}`;
+          i += 2;
+        } else {
+          cls += glob[i];
+          i++;
+        }
       }
       cls += "]";
       i++; // skip closing ]
@@ -663,11 +765,20 @@ function globToRegexBody(glob) {
 function compilePattern(raw) {
   let pattern = raw;
   let negate = false;
-  if (pattern.startsWith("!")) { negate = true; pattern = pattern.slice(1); }
+  if (pattern.startsWith("!")) {
+    negate = true;
+    pattern = pattern.slice(1);
+  }
   let dirOnly = false;
-  if (pattern.endsWith("/")) { dirOnly = true; pattern = pattern.slice(0, -1); }
+  if (pattern.endsWith("/")) {
+    dirOnly = true;
+    pattern = pattern.slice(0, -1);
+  }
   let anchored = false;
-  if (pattern.startsWith("/")) { anchored = true; pattern = pattern.slice(1); }
+  if (pattern.startsWith("/")) {
+    anchored = true;
+    pattern = pattern.slice(1);
+  }
   if (pattern.includes("/")) anchored = true;
 
   const body = globToRegexBody(pattern);
@@ -685,7 +796,7 @@ export class CommitignoreMatcher {
       try {
         this.compiled.push(compilePattern(t));
       } catch (e) {
-        logMessage("WARN: unparseable .commitignore pattern: " + t + " (" + e.message + ")");
+        logMessage(`WARN: unparseable .commitignore pattern: ${t} (${e.message})`);
       }
     }
   }
@@ -720,11 +831,7 @@ export function resolveConfig(userConfig = {}, env = process.env) {
     defaultModel: DEFAULT_GROQ_MODEL,
     needsKey: false, // custom/unknown provider: don't block, let the endpoint decide
   };
-  const apiKey =
-    userConfig.apiKey ||
-    env[providerDef.env] ||
-    env.NEURO_COMMIT_API_KEY ||
-    "";
+  const apiKey = userConfig.apiKey || env[providerDef.env] || env.NEURO_COMMIT_API_KEY || "";
   const customTypes = Array.isArray(userConfig.customTypes) ? userConfig.customTypes : [];
   const allTypes = [...new Set([...DEFAULT_VALID_TYPES, ...customTypes])];
   const typesStr = [...allTypes].sort().join(", ");
@@ -772,9 +879,11 @@ export function loadUserConfig() {
 export function logMessage(message) {
   try {
     if (existsSync(LOG_FILE) && statSync(LOG_FILE).size > MAX_LOG_BYTES) {
-      try { renameSync(LOG_FILE, LOG_FILE + ".1"); } catch {}
+      try {
+        renameSync(LOG_FILE, `${LOG_FILE}.1`);
+      } catch {}
     }
-    appendFileSync(LOG_FILE, message + "\n", "utf8");
+    appendFileSync(LOG_FILE, `${message}\n`, "utf8");
   } catch {
     // logging must never break the commit flow
   }
@@ -783,7 +892,7 @@ export function logMessage(message) {
 export function git(args, cwd) {
   try {
     const r = spawnSync("git", args, { encoding: "utf8", cwd, maxBuffer: 64 * 1024 * 1024 });
-    return r.status === 0 ? (r.stdout || "") : "";
+    return r.status === 0 ? r.stdout || "" : "";
   } catch {
     return "";
   }
@@ -803,8 +912,11 @@ export function filterDiffLines(rawDiff, matcher) {
       if (parts.length >= 3) {
         currentFile = parts[parts.length - 1];
         if (currentFile.startsWith("b/")) currentFile = currentFile.slice(2);
-        if (matcher.ignores(currentFile)) { currentFile = null; continue; }
-        filtered.push("\n# File: " + currentFile);
+        if (matcher.ignores(currentFile)) {
+          currentFile = null;
+          continue;
+        }
+        filtered.push(`\n# File: ${currentFile}`);
       }
     } else if (
       currentFile &&
@@ -820,14 +932,19 @@ export function filterDiffLines(rawDiff, matcher) {
 
 export function getStagedDiff() {
   const nameOnly = git(["diff", "--cached", "--name-only"]);
-  const stagedFiles = nameOnly.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const stagedFiles = nameOnly
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (!stagedFiles.length) return { diff: "", allIgnored: false };
 
   let patterns = [];
   const repoRoot = findRepoRoot();
   const commitignorePath = repoRoot ? join(repoRoot, ".commitignore") : ".commitignore";
   if (existsSync(commitignorePath)) {
-    try { patterns = readCommitignore(readFileSync(commitignorePath, "utf8")); } catch {}
+    try {
+      patterns = readCommitignore(readFileSync(commitignorePath, "utf8"));
+    } catch {}
   }
   const matcher = new CommitignoreMatcher(patterns);
 
@@ -860,11 +977,13 @@ export function callLlm(messages, cfg, opts = {}) {
   } = opts;
 
   if (cfg.needsKey && !cfg.apiKey) {
-    return Promise.reject(new Error(
-      `API key for provider '${cfg.provider}' is not set. Run 'qq config' to set ` +
-      `your key, export ${cfg.providerEnv || "the provider env var"}, or switch ` +
-      "provider (e.g. 'ollama' runs locally with no key).",
-    ));
+    return Promise.reject(
+      new Error(
+        `API key for provider '${cfg.provider}' is not set. Run 'qq config' to set ` +
+          `your key, export ${cfg.providerEnv || "the provider env var"}, or switch ` +
+          "provider (e.g. 'ollama' runs locally with no key).",
+      ),
+    );
   }
 
   const payload = { model: cfg.model, messages, stream: true, temperature };
@@ -885,7 +1004,7 @@ export function callLlm(messages, cfg, opts = {}) {
     "User-Agent": `rxcommit/${NEURO_COMMIT_VERSION}`,
     "Content-Length": Buffer.byteLength(body),
   };
-  if (cfg.apiKey) headers["Authorization"] = `Bearer ${cfg.apiKey}`;
+  if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
 
   return new Promise((resolve, reject) => {
     const req = reqFn(
@@ -904,11 +1023,15 @@ export function callLlm(messages, cfg, opts = {}) {
 
         if (status !== 200) {
           let errBody = "";
-          res.on("data", (d) => { errBody += d; });
+          res.on("data", (d) => {
+            errBody += d;
+          });
           res.on("end", () => {
             if (status === 429) {
               logMessage(`${cfg.provider} rate limited: ${errBody}`);
-              reject(new Error(`${cfg.provider} API rate limit exceeded. Wait a moment and retry.`));
+              reject(
+                new Error(`${cfg.provider} API rate limit exceeded. Wait a moment and retry.`),
+              );
             } else {
               reject(new Error(`${cfg.provider} API HTTP ${status}: ${errBody}`));
             }
@@ -920,7 +1043,7 @@ export function callLlm(messages, cfg, opts = {}) {
         let text = "";
         const handleLine = (line) => {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) return;
+          if (!trimmed?.startsWith("data: ")) return;
           const dataStr = trimmed.slice(6);
           if (dataStr === "[DONE]") return;
           try {
@@ -931,16 +1054,17 @@ export function callLlm(messages, cfg, opts = {}) {
               if (echo) process.stdout.write(content);
             }
           } catch (e) {
-            logMessage("WARN: malformed SSE chunk: " + e.message);
+            logMessage(`WARN: malformed SSE chunk: ${e.message}`);
           }
         };
 
         res.on("data", (chunk) => {
           buffer += chunk;
-          let idx;
-          while ((idx = buffer.indexOf("\n")) !== -1) {
+          let idx = buffer.indexOf("\n");
+          while (idx !== -1) {
             handleLine(buffer.slice(0, idx));
             buffer = buffer.slice(idx + 1);
+            idx = buffer.indexOf("\n");
           }
         });
         res.on("end", () => {
@@ -968,8 +1092,7 @@ export async function generateCommitMessage(diff, cfg, opts = {}) {
   const typeRegexStr = buildTypeRegexStr(cfg.validTypes || DEFAULT_VALID_TYPES);
   const typeSet = new Set(cfg.validTypes || DEFAULT_VALID_TYPES);
 
-  const userPrompt =
-    `write a commit (subject + blank line + body explaining why) for:\n\n---\n${diff}\n---`;
+  const userPrompt = `write a commit (subject + blank line + body explaining why) for:\n\n---\n${diff}\n---`;
   const messages = [
     { role: "system", content: cfg.systemPrompt },
     { role: "user", content: userPrompt },
@@ -979,7 +1102,8 @@ export async function generateCommitMessage(diff, cfg, opts = {}) {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       logMessage(`Calling LLM (attempt ${attempt}/${MAX_ATTEMPTS})`);
-      if (echo) process.stdout.write(`[${attempt}/${MAX_ATTEMPTS}] Generating commit message...\n\n`);
+      if (echo)
+        process.stdout.write(`[${attempt}/${MAX_ATTEMPTS}] Generating commit message...\n\n`);
       const message = await callLlm(messages, cfg, { echo, typeRegexStr });
 
       if (!message || message.startsWith("#") || message.length < 10) {
@@ -989,7 +1113,9 @@ export async function generateCommitMessage(diff, cfg, opts = {}) {
       }
       if (!isValidCommitMessage(message, typeSet)) {
         lastError = "Response did not match Conventional Commits format";
-        logMessage(`Validation failed (attempt ${attempt}): ${JSON.stringify(message.slice(0, 120))}`);
+        logMessage(
+          `Validation failed (attempt ${attempt}): ${JSON.stringify(message.slice(0, 120))}`,
+        );
         continue;
       }
       logMessage(`SUCCESS on attempt ${attempt}`);
@@ -1018,7 +1144,11 @@ export function tomlReplace(content, sections, newVersion, old) {
     const stripped = line.replace(/\r?\n$/, "");
     const eol = line.slice(stripped.length);
     const sm = stripped.match(sectionRe);
-    if (sm) { current = sm[1].trim(); out.push(line); continue; }
+    if (sm) {
+      current = sm[1].trim();
+      out.push(line);
+      continue;
+    }
     if (!replaced && sections.includes(current)) {
       const vm = stripped.match(verRe);
       if (vm && vm[2] === old) {
@@ -1043,13 +1173,25 @@ export function tomlHandle(content, newVersion, sections) {
 export const MANIFEST_DEFINITIONS = [
   { name: "package.json", patterns: ["package.json"], handler: jsonHandle },
   { name: "composer.json", patterns: ["composer.json"], handler: jsonHandle },
-  { name: "Cargo.toml", patterns: ["Cargo.toml"], handler: (c, v) => tomlHandle(c, v, ["package"]) },
-  { name: "pyproject.toml", patterns: ["pyproject.toml"], handler: (c, v) => tomlHandle(c, v, ["project", "tool.poetry"]) },
+  {
+    name: "Cargo.toml",
+    patterns: ["Cargo.toml"],
+    handler: (c, v) => tomlHandle(c, v, ["package"]),
+  },
+  {
+    name: "pyproject.toml",
+    patterns: ["pyproject.toml"],
+    handler: (c, v) => tomlHandle(c, v, ["project", "tool.poetry"]),
+  },
   { name: "Chart.yaml", patterns: ["Chart.yaml"], handler: helmHandle },
   { name: "pubspec.yaml", patterns: ["pubspec.yaml"], handler: yamlHandle },
   { name: "build.gradle", patterns: ["build.gradle"], handler: gradleHandle },
   { name: "build.gradle.kts", patterns: ["build.gradle.kts"], handler: gradleHandle },
-  { name: "Version.props", patterns: ["Version.props", "Directory.Build.props"], handler: csprojHandle },
+  {
+    name: "Version.props",
+    patterns: ["Version.props", "Directory.Build.props"],
+    handler: csprojHandle,
+  },
   { name: "csproj", patterns: ["*.csproj"], handler: csprojHandle },
   { name: "gemspec", patterns: ["*.gemspec"], handler: gemspecHandle },
   { name: "setup.cfg", patterns: ["setup.cfg"], handler: setupcfgHandle },
@@ -1059,11 +1201,20 @@ export const MANIFEST_DEFINITIONS = [
 ];
 
 const SKIP_DIRS = new Set([
-  "node_modules", ".git", "__pycache__", ".venv", "venv", ".tox",
-  ".eggs", "dist", "build", ".git2", ".svn",
+  "node_modules",
+  ".git",
+  "__pycache__",
+  ".venv",
+  "venv",
+  ".tox",
+  ".eggs",
+  "dist",
+  "build",
+  ".git2",
+  ".svn",
 ]);
 
-function matchManifestPattern(name, pattern) {
+function _matchManifestPattern(name, pattern) {
   return pattern.startsWith("*.") ? name.endsWith(pattern.slice(1)) : name === pattern;
 }
 
@@ -1075,7 +1226,11 @@ function walkFiles(root) {
   while (stack.length) {
     const dir = stack.pop();
     let entries;
-    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
     for (const e of entries) {
       const full = join(dir, e.name);
       if (e.isDirectory()) {
@@ -1092,7 +1247,7 @@ export function discoverManifests(repoRoot) {
   // Build lookup structures for efficient matching
   const exactNames = new Map(); // name -> def
   const suffixPatterns = []; // { suffix, def }
-  
+
   for (const def of MANIFEST_DEFINITIONS) {
     for (const pattern of def.patterns) {
       if (pattern.startsWith("*.")) {
@@ -1102,15 +1257,15 @@ export function discoverManifests(repoRoot) {
       }
     }
   }
-  
+
   const allFiles = walkFiles(repoRoot);
   const found = [];
   const seen = new Set();
-  
+
   for (const f of allFiles) {
     const name = basename(f);
     let matchedDef = null;
-    
+
     // Check exact name matches first (cheaper)
     if (exactNames.has(name)) {
       matchedDef = exactNames.get(name);
@@ -1123,13 +1278,13 @@ export function discoverManifests(repoRoot) {
         }
       }
     }
-    
+
     if (matchedDef && !seen.has(f)) {
       seen.add(f);
       found.push({ path: f, def: matchedDef });
     }
   }
-  
+
   return found;
 }
 
@@ -1161,7 +1316,7 @@ export function getChangedFilesInScope(repoRoot, manifestRelPath) {
   const prefix = posixDirname(manifestRelPath);
   if (prefix === "." || prefix === "") return new Set();
   const out = git(["diff", "--cached", "--name-only"], repoRoot);
-  const prefixSlash = prefix + "/";
+  const prefixSlash = `${prefix}/`;
   return new Set(out.split(/\r?\n/).filter((f) => f.startsWith(prefixSlash)));
 }
 
@@ -1224,13 +1379,19 @@ export function bumpProjectVersion(kind, message = "", repoRoot = findRepoRoot()
 // ============================================================
 
 function isDir(p) {
-  try { return statSync(p).isDirectory(); } catch { return false; }
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 export function checkConflictingHooks(repoRoot) {
   const conflicts = [];
   if (isDir(join(repoRoot, ".husky"))) {
-    conflicts.push(".husky directory detected — conflicts with RXCommit hooks. Delete it or run `npx husky uninstall`.");
+    conflicts.push(
+      ".husky directory detected — conflicts with RXCommit hooks. Delete it or run `npx husky uninstall`.",
+    );
   }
   if (existsSync(join(repoRoot, "lefthook.yml")) || existsSync(join(repoRoot, "lefthook.yaml"))) {
     conflicts.push("lefthook config detected — may conflict with RXCommit hooks.");
@@ -1320,21 +1481,27 @@ export async function buildPrInfo(base, cfg) {
     return { error: `No commits on '${branch}' ahead of '${base}'.`, base, branch };
   }
   const diffstat = git(["diff", "--stat", `${base}..HEAD`]).slice(0, 2000);
-  const commitText = commits.map((c) => `- ${c.subject}` + (c.body ? `\n  ${c.body}` : "")).join("\n");
+  const commitText = commits
+    .map((c) => `- ${c.subject}${c.body ? `\n  ${c.body}` : ""}`)
+    .join("\n");
   const user = `Base branch: ${base}\nHead branch: ${branch}\n\nCommits:\n${commitText}\n\nDiff stat:\n${diffstat}`;
 
   let data;
   try {
     const raw = await callLlm(
-      [{ role: "system", content: PR_SYSTEM_PROMPT }, { role: "user", content: user }],
-      cfg, { echo: false, clean: false, temperature: 0.3, maxTokens: 900 },
+      [
+        { role: "system", content: PR_SYSTEM_PROMPT },
+        { role: "user", content: user },
+      ],
+      cfg,
+      { echo: false, clean: false, temperature: 0.3, maxTokens: 900 },
     );
     data = extractJson(raw);
   } catch (e) {
     return { error: e.message, base, branch };
   }
   if (!data || typeof data !== "object" || !("title" in data) || !("body" in data)) {
-    data = { title: commits[0].subject, body: "## Changes\n" + commitText };
+    data = { title: commits[0].subject, body: `## Changes\n${commitText}` };
   }
   return { ...data, base, branch, count: commits.length };
 }
@@ -1347,25 +1514,41 @@ const SPLIT_SYSTEM_PROMPT =
   "single group. Use lowercase imperative subjects with no trailing period.";
 
 export async function buildSplitPlan(cfg) {
-  const staged = git(["diff", "--cached", "--name-only"]).split(/\r?\n/).filter((s) => s.trim());
+  const staged = git(["diff", "--cached", "--name-only"])
+    .split(/\r?\n/)
+    .filter((s) => s.trim());
   if (!staged.length) {
-    return { error: "No staged changes. Stage files first with 'git add'.", groups: [], staged: [] };
+    return {
+      error: "No staged changes. Stage files first with 'git add'.",
+      groups: [],
+      staged: [],
+    };
   }
-  const parts = staged.map((f) => `### ${f}\n${git(["diff", "--cached", "--unified=0", "--", f]).slice(0, 700)}`);
-  const user = ("Staged files and their diffs:\n\n" + parts.join("\n\n")).slice(0, 6000);
+  const parts = staged.map(
+    (f) => `### ${f}\n${git(["diff", "--cached", "--unified=0", "--", f]).slice(0, 700)}`,
+  );
+  const user = `Staged files and their diffs:\n\n${parts.join("\n\n")}`.slice(0, 6000);
 
   let data;
   try {
     const raw = await callLlm(
-      [{ role: "system", content: SPLIT_SYSTEM_PROMPT }, { role: "user", content: user }],
-      cfg, { echo: false, clean: false, temperature: 0.1, maxTokens: 900 },
+      [
+        { role: "system", content: SPLIT_SYSTEM_PROMPT },
+        { role: "user", content: user },
+      ],
+      cfg,
+      { echo: false, clean: false, temperature: 0.1, maxTokens: 900 },
     );
     data = extractJson(raw);
   } catch (e) {
     return { error: e.message, groups: [], staged };
   }
-  let groups = Array.isArray(data) ? data : (data && Array.isArray(data.groups) ? data.groups : null);
-  if (!groups || !groups.length) {
+  const groups = Array.isArray(data)
+    ? data
+    : data && Array.isArray(data.groups)
+      ? data.groups
+      : null;
+  if (!groups?.length) {
     return { error: "Could not parse a split plan from the model.", groups: [], staged };
   }
   const assigned = [];
@@ -1427,9 +1610,9 @@ export function composeMessage(message, { bumps = [], kind = "patch", addCoautho
   let out = message;
   if (bumps.length) {
     const footer = [`Bump version (${kind}):`, ...bumps.map(([f, o, n]) => `  ${f}: ${o} → ${n}`)];
-    out += "\n\n" + footer.join("\n");
+    out += `\n\n${footer.join("\n")}`;
   }
-  if (addCoauthor) out += "\n\n" + COAUTHOR_TRAILER;
+  if (addCoauthor) out += `\n\n${COAUTHOR_TRAILER}`;
   return out;
 }
 
@@ -1444,7 +1627,9 @@ export async function main(commitMsgFile, cfg, opts = {}) {
   logMessage("\n--- HOOK STARTED ---");
 
   let existing = "";
-  try { existing = readFileSync(commitMsgFile, "utf8").trim(); } catch {}
+  try {
+    existing = readFileSync(commitMsgFile, "utf8").trim();
+  } catch {}
   if (existing && !existing.startsWith("#")) {
     logMessage("User-provided commit message detected. Skipping AI generation.");
     return 0;
@@ -1508,12 +1693,15 @@ const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv
 if (isMain) {
   const cfg = resolveConfig(loadUserConfig());
   const arg = process.argv[2];
-  if (arg && arg.startsWith("--")) {
+  if (arg?.startsWith("--")) {
     runSubcommand(process.argv.slice(2), cfg).then((code) => process.exit(code));
   } else {
     const commitMsgFile = arg || ".git/COMMIT_EDITMSG";
     main(commitMsgFile, cfg)
       .then((code) => process.exit(code ?? 0))
-      .catch((e) => { logMessage("FATAL: " + e.message); process.exit(1); });
+      .catch((e) => {
+        logMessage(`FATAL: ${e.message}`);
+        process.exit(1);
+      });
   }
 }
