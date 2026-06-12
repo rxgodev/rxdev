@@ -1089,21 +1089,54 @@ function walkFiles(root) {
 }
 
 export function discoverManifests(repoRoot) {
-  const allFiles = walkFiles(repoRoot);
-  const found = [];
-  const seen = new Set();
+  // Build lookup structures for efficient matching
+  const exactNames = new Map(); // name -> def
+  const suffixPatterns = []; // { suffix, def }
+  
   for (const def of MANIFEST_DEFINITIONS) {
-    const matches = allFiles
-      .filter((f) => def.patterns.some((p) => matchManifestPattern(basename(f), p)))
-      .sort();
-    for (const f of matches) {
-      if (!seen.has(f)) {
-        seen.add(f);
-        found.push({ path: f, def });
+    for (const pattern of def.patterns) {
+      if (pattern.startsWith("*.")) {
+        suffixPatterns.push({ suffix: pattern.slice(1), def });
+      } else {
+        exactNames.set(pattern, def);
       }
     }
   }
+  
+  const allFiles = walkFiles(repoRoot);
+  const found = [];
+  const seen = new Set();
+  
+  for (const f of allFiles) {
+    const name = basename(f);
+    let matchedDef = null;
+    
+    // Check exact name matches first (cheaper)
+    if (exactNames.has(name)) {
+      matchedDef = exactNames.get(name);
+    } else {
+      // Check suffix patterns
+      for (const { suffix, def } of suffixPatterns) {
+        if (name.endsWith(suffix)) {
+          matchedDef = def;
+          break;
+        }
+      }
+    }
+    
+    if (matchedDef && !seen.has(f)) {
+      seen.add(f);
+      found.push({ path: f, def: matchedDef });
+    }
+  }
+  
   return found;
+}
+
+let _manifestCache = null;
+export function getManifests(repoRoot) {
+  if (!_manifestCache) _manifestCache = discoverManifests(repoRoot);
+  return _manifestCache;
 }
 
 export function manifestGetVersion(content, def) {
@@ -1142,7 +1175,7 @@ export function shouldBumpManifest(manifestRelPath, repoRoot, message) {
 
 export function bumpProjectVersion(kind, message = "", repoRoot = findRepoRoot()) {
   if (!repoRoot) return [];
-  const manifests = discoverManifests(repoRoot);
+  const manifests = getManifests(repoRoot);
   if (!manifests.length) {
     logMessage("bump: no manifests found in repo");
     return [];
@@ -1252,7 +1285,7 @@ export function buildReleaseInfo(todayStr) {
   // Highest known version (tag or manifest), so a repo that tags less often
   // than it bumps its manifest never regresses.
   let current = getLatestTagVersion(repoRoot);
-  for (const { path, def } of discoverManifests(repoRoot)) {
+  for (const { path, def } of getManifests(repoRoot)) {
     try {
       const v = manifestGetVersion(readFileSync(path, "utf8"), def);
       if (v) current = semverMax(current, v);
