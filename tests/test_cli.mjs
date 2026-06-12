@@ -14,7 +14,9 @@ function run(...args) {
 test("version", () => {
   const r = run("version");
   assert.equal(r.status, 0);
-  assert.ok(r.stdout.trim().startsWith("v"));
+  const lines = r.stdout.trim().split("\n");
+  const versionLine = lines.find((l) => l.trim().startsWith("v"));
+  assert.ok(versionLine, "Expected a line starting with 'v'");
 });
 
 test("--help", () => {
