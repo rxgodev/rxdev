@@ -70,6 +70,7 @@ const DEFAULT_CONFIG = {
 };
 
 // OpenAI-compatible providers (mirror of PROVIDERS in ai_commit.mjs).
+// Keep in sync with .githooks/ai_commit.mjs PROVIDERS.
 const PROVIDERS = {
   groq: { label: "Groq (fast, free tier)", env: "GROQ_API_KEY", defaultModel: "llama-3.1-8b-instant" },
   openai: { label: "OpenAI", env: "OPENAI_API_KEY", defaultModel: "gpt-4o-mini" },
