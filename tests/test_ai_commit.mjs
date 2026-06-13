@@ -559,6 +559,29 @@ test("getManifests: cache is keyed by repoRoot (no cross-repo bleed)", () => {
   }
 });
 
+test("buildPromptDiff: short diff is returned unchanged", () => {
+  const d = "# File: a.js\n+x\n+y";
+  assert.equal(aic.buildPromptDiff(d, 1000), d);
+});
+
+test("buildPromptDiff: keeps every file header within the budget", () => {
+  const file = (name, n) =>
+    `# File: ${name}\n${Array.from({ length: n }, (_, i) => `+line ${i}`).join("\n")}`;
+  const d = [file("a.js", 80), file("b.js", 80), file("c.js", 80)].join("\n");
+  const out = aic.buildPromptDiff(d, 400);
+  assert.ok(out.length <= 400, `length ${out.length} > 400`);
+  // A blind slice(0, 400) would drop b.js and c.js entirely; we keep all headers.
+  assert.ok(out.includes("# File: a.js"));
+  assert.ok(out.includes("# File: b.js"));
+  assert.ok(out.includes("# File: c.js"));
+  assert.ok(/more changed line/.test(out)); // truncation marker present
+});
+
+test("buildPromptDiff: non-file-structured input falls back to a slice", () => {
+  const d = `Files changed (binary or no text diff):\n${"x".repeat(500)}`;
+  assert.equal(aic.buildPromptDiff(d, 100).length, 100);
+});
+
 // ── slice 5: main flow + subcommands ──
 
 test("composeMessage: bump footer + co-author", () => {

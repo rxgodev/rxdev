@@ -1395,20 +1395,59 @@ async function filterHistory() {
       args.push("--replace-text", replaceTextFile);
     }
 
-    console.log(`\n${red}${bold}⚠️  WARNING: This will REWRITE git history!${reset}`);
-    console.log(`${dim}This is a destructive operation. Make sure you have a backup.${reset}\n`);
+    const cleanupTmp = () => {
+      if (replaceTextFile) {
+        try {
+          unlinkSync(replaceTextFile);
+        } catch {}
+      }
+    };
 
-    const { confirm } = await inq.default.prompt([
+    console.log(`\n${red}${bold}⚠️  WARNING: This will REWRITE git history!${reset}`);
+    console.log(
+      `${dim}This is destructive and irreversible. Command: git ${args.join(" ")}${reset}\n`,
+    );
+
+    const repoName = gitRoot.split(/[\\/]/).filter(Boolean).pop() || "repo";
+
+    // 1) Safety backup — a bundle captures ALL refs and can fully restore the repo.
+    const { backup } = await inq.default.prompt([
       {
         type: "confirm",
-        name: "confirm",
-        message: `Run: git ${args.join(" ")}`,
-        default: false,
+        name: "backup",
+        message: "Create a safety backup bundle first? (recommended)",
+        default: true,
       },
     ]);
+    if (backup) {
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const bundlePath = join(dirname(gitRoot), `${repoName}-backup-${stamp}.bundle`);
+      console.log(`\n💾 Backing up to ${bundlePath} ...`);
+      const b = spawnSync("git", ["bundle", "create", bundlePath, "--all"], {
+        stdio: "inherit",
+        cwd: gitRoot,
+      });
+      if (b.status !== 0) {
+        console.error("\n❌ Backup failed — aborting. No history was rewritten.");
+        cleanupTmp();
+        process.exit(1);
+      }
+      console.log(
+        `${green}✅ Backup created.${reset} ${dim}Restore with: git clone "${bundlePath}" <dir>${reset}\n`,
+      );
+    }
 
-    if (!confirm) {
-      console.log("↩️  Cancelled.\n");
+    // 2) Typed confirmation — must type the repo name (GitHub-style guard).
+    const { typed } = await inq.default.prompt([
+      {
+        type: "input",
+        name: "typed",
+        message: `Type the repository name "${repoName}" to confirm (empty cancels):`,
+      },
+    ]);
+    if (typed.trim() !== repoName) {
+      console.log("↩️  Name did not match — cancelled. No history was rewritten.\n");
+      cleanupTmp();
       continue;
     }
 
