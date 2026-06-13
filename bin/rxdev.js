@@ -1144,6 +1144,11 @@ async function install() {
     }
   }
 
+  const oldLogFile = join(process.cwd(), "ai_commit_debug.log");
+  if (existsSync(oldLogFile)) {
+    try { unlinkSync(oldLogFile); } catch {}
+  }
+
   if (process.platform !== "win32") {
     spawnSync("chmod", ["+x", join(githooksDir, "prepare-commit-msg")]);
   }
