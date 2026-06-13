@@ -1790,7 +1790,9 @@ async function hook() {
   return _hookModule;
 }
 function hookConfig(aic) {
-  return aic.resolveConfig(aic.loadUserConfig());
+  const userConfig = aic.loadUserConfig();
+  const projectConfig = aic.loadProjectConfig(process.cwd());
+  return aic.resolveConfig({ ...userConfig, ...projectConfig });
 }
 
 async function scanSecrets() {

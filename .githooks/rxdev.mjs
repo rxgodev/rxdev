@@ -892,9 +892,49 @@ export function resolveConfig(userConfig = {}, env = process.env) {
 // ============================================================
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CONFIG_DIR = join(homedir(), ".config", "ai-commit");
+const OLD_CONFIG_DIR = join(homedir(), ".config", "ai-commit");
+const CONFIG_DIR = join(homedir(), ".config", "rxdev");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
-const LOG_FILE = join(homedir(), ".config", "ai-commit", "ai_commit_debug.log");
+const LOG_FILE = join(CONFIG_DIR, "rxdev_debug.log");
+
+function migrateOldConfig() {
+  if (existsSync(CONFIG_DIR) || !existsSync(OLD_CONFIG_DIR)) return;
+  try {
+    mkdirSync(CONFIG_DIR, { recursive: true });
+    const oldConfig = join(OLD_CONFIG_DIR, "config.json");
+    if (existsSync(oldConfig)) {
+      writeFileSync(CONFIG_FILE, readFileSync(oldConfig, "utf8"));
+    }
+  } catch {}
+}
+
+export function loadProjectConfig(repoRoot) {
+  const ymlPath = join(repoRoot || ".", "rxdev.yml");
+  if (!existsSync(ymlPath)) return {};
+  try {
+    const content = readFileSync(ymlPath, "utf8");
+    const config = {};
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const match = trimmed.match(/^(\w+):\s*(.+)$/);
+      if (match) {
+        let [, key, value] = match;
+        value = value.trim();
+        if (value === "true") value = true;
+        else if (value === "false") value = false;
+        else if (/^\d+$/.test(value)) value = parseInt(value, 10);
+        else if (value.startsWith("[") && value.endsWith("]")) {
+          value = value.slice(1, -1).split(",").map((s) => s.trim());
+        }
+        config[key] = value;
+      }
+    }
+    return config;
+  } catch {
+    return {};
+  }
+}
 const MAX_LOG_BYTES = 512 * 1024;
 
 export function loadUserConfig() {
@@ -1945,7 +1985,11 @@ export async function main(commitMsgFile, cfg, opts = {}) {
 // ── Script entrypoint (inert when imported, e.g. by tests) ──
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  const cfg = resolveConfig(loadUserConfig());
+  migrateOldConfig();
+  const repoRoot = findRepoRoot();
+  const projectConfig = loadProjectConfig(repoRoot);
+  const userConfig = { ...loadUserConfig(), ...projectConfig };
+  const cfg = resolveConfig(userConfig);
   const arg = process.argv[2];
   if (arg?.startsWith("--")) {
     runSubcommand(process.argv.slice(2), cfg).then((code) => process.exit(code));
