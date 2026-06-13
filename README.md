@@ -33,9 +33,9 @@
 ## What's New in v4.0
 
 - **Renamed** from `rxcommit` to `rxdev` — broader scope beyond just commits
-- **AI Code Review** (`qq review`) — review staged changes or PRs before committing
+- **AI Code Review** (`rxdev review`) — review staged changes or PRs before committing
 - **Contextual Commits** — uses branch name, recent commits, and GitHub Issues for better messages
-- **Analytics** (`qq analytics`) — commit statistics and bad practice detection
+- **Analytics** (`rxdev analytics`) — commit statistics and bad practice detection
 - **Smart Split** — auto-detects file types (tests, docs, config) for intelligent grouping
 - **Config as Code** — `rxdev.yml` in your project root for team-shared settings
 - **GitHub Action** — automatic AI review on every PR
@@ -46,12 +46,12 @@
 
 ## Features
 
-### QuickFlow (`qq go`)
+### QuickFlow (`rxdev go`)
 
 The flagship workflow. Stage, generate, review, push in one command:
 
 ```
-$ qq go
+$ rxdev go
 ```
 
 1. **Stage** — interactively choose files to include
@@ -59,12 +59,12 @@ $ qq go
 3. **Review** — see the message, choose what to do next
 4. **Push** — accept and push, or edit, regenerate, or cancel
 
-### AI Code Review (`qq review`)
+### AI Code Review (`rxdev review`)
 
 Get instant feedback on your staged changes:
 
 ```
-$ qq review
+$ rxdev review
 ```
 
 - Analyzes code for bugs, security issues, and performance problems
@@ -79,12 +79,12 @@ Commit messages that understand your workflow:
 - **Recent history** — considers the last 3 commits
 - **GitHub Issues** — auto-links to issues from branch names (`fix/123`, `feature/PROJ-456`)
 
-### Smart Split (`qq split`)
+### Smart Split (`rxdev split`)
 
 Split large changes into logical commits:
 
 ```
-$ qq split
+$ rxdev split
 ```
 
 - Auto-detects test files → `test:` commits
@@ -92,12 +92,12 @@ $ qq split
 - Auto-detects config files → `chore:` commits
 - LLM handles the rest for intelligent grouping
 
-### Analytics (`qq analytics`)
+### Analytics (`rxdev analytics`)
 
 Understand your commit patterns:
 
 ```
-$ qq analytics
+$ rxdev analytics
 ```
 
 - Commit statistics by type
@@ -107,12 +107,23 @@ $ qq analytics
 
 ### GitHub Action
 
-Automatic AI review on every PR:
+Automatic AI review on every PR — uses your existing provider key:
 
 ```yaml
-- uses: rxgodev/rxdev-review@v1
-  with:
-    api-key: ${{ secrets.RXDEV_API_KEY }}
+name: AI Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rxgodev/rxdev-review@v1
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          # or OPENAI_API_KEY, OPENROUTER_API_KEY — whichever you use
 ```
 
 ### Other Features
@@ -180,11 +191,16 @@ rxdev init
 rxdev go
 ```
 
-Or use the `qq` alias:
-```bash
-qq init
-qq go
-```
+That's it. `rxdev go` guides you through every step:
+
+1. **Choose files to stage** — or press Enter to stage all
+2. **AI generates the message** — streamed live to your terminal
+3. **Review loop** — decide what to do:
+   - **Push** — accept and push immediately
+   - **Edit message** — open `$EDITOR` and amend
+   - **Regenerate** — ask the model for a new suggestion
+   - **Cancel** — soft-reset and abort
+4. **Push** — select remote and branch interactively from lists
 
 ---
 
@@ -207,8 +223,6 @@ qq go
 | `rxdev uninstall` | Remove the hook |
 | `rxdev version` | Show version number |
 | `rxdev update` | Update to latest version |
-
-All commands also work with `qq` alias: `qq go`, `qq review`, etc.
 
 ---
 
@@ -282,10 +296,9 @@ rxdev config
 
 | Variable | Description |
 |----------|-------------|
-| `RXDEV_API_KEY` | API key (any provider) |
-| `GROQ_API_KEY` | Groq-specific key |
-| `OPENAI_API_KEY` | OpenAI-specific key |
-| `OPENROUTER_API_KEY` | OpenRouter-specific key |
+| `GROQ_API_KEY` | Groq API key (default provider) |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
 
 ### Config as Code (`rxdev.yml`)
 
@@ -318,7 +331,7 @@ Edit `.commitignore` (follows `.gitignore` syntax) to exclude files from the dif
 
 ## GitHub Action
 
-Automatic AI review on every PR:
+Automatic AI review on every PR — uses your existing provider key:
 
 ```yaml
 name: AI Review
@@ -333,7 +346,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: rxgodev/rxdev-review@v1
         env:
-          RXDEV_API_KEY: ${{ secrets.RXDEV_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          # or OPENAI_API_KEY, OPENROUTER_API_KEY — whichever you use
 ```
 
 ---
