@@ -1771,6 +1771,10 @@ export async function buildReview(diff, cfg) {
     return { error: "No changes to review", issues: [], review: "" };
   }
 
+  if (diff.trim().length < 50) {
+    return { review: "Changes too small for meaningful review. Consider making larger changes.", issues: [], issueCount: 0 };
+  }
+
   const userPrompt = `Review the following code changes:\n\n---\n${diff}\n---`;
 
   logMessage(`REVIEW: Sending ${diff.length} chars to LLM`);
