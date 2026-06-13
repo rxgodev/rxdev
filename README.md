@@ -1,15 +1,14 @@
 <div align="center">
 
-# RXCommit
+# RXDev
 
-**AI-powered Git commit generator** — stage, generate, review, push in one command.
+**AI-powered developer workflow tool** — commit messages, code review, PR automation, analytics, and more.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-3.0.0-8250df)](https://github.com/rxgodev/rxcommit/releases)
-[![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
+[![Version](https://img.shields.io/badge/version-4.0.0-8250df)](https://github.com/rxgodev/rxcommit/releases)
+[![CLI](https://img.shields.io/badge/cli-rxdev-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
-[![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
-[![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
+[![CI](https://img.shields.io/badge/CI-Windows%20%7C%20macOS%20%7C%20Ubuntu-4FC08D)](.github/workflows/ci.yml)
 
 [Documentation](https://github.com/rxgodev/rxcommit#readme) · [Report Bug](https://github.com/rxgodev/rxcommit/issues) ·
 [Русский](./docs/languages/ru-RU.md) · [中文](./docs/languages/zh-CN.md) · [Deutsch](./docs/languages/de-DE.md) · [Français](./docs/languages/fr-FR.md)
@@ -18,21 +17,38 @@
 
 ## Table of Contents
 
+- [What's New in v4.0](#whats-new-in-v40)
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Commands](#commands)
+- [Providers & Models](#providers--models)
 - [Configuration](#configuration)
+- [GitHub Action](#github-action)
 - [Documentation](#documentation)
 - [License](#license)
 
 ---
 
+## What's New in v4.0
+
+- **Renamed** from `rxcommit` to `rxdev` — broader scope beyond just commits
+- **AI Code Review** (`qq review`) — review staged changes or PRs before committing
+- **Contextual Commits** — uses branch name, recent commits, and GitHub Issues for better messages
+- **Analytics** (`qq analytics`) — commit statistics and bad practice detection
+- **Smart Split** — auto-detects file types (tests, docs, config) for intelligent grouping
+- **Config as Code** — `rxdev.yml` in your project root for team-shared settings
+- **GitHub Action** — automatic AI review on every PR
+- **Improved Diff System** — smart truncation (16K chars), never cuts files mid-way
+- **Cross-platform CI** — tested on Windows, macOS, and Ubuntu
+
+---
+
 ## Features
 
-### 🚀 QuickFlow (`qq go`)
+### QuickFlow (`qq go`)
 
-The flagship workflow. A single command that takes you from dirty working tree to pushed commit:
+The flagship workflow. Stage, generate, review, push in one command:
 
 ```
 $ qq go
@@ -43,29 +59,70 @@ $ qq go
 3. **Review** — see the message, choose what to do next
 4. **Push** — accept and push, or edit, regenerate, or cancel
 
-QuickFlow eliminates context-switching. No more `git add → git commit → wait → git push`. Everything happens in one seamless session.
+### AI Code Review (`qq review`)
 
----
+Get instant feedback on your staged changes:
 
-### Core Features
+```
+$ qq review
+```
 
-- **AI-generated commit messages** — a Conventional Commits subject in English plus a body in your chosen language explaining *why*, derived entirely from your staged diff. Supports English, Russian, Chinese, German, and French.
-- **Auto-bump version (opt-in)** — intelligently discovers version manifests across the entire repository (monorepo-safe). Supports 15+ formats:
-  - `package.json`, `composer.json` — JSON parser
-  - `Cargo.toml`, `pyproject.toml` — TOML parser
-  - `pubspec.yaml`, `Chart.yaml`, `*.gemspec`, `setup.cfg`
-  - `build.gradle`, `*.csproj`, `VERSION`, `version.txt`
-  - Auto-detected by file name; no configuration needed.
-  - `feat:` → **minor** bump, `!` / `BREAKING CHANGE` → **major**, everything else → **patch**
-  - Pre-release safe — preserves `-alpha.1`, `+build` suffixes.
-  - Merge-safe — reads already-staged manifests from the index.
-  - Change-aware — skips bump when changed files are unrelated to the package.
-  - Git-tag aware — falls back to the latest semver tag when no manifest version exists.
-- **Edit before commit** — review, regenerate, or open `$EDITOR` to tweak the message before it lands.
-- **Multi-project** — manage hooks and shared `prepare-commit-msg` templates across several repositories from one place.
-- **History rewriting** — `qq filter` provides an interactive wrapper around `git-filter-repo` for removing secrets, files, or paths from git history.
-- **Interactive push** — QuickFlow push step shows an interactive list of remotes and branches to choose from.
-- **Ignore list** — `.commitignore` works like `.gitignore`; matching files are excluded from the diff sent to the model.
+- Analyzes code for bugs, security issues, and performance problems
+- Provides severity ratings (critical/warning/suggestion)
+- Works on staged changes or PR diffs
+
+### Contextual Commits
+
+Commit messages that understand your workflow:
+
+- **Branch context** — knows you're on `feature/user-auth`
+- **Recent history** — considers the last 3 commits
+- **GitHub Issues** — auto-links to issues from branch names (`fix/123`, `feature/PROJ-456`)
+
+### Smart Split (`qq split`)
+
+Split large changes into logical commits:
+
+```
+$ qq split
+```
+
+- Auto-detects test files → `test:` commits
+- Auto-detects docs → `docs:` commits
+- Auto-detects config files → `chore:` commits
+- LLM handles the rest for intelligent grouping
+
+### Analytics (`qq analytics`)
+
+Understand your commit patterns:
+
+```
+$ qq analytics
+```
+
+- Commit statistics by type
+- Average message length
+- Breaking change detection
+- Bad practice warnings (too long, non-conventional, etc.)
+
+### GitHub Action
+
+Automatic AI review on every PR:
+
+```yaml
+- uses: rxgodev/rxdev-review@v1
+  with:
+    api-key: ${{ secrets.RXDEV_API_KEY }}
+```
+
+### Other Features
+
+- **Auto-bump version** — discovers 15+ manifest formats (package.json, Cargo.toml, pyproject.toml, etc.)
+- **Secret scanning** — detects leaked credentials in staged changes
+- **PR generation** — creates PR titles and descriptions from commits
+- **Changelog generation** — builds CHANGELOG entries from conventional commits
+- **History rewriting** — interactive `git-filter-repo` wrapper
+- **Multi-project** — manage hooks across multiple repositories
 
 ---
 
@@ -74,40 +131,40 @@ QuickFlow eliminates context-switching. No more `git add → git commit → wait
 ### Prerequisites
 
 - **Node.js** >= 18
-- A **free API key** from [console.groq.com](https://console.groq.com)
+- An **API key** from one of the supported providers (see [Providers & Models](#providers--models))
 
 ### 1. Set up GitHub Package Registry
 
 ```bash
-pnpm login --scope=@rxgodev --registry=https://npm.pkg.github.com/
+npm login --scope=@rxgodev --registry=https://npm.pkg.github.com/
 ```
 
-Enter your GitHub username and a [personal access token](https://github.com/settings/tokens) with `write:packages` scope when prompted (token goes in the "Password" field).
+Enter your GitHub username and a [personal access token](https://github.com/settings/tokens) with `write:packages` scope when prompted.
 
 ### 2. Install globally
 
 **npm:**
 ```bash
-npm install -g @rxgodev/rxcommit@latest
+npm install -g @rxgodev/rxdev@latest
 ```
 
 **pnpm:**
 ```bash
-pnpm add -g @rxgodev/rxcommit@latest
+pnpm add -g @rxgodev/rxdev@latest
 ```
 
 **yarn:**
 ```bash
-yarn global add @rxgodev/rxcommit@latest
+yarn global add @rxgodev/rxdev@latest
 ```
 
 ### 3. Configure your API key
 
 ```bash
-qq config
+rxdev config
 ```
 
-Navigate to **API key** in the menu and paste your Groq key.
+Navigate to **API key** in the menu and paste your key.
 
 ---
 
@@ -117,70 +174,167 @@ After installing, get your first AI-powered commit in seconds:
 
 ```bash
 # Install the hook (one time per repo)
-qq init
+rxdev init
 
 # QuickFlow — stage, generate, review, push
-qq go
+rxdev go
 ```
 
-That's it. `qq go` guides you through every step:
-
-1. **Choose files to stage** — or press Enter to stage all
-2. **AI generates the message** — streamed live to your terminal
-3. **Review loop** — decide what to do:
-   - **Push** — accept and push immediately
-   - **Edit message** — open `$EDITOR` and amend
-   - **Regenerate** — ask the model for a new suggestion
-   - **Cancel** — soft-reset and abort
-4. **Push** — select remote and branch interactively from lists
-
-> QuickFlow is the recommended workflow. For Git hook integration (automatic generation via `git commit`), see `qq init`.
+Or use the `qq` alias:
+```bash
+qq init
+qq go
+```
 
 ---
 
 ## Commands
 
-| Command          | Description |
-|------------------|-------------|
-| `qq go`          | **QuickFlow** — stage → scan for secrets → generate → review → push (recommended) |
-| `qq split`       | Split staged changes into multiple logical, Conventional-Commit-shaped commits |
-| `qq scan`        | Scan staged changes for leaked secrets/credentials (deterministic, no LLM) |
-| `qq pr`          | Generate a pull request title + description from the branch's commits |
-| `qq release`     | Build a CHANGELOG entry from commits since the last tag, then commit & tag |
-| `qq init`        | Install the AI commit hook in the current repository |
-| `qq config`      | Configure API key, model, language, co-author, auto-bump, projects, and templates |
-| `qq status`      | Show integration status for the current repository |
-| `qq doctor`      | Diagnose your setup — Node, hooks, provider, and API key |
-| `qq filter`      | Rewrite git history — remove files, secrets, or paths using git-filter-repo |
-| `qq uninstall`   | Remove the hook from the repository |
-| `qq version`     | Show version number |
-| `qq update`      | Show update instructions |
+| Command | Description |
+|---------|-------------|
+| `rxdev go` | **QuickFlow** — stage → scan → generate → review → push |
+| `rxdev review` | AI code review of staged changes |
+| `rxdev split` | Split staged changes into multiple logical commits |
+| `rxdev scan` | Scan staged changes for leaked secrets |
+| `rxdev analytics` | Show commit statistics and bad practices |
+| `rxdev pr` | Generate a pull request title + description |
+| `rxdev release` | Build CHANGELOG entry, commit & tag |
+| `rxdev init` | Install the AI commit hook |
+| `rxdev config` | Configure provider, model, language, and more |
+| `rxdev status` | Show integration status |
+| `rxdev doctor` | Diagnose your setup |
+| `rxdev filter` | Rewrite git history |
+| `rxdev uninstall` | Remove the hook |
+| `rxdev version` | Show version number |
+| `rxdev update` | Update to latest version |
+
+All commands also work with `qq` alias: `qq go`, `qq review`, etc.
+
+---
+
+## Providers & Models
+
+### Groq (default, free tier)
+
+| Model | Speed | Context | Best for |
+|-------|-------|---------|----------|
+| Llama 3.3 70B Versatile | ~280 t/s | 128K | High quality, complex changes |
+| Llama 3.1 8B Instant | ~560 t/s | 128K | Fast, simple changes (default) |
+| Mixtral 8x7B | ~500 t/s | 32K | Balanced speed/quality |
+
+### OpenAI
+
+| Model | Context | Best for |
+|-------|---------|----------|
+| GPT-4o | 128K | Best quality |
+| GPT-4o-mini | 128K | Fast, cost-effective (default) |
+| GPT-4 Turbo | 128K | Legacy support |
+
+### OpenRouter
+
+Access to 100+ models through OpenRouter:
+- `openai/gpt-4o` — GPT-4o via OpenRouter
+- `anthropic/claude-3.5-sonnet` — Claude 3.5
+- `meta-llama/llama-3.3-70b` — Llama 3.3
+- Any model available on [openrouter.ai](https://openrouter.ai)
+
+### Ollama (local, private)
+
+Run any model locally — your code never leaves your machine:
+- `llama3.1` — Meta's Llama 3.1
+- `codellama` — Code-specialized Llama
+- `mistral` — Mistral 7B
+- Any model supported by [Ollama](https://ollama.ai)
+
+### Custom Endpoint
+
+Use any OpenAI-compatible API:
+```bash
+rxdev config
+# Set Provider → custom
+# Set API URL → https://your-api.com/v1/chat/completions
+```
 
 ---
 
 ## Configuration
 
+### Interactive Configuration
+
 ```bash
-qq config
+rxdev config
 ```
 
 ### Settings
 
-| Setting             | Description |
-|---------------------|-------------|
-| **Provider**        | Choose the LLM backend: **Groq** (default), **OpenAI**, **OpenRouter**, **Ollama** (local, no key, your diffs never leave the machine), or a custom OpenAI-compatible endpoint |
-| **Model**           | Pick a model for the chosen provider (Groq presets: Llama 3.1 **8B** ~560 t/s / **70B** ~280 t/s) |
-| **Language**        | Choose the language for the commit body: English, Russian, German, French, or Chinese |
-| **Custom prompt**   | Override the system prompt. Use `{types}` as a placeholder — it is replaced with the allowed commit types (e.g. `feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert` plus any custom types you add) |
-| **Custom types**    | Add extra Conventional Commits types beyond the built-in set (e.g. `hotfix, deps, i18n, ui, api, db`) |
-| **API key**         | Set or clear the provider API key (or use the `GROQ_API_KEY` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` / `NEURO_COMMIT_API_KEY` env var). Not needed for Ollama |
-| **Co-author**       | Toggle the `Co-authored-by` trailer in commit messages |
-| **Auto-bump**       | Toggle automatic version bumps for 15+ manifest types (off by default) |
-| **Projects & Templates** | List integrated projects and manage shared `prepare-commit-msg` templates |
+| Setting | Description |
+|---------|-------------|
+| **Provider** | Choose LLM backend: Groq, OpenAI, OpenRouter, Ollama, or custom |
+| **Model** | Pick a model for the chosen provider |
+| **Language** | Choose language for commit body: English, Russian, German, French, Chinese |
+| **Custom prompt** | Override system prompt. Use `{types}` placeholder |
+| **Custom types** | Add extra Conventional Commits types |
+| **API key** | Set provider API key (or use env vars) |
+| **Co-author** | Toggle `Co-authored-by` trailer |
+| **Auto-bump** | Toggle automatic version bumps |
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `RXDEV_API_KEY` | API key (any provider) |
+| `GROQ_API_KEY` | Groq-specific key |
+| `OPENAI_API_KEY` | OpenAI-specific key |
+| `OPENROUTER_API_KEY` | OpenRouter-specific key |
+
+### Config as Code (`rxdev.yml`)
+
+Create `rxdev.yml` in your project root for team-shared settings:
+
+```yaml
+provider: groq
+model: llama-3.3-70b-versatile
+language: en
+maxDiffLength: 16000
+coauthor: true
+bumpVersion: false
+validTypes:
+  - feat
+  - fix
+  - docs
+  - refactor
+  - perf
+  - test
+  - chore
+```
+
+Priority: `rxdev.yml` → CLI flags → `~/.config/rxdev/config.json` → defaults
 
 ### .commitignore
 
-Edit `.commitignore` (which follows `.gitignore` syntax) to exclude files from the diff sent to the model. By default, `.githooks` entries are listed there.
+Edit `.commitignore` (follows `.gitignore` syntax) to exclude files from the diff sent to the model.
+
+---
+
+## GitHub Action
+
+Automatic AI review on every PR:
+
+```yaml
+name: AI Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rxgodev/rxdev-review@v1
+        env:
+          RXDEV_API_KEY: ${{ secrets.RXDEV_API_KEY }}
+```
 
 ---
 
@@ -188,9 +342,10 @@ Edit `.commitignore` (which follows `.gitignore` syntax) to exclude files from t
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](./docs/architecture.md) | High-level overview of the Node.js CLI + git-hook architecture |
+| [Architecture](./docs/architecture.md) | High-level overview of the CLI + git-hook architecture |
 | [Auto-bump](./docs/auto-bump.md) | Smart version bumping for 15+ manifest formats |
-| [Templates & Projects](./docs/templates.md) | Multi-repository management and shared hook templates |
+| [Templates & Projects](./docs/templates.md) | Multi-repository management and shared templates |
+| [Changelog](./CHANGELOG.md) | Version history and changes |
 
 ---
 
