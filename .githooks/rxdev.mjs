@@ -154,13 +154,23 @@ const TYPE_REGEX_STR = buildTypeRegexStr(validTypes);
 const _TYPE_REGEX = new RegExp(`^(?:${TYPE_REGEX_STR})`, "i");
 const _COMMIT_RE = new RegExp(`^(?:${TYPE_REGEX_STR})(?:\\([^)]*\\))?\\s*:`, "i");
 
+const LANGUAGE_NAMES = {
+  en: "English",
+  ru: "Russian",
+  de: "German",
+  fr: "French",
+  zh: "Chinese",
+};
+
 export function buildSystemPrompt(typesStr, language, customPrompt = "") {
   if (customPrompt) return customPrompt.replace("{types}", typesStr);
   const bodyPrompt = BODY_LANGUAGE_PROMPTS[language] || BODY_LANGUAGE_PROMPTS.ru;
+  const langName = LANGUAGE_NAMES[language] || "Russian";
   return (
     "Format:\ntype(scope): lowercase description\n\none short WHY sentence\n" +
     `Valid types: ${typesStr}.\n` +
     `- ${bodyPrompt}\n` +
+    `- IMPORTANT: The body (WHY sentence) MUST be written in ${langName}. The type and scope stay in English.\n` +
     `${BAD_EXAMPLES}`
   );
 }

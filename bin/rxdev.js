@@ -1521,10 +1521,11 @@ async function quickFlow() {
 
   console.log(`\n${sep(`${bold}📂  Stage Changes${reset}`)}\n`);
 
-  const unstaged = spawnSync("git", ["diff", "--name-only", "--diff-filter=ACMR"], { encoding: "utf8" })
+  const unstaged = spawnSync("git", ["diff", "--name-only"], { encoding: "utf8" })
     .stdout.trim()
     .split("\n")
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((f) => existsSync(f));
   const alreadyStaged = spawnSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" })
     .stdout.trim()
     .split("\n")
@@ -2052,8 +2053,26 @@ async function analyticsCommand() {
   const aic = await hook();
   const rangeIdx = args.indexOf("--range");
   const range = rangeIdx !== -1 ? args[rangeIdx + 1] : "HEAD~20..HEAD";
-  const data = aic.analyzeCommits(range);
-  const badPractices = aic.detectBadPractices(range);
+
+  let data;
+  try {
+    data = aic.analyzeCommits(range);
+  } catch (e) {
+    console.error(`❌ Error analyzing commits: ${e.message}`);
+    process.exit(1);
+  }
+
+  let badPractices = [];
+  try {
+    badPractices = aic.detectBadPractices(range);
+  } catch (e) {
+    // Ignore bad practices errors
+  }
+
+  if (data.total === 0) {
+    console.log("ℹ️  No commits found in the specified range.\n");
+    return;
+  }
 
   console.log(`Total commits: ${data.total}`);
   console.log(`Average message length: ${data.avgMessageLength} chars`);
