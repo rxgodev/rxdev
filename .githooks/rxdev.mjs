@@ -1754,10 +1754,13 @@ export async function buildSplitPlan(cfg) {
 }
 
 const REVIEW_SYSTEM_PROMPT =
-  "You are a senior code reviewer. Review the following code changes and provide feedback. " +
-  "Focus on: bugs, security issues, performance problems, code quality, and potential improvements. " +
-  "For each issue found, provide: file path (if applicable), severity (critical/warning/suggestion), " +
-  "and a clear explanation. Be concise but thorough. Output as a structured list.";
+  "You are a senior code reviewer. You MUST review the code diff provided below. " +
+  "Output a structured review with sections: " +
+  "1. Summary (1-2 sentences about what changed) " +
+  "2. Issues found (if any) with severity: critical/warning/suggestion " +
+  "3. Suggestions for improvement (if any) " +
+  "If no issues found, say 'No issues found. Code looks good.' " +
+  "Do NOT ask for more code. Review what is provided.";
 
 export async function buildReview(diff, cfg) {
   if (!diff || diff.trim().length === 0) {
@@ -1818,9 +1821,9 @@ export async function buildPrReview(_prNumber, cfg) {
 }
 
 export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
-  let logOutput = git(["log", "--pretty=format:%H|%s|%b", revRange], repoRoot);
+  let logOutput = git(["log", "--first-parent", "--pretty=format:%H|%s", revRange], repoRoot);
   if (!logOutput) {
-    logOutput = git(["log", "--pretty=format:%H|%s|%b", "HEAD"], repoRoot);
+    logOutput = git(["log", "--first-parent", "--pretty=format:%H|%s", "HEAD"], repoRoot);
   }
   if (!logOutput) return { total: 0, byType: {}, avgMessageLength: 0, breakingChanges: 0 };
 
@@ -1855,8 +1858,8 @@ export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
 }
 
 export function detectBadPractices(revRange = "HEAD~20..HEAD", repoRoot) {
-  let logOutput = git(["log", "--pretty=format:%H|%s", revRange], repoRoot);
-  if (!logOutput) logOutput = git(["log", "--pretty=format:%H|%s", "HEAD"], repoRoot);
+  let logOutput = git(["log", "--first-parent", "--pretty=format:%H|%s", revRange], repoRoot);
+  if (!logOutput) logOutput = git(["log", "--first-parent", "--pretty=format:%H|%s", "HEAD"], repoRoot);
   if (!logOutput) return [];
 
   const commits = logOutput

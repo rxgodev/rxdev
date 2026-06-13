@@ -1584,10 +1584,22 @@ async function quickFlow() {
   if (secrets.length > 0) {
     console.log(`${yellow}🚨 ${secrets.length} potential secret(s) in staged changes:${reset}`);
     for (const f of secrets) console.log(`   • ${f.type} — ${f.file} (${f.preview})`);
-    const carryOn = await askYesNo("Commit anyway?");
-    if (!carryOn) {
-      console.log(`\n${bold}↩️  Aborted — unstage the secrets and retry.${reset}`);
+    const action = await promptSelect(
+      [
+        { name: "⚠️  Commit anyway (risky)", value: "commit" },
+        { name: "🗑️  Unstage secret files & commit", value: "unstage" },
+        { name: "❌ Cancel", value: "cancel" },
+      ],
+      "What to do with secrets?",
+    );
+    if (action === "cancel") {
+      console.log(`\n${bold}↩️  Aborted.${reset}`);
       return;
+    }
+    if (action === "unstage") {
+      const secretFiles = [...new Set(secrets.map((s) => s.file))];
+      spawnSync("git", ["reset", "HEAD", "--", ...secretFiles], { stdio: "pipe" });
+      console.log(`${yellow}🗑️  Unstaged: ${secretFiles.join(", ")}${reset}\n`);
     }
   }
 
