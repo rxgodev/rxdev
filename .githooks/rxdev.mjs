@@ -1821,9 +1821,9 @@ export async function buildPrReview(_prNumber, cfg) {
 }
 
 export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
-  let logOutput = git(["log", "--first-parent", "--pretty=format:%H|%s", revRange], repoRoot);
+  let logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", revRange], repoRoot);
   if (!logOutput) {
-    logOutput = git(["log", "--first-parent", "--pretty=format:%H|%s", "HEAD"], repoRoot);
+    logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", "HEAD"], repoRoot);
   }
   if (!logOutput) return { total: 0, byType: {}, avgMessageLength: 0, breakingChanges: 0 };
 
@@ -1831,8 +1831,9 @@ export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [hash, subject, ...bodyParts] = line.split("|");
-      return { hash, subject: subject || "", body: bodyParts.join("|") };
+      const spaceIdx = line.indexOf(" ");
+      if (spaceIdx === -1) return { hash: line, subject: "" };
+      return { hash: line.slice(0, spaceIdx), subject: line.slice(spaceIdx + 1) };
     });
 
   const byType = {};
@@ -1858,16 +1859,17 @@ export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
 }
 
 export function detectBadPractices(revRange = "HEAD~20..HEAD", repoRoot) {
-  let logOutput = git(["log", "--first-parent", "--pretty=format:%H|%s", revRange], repoRoot);
-  if (!logOutput) logOutput = git(["log", "--first-parent", "--pretty=format:%H|%s", "HEAD"], repoRoot);
+  let logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", revRange], repoRoot);
+  if (!logOutput) logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", "HEAD"], repoRoot);
   if (!logOutput) return [];
 
   const commits = logOutput
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [hash, subject] = line.split("|");
-      return { hash, subject: subject || "" };
+      const spaceIdx = line.indexOf(" ");
+      if (spaceIdx === -1) return { hash: line, subject: "" };
+      return { hash: line.slice(0, spaceIdx), subject: line.slice(spaceIdx + 1) };
     });
 
   const issues = [];

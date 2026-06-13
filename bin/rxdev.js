@@ -1586,9 +1586,9 @@ async function quickFlow() {
     for (const f of secrets) console.log(`   • ${f.type} — ${f.file} (${f.preview})`);
     const action = await promptSelect(
       [
-        { name: "⚠️  Commit anyway (risky)", value: "commit" },
-        { name: "🗑️  Unstage secret files & commit", value: "unstage" },
-        { name: "❌ Cancel", value: "cancel" },
+        { name: "  ⚠️  Commit anyway (risky)", value: "commit" },
+        { name: "  🗑️  Unstage secret files & commit", value: "unstage" },
+        { name: "  ❌ Cancel", value: "cancel" },
       ],
       "What to do with secrets?",
     );
