@@ -1,6 +1,5 @@
-// Node tests for the pure logic in .githooks/ai_commit.mjs.
-// Mirrors tests/test_ai_commit.py so the port can be cross-checked 1:1.
-// Run with:  node --test tests/test_ai_commit.mjs
+// Node tests for the pure logic in .githooks/rxdev.mjs.
+// Run with:  node --test tests/test_rxdev.mjs
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -20,7 +19,7 @@ function tmpGitRepo() {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-const aicPath = join(here, "..", ".githooks", "ai_commit.mjs");
+const aicPath = join(here, "..", ".githooks", "rxdev.mjs");
 const aic = await import(pathToFileURL(aicPath).href);
 
 // Local SSE server helpers for callLlm tests (no network, no keys).

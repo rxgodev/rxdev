@@ -1,6 +1,6 @@
-// RXCommit — the prepare-commit-msg hook (Node, zero dependencies).
+// RXDev — the prepare-commit-msg hook (Node, zero dependencies).
 //
-// Invoked by .githooks/prepare-commit-msg as `node ai_commit.mjs "$1"`. It
+// Invoked by .githooks/prepare-commit-msg as `node rxdev.mjs "$1"`. It
 // generates a Conventional Commit message from the staged diff via any
 // OpenAI-compatible provider, with optional version bumping and secret scanning.
 //
@@ -32,7 +32,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const NEURO_COMMIT_VERSION = "2.19.3";
+export const RXDEV_VERSION = "4.0.0";
 
 export const DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant";
 
@@ -827,11 +827,11 @@ export function resolveConfig(userConfig = {}, env = process.env) {
   const provider = String(userConfig.provider || DEFAULT_PROVIDER).toLowerCase();
   const providerDef = PROVIDERS[provider] || {
     url: PROVIDERS[DEFAULT_PROVIDER].url,
-    env: "NEURO_COMMIT_API_KEY",
+    env: "RXDEV_API_KEY",
     defaultModel: DEFAULT_GROQ_MODEL,
     needsKey: false, // custom/unknown provider: don't block, let the endpoint decide
   };
-  const apiKey = userConfig.apiKey || env[providerDef.env] || env.NEURO_COMMIT_API_KEY || "";
+  const apiKey = userConfig.apiKey || env[providerDef.env] || env.RXDEV_API_KEY || env.NEURO_COMMIT_API_KEY || "";
   const customTypes = Array.isArray(userConfig.customTypes) ? userConfig.customTypes : [];
   const allTypes = [...new Set([...DEFAULT_VALID_TYPES, ...customTypes])];
   const typesStr = [...allTypes].sort().join(", ");
@@ -1001,7 +1001,7 @@ export function callLlm(messages, cfg, opts = {}) {
 
   const headers = {
     "Content-Type": "application/json",
-    "User-Agent": `rxcommit/${NEURO_COMMIT_VERSION}`,
+    "User-Agent": `rxdev/${RXDEV_VERSION}`,
     "Content-Length": Buffer.byteLength(body),
   };
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
@@ -1635,7 +1635,7 @@ export async function main(commitMsgFile, cfg, opts = {}) {
     return 0;
   }
 
-  if (echo) process.stdout.write(`[+] RXCommit v${NEURO_COMMIT_VERSION} started\n`);
+  if (echo) process.stdout.write(`[+] RXDev v${RXDEV_VERSION} started\n`);
 
   const repoRoot = findRepoRoot();
   if (repoRoot) {
@@ -1665,7 +1665,7 @@ export async function main(commitMsgFile, cfg, opts = {}) {
 
   let bumps = [];
   let kind = "patch";
-  if (cfg.bumpVersion && !process.env.NEURO_COMMIT_SKIP_BUMP) {
+  if (cfg.bumpVersion && !process.env.RXDEV_SKIP_BUMP && !process.env.NEURO_COMMIT_SKIP_BUMP) {
     kind = determineBumpKind(message);
     bumps = bumpProjectVersion(kind, message, repoRoot);
     if (bumps.length) {

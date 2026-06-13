@@ -48,7 +48,7 @@ if (update?.latest && update.latest !== pkg.version) {
 
 const DEFAULT_COMMITIGNORE = `# Auto-commit configuration files
 .githooks/
-ai_commit.mjs
+rxdev.mjs
 ai_commit.py
 ai_commit_debug.log
 .env
@@ -69,8 +69,8 @@ const DEFAULT_CONFIG = {
   provider: "groq",
 };
 
-// OpenAI-compatible providers (mirror of PROVIDERS in ai_commit.mjs).
-// Keep in sync with .githooks/ai_commit.mjs PROVIDERS.
+// OpenAI-compatible providers (mirror of PROVIDERS in rxdev.mjs).
+// Keep in sync with .githooks/rxdev.mjs PROVIDERS.
 const PROVIDERS = {
   groq: {
     label: "Groq (fast, free tier)",
@@ -186,9 +186,9 @@ function updateProjectHooks(projectPath) {
   if (!existsSync(githooksDir)) return false;
   let updated = false;
 
-  // Update ai_commit.mjs with version/hash check
-  const pySrc = join(SOURCE_GITHOOKS_DIR, "ai_commit.mjs");
-  const pyDst = join(githooksDir, "ai_commit.mjs");
+  // Update rxdev.mjs with version/hash check
+  const pySrc = join(SOURCE_GITHOOKS_DIR, "rxdev.mjs");
+  const pyDst = join(githooksDir, "rxdev.mjs");
   if (existsSync(pySrc)) {
     const latest = readFileSync(pySrc, "utf8");
     if (!existsSync(pyDst)) {
@@ -219,12 +219,12 @@ function updateProjectHooks(projectPath) {
     }
   }
 
-  // Restore prepare-commit-msg if it's broken (missing call to ai_commit.mjs)
+  // Restore prepare-commit-msg if it's broken (missing call to rxdev.mjs)
   const hookSrc = join(SOURCE_GITHOOKS_DIR, "prepare-commit-msg");
   const hookDst = join(githooksDir, "prepare-commit-msg");
   if (existsSync(hookSrc) && existsSync(hookDst)) {
     const installed = readFileSync(hookDst, "utf8");
-    if (!installed.includes("ai_commit.mjs")) {
+    if (!installed.includes("rxdev.mjs")) {
       writeFileSync(hookDst, readFileSync(hookSrc, "utf8"));
       if (process.platform !== "win32") {
         spawnSync("chmod", ["+x", hookDst]);
@@ -238,7 +238,7 @@ function updateProjectHooks(projectPath) {
 
 // === UTILS ===
 
-// The commit hook is now pure Node (ai_commit.mjs) — no Python/pathspec needed.
+// The commit hook is now pure Node (rxdev.mjs) — no Python/pathspec needed.
 // git-filter-repo is only required for `qq filter`, which checks for it lazily
 // (see checkFilterRepo) and points the user at `pip install git-filter-repo`.
 
@@ -327,7 +327,7 @@ function saveTemplates(templates) {
 
 async function askForScript(initial) {
   const inquirer = await import("inquirer");
-  const defaultContent = initial || '#!/bin/sh\nnode .githooks/ai_commit.mjs "$1"';
+  const defaultContent = initial || '#!/bin/sh\nnode .githooks/rxdev.mjs "$1"';
   while (true) {
     const { script } = await inquirer.default.prompt([
       {
@@ -365,11 +365,11 @@ function validatePreCommitScript(script) {
   const hasCall = lines.some(
     (line) =>
       /node\s+\.githooks\/ai_commit\.mjs\s+"\$1"/.test(line) ||
-      line.includes("node .githooks/ai_commit.mjs"),
+      line.includes("node .githooks/rxdev.mjs"),
   );
 
   if (!hasCall) {
-    return 'Script must contain: node .githooks/ai_commit.mjs "$1"';
+    return 'Script must contain: node .githooks/rxdev.mjs "$1"';
   }
 
   return null;
@@ -1109,7 +1109,7 @@ async function install() {
   const githooksDir = join(process.cwd(), ".githooks");
   if (!existsSync(githooksDir)) mkdirSync(githooksDir, { recursive: true });
 
-  for (const file of ["ai_commit.mjs", "prepare-commit-msg"]) {
+  for (const file of ["rxdev.mjs", "prepare-commit-msg"]) {
     const src = join(SOURCE_GITHOOKS_DIR, file);
     const dst = join(githooksDir, file);
     if (!existsSync(src)) {
@@ -1117,7 +1117,7 @@ async function install() {
       process.exit(1);
     }
     const content = readFileSync(src, "utf8");
-    if (file === "ai_commit.mjs") {
+    if (file === "rxdev.mjs") {
       writePyWithHash(dst, content);
     } else {
       writeFileSync(dst, content);
@@ -1143,7 +1143,7 @@ async function install() {
   }
   registerProject();
 
-  console.log("🎉 RXCommit installed successfully!");
+  console.log("🎉 RXDev installed successfully!");
 }
 
 function uninstall() {
@@ -1157,7 +1157,7 @@ function uninstall() {
 
   unsetGitHooksPath();
   console.log("✅ Git hooks path reset.");
-  console.log("🗑️ RXCommit uninstalled!");
+  console.log("🗑️ RXDev uninstalled!");
 }
 
 function showStatus() {
@@ -1191,7 +1191,7 @@ function showStatus() {
   const templateName = getTemplateForProject(root) || "—";
   const cfg = loadConfig();
 
-  console.log("\n🔍 RXCommit Status\n");
+  console.log("\n🔍 RXDev Status\n");
   console.log(`📁 Git root:       ${root}`);
   console.log(`⚙️  Hooks path:     ${hooksConfigured ? "✅ .githooks" : "❌ not set"}`);
   console.log(`📜 Hook file:       ${hookExists ? "✅ present" : "❌ missing"}`);
@@ -1219,7 +1219,7 @@ function doctor() {
   const bad = (s) => `❌ ${s}`;
   const warn = (s) => `⚠️  ${s}`;
 
-  console.log("\n🩺 RXCommit Doctor\n");
+  console.log("\n🩺 RXDev Doctor\n");
 
   // Node version (the hook runtime; >= 18 required)
   const nodeMajor = parseInt(process.versions.node.split(".")[0], 10);
@@ -1260,7 +1260,7 @@ function doctor() {
       : bad("Hook missing — run 'qq init'"),
   );
 
-  const pyFile = join(gitRoot, ".githooks", "ai_commit.mjs");
+  const pyFile = join(gitRoot, ".githooks", "rxdev.mjs");
   if (existsSync(pyFile)) {
     const hashPath = hashFilePath(pyFile);
     if (existsSync(hashPath)) {
@@ -1268,14 +1268,14 @@ function doctor() {
       const cur = fileHash(readFileSync(pyFile, "utf8"));
       console.log(
         stored === cur
-          ? ok("Hook: ai_commit.mjs integrity OK")
-          : warn("ai_commit.mjs changed since install (hash mismatch)"),
+          ? ok("Hook: rxdev.mjs integrity OK")
+          : warn("rxdev.mjs changed since install (hash mismatch)"),
       );
     } else {
-      console.log(warn("ai_commit.mjs present but no .sha256 sidecar"));
+      console.log(warn("rxdev.mjs present but no .sha256 sidecar"));
     }
   } else {
-    console.log(bad("ai_commit.mjs missing — run 'qq init'"));
+    console.log(bad("rxdev.mjs missing — run 'qq init'"));
   }
 
   // provider / key
@@ -1450,7 +1450,7 @@ async function quickFlow() {
   // ── Header box (only boxed element) ──
   const showHeader = () => {
     clearScreen();
-    const lines = [`${bold}🚀  RXCommit QuickFlow®${reset}`];
+    const lines = [`${bold}🚀  RXDev QuickFlow®${reset}`];
     const w = Math.max(...lines.map((l) => sa(l).length)) + 4;
     const o =
       "╭" +
@@ -1786,7 +1786,7 @@ async function quickFlow() {
 
 let _hookModule = null;
 async function hook() {
-  if (!_hookModule) _hookModule = await import(join(SOURCE_GITHOOKS_DIR, "ai_commit.mjs"));
+  if (!_hookModule) _hookModule = await import(join(SOURCE_GITHOOKS_DIR, "rxdev.mjs"));
   return _hookModule;
 }
 function hookConfig(aic) {
@@ -1986,7 +1986,7 @@ async function splitCommand() {
 }
 
 function showHelp() {
-  console.log(`${boldCyan}RXCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
+  console.log(`${boldCyan}RXDev${resetColor} is an AI-powered developer workflow tool ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
 ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
   ${boldCyan}qq${resetColor} <command> [options]
@@ -2078,19 +2078,19 @@ async function mainCmd() {
       await releaseCommand();
       break;
     case "update": {
-      console.log("Updating RXCommit...\n");
+      console.log("Updating RXDev...\n");
       const isPnpm = __dirname.includes("pnpm") || process.env.PNPM_HOME;
       const pm = isPnpm ? "pnpm" : "npm";
       const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit" });
       if (upd.status === 0) {
-        console.log("\n✅ RXCommit updated successfully.");
+        console.log("\n✅ RXDev updated successfully.");
       } else if (pm === "pnpm") {
         console.log("\n⚠️  pnpm update failed, trying npm...\n");
         const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], {
           stdio: "inherit",
         });
         if (npmUpd.status === 0) {
-          console.log("\n✅ RXCommit updated successfully.");
+          console.log("\n✅ RXDev updated successfully.");
         } else {
           console.log(
             "\n❌ Update failed. Try manually:\n  pnpm add -g @rxgodev/rxcommit@latest\n  npm install -g @rxgodev/rxcommit@latest",
