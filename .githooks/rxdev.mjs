@@ -1512,11 +1512,11 @@ export function checkConflictingHooks(repoRoot) {
   const conflicts = [];
   if (isDir(join(repoRoot, ".husky"))) {
     conflicts.push(
-      ".husky directory detected — conflicts with RXCommit hooks. Delete it or run `npx husky uninstall`.",
+      ".husky directory detected — conflicts with RXDev hooks. Delete it or run `npx husky uninstall`.",
     );
   }
   if (existsSync(join(repoRoot, "lefthook.yml")) || existsSync(join(repoRoot, "lefthook.yaml"))) {
-    conflicts.push("lefthook config detected — may conflict with RXCommit hooks.");
+    conflicts.push("lefthook config detected — may conflict with RXDev hooks.");
   }
   if (existsSync(join(repoRoot, ".pre-commit-config.yaml"))) {
     conflicts.push(".pre-commit-config.yaml detected — may conflict with core.hooksPath.");
@@ -1919,7 +1919,7 @@ export async function runSubcommand(argv, cfg) {
 //  COMMIT MESSAGE COMPOSITION + MAIN FLOW
 // ============================================================
 
-const COAUTHOR_TRAILER = "Co-authored-by: RXCommit <autocommitrxgo@gmail.com>";
+const COAUTHOR_TRAILER = "Co-authored-by: RXDev <autocommitrxgo@gmail.com>";
 
 export function composeMessage(message, { bumps = [], kind = "patch", addCoauthor = false } = {}) {
   let out = message;
@@ -1933,7 +1933,7 @@ export function composeMessage(message, { bumps = [], kind = "patch", addCoautho
 
 export function writeErrorToCommit(msgFile, errMsg) {
   try {
-    writeFileSync(msgFile, `# RXCommit: ${errMsg}\n`, "utf8");
+    writeFileSync(msgFile, `# RXDev: ${errMsg}\n`, "utf8");
   } catch {}
 }
 

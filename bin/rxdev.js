@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync 
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import readline from "node:readline";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import updateNotifier from "update-notifier";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1124,6 +1124,13 @@ async function install() {
     }
   }
 
+  for (const oldFile of ["ai_commit.mjs", "ai_commit.py", "ai_commit.mjs.sha256"]) {
+    const oldPath = join(githooksDir, oldFile);
+    if (existsSync(oldPath)) {
+      try { unlinkSync(oldPath); } catch {}
+    }
+  }
+
   if (process.platform !== "win32") {
     spawnSync("chmod", ["+x", join(githooksDir, "prepare-commit-msg")]);
   }
@@ -1786,7 +1793,10 @@ async function quickFlow() {
 
 let _hookModule = null;
 async function hook() {
-  if (!_hookModule) _hookModule = await import(join(SOURCE_GITHOOKS_DIR, "rxdev.mjs"));
+  if (!_hookModule) {
+    const hookPath = pathToFileURL(join(SOURCE_GITHOOKS_DIR, "rxdev.mjs")).href;
+    _hookModule = await import(hookPath);
+  }
   return _hookModule;
 }
 function hookConfig(aic) {
