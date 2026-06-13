@@ -2134,7 +2134,11 @@ async function reviewCommand() {
 }
 
 async function statsCommand() {
-  console.log("\n📊 Commit statistics:\n");
+  const repoName = process.cwd().split(/[\\/]/).pop();
+  const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    encoding: "utf8",
+  }).stdout.trim();
+  console.log(`\n📊 ${repoName}:${branch} — commit statistics:\n`);
   const aic = await hook();
   const rangeIdx = args.indexOf("--range");
   const range = rangeIdx !== -1 ? args[rangeIdx + 1] : "HEAD~20..HEAD";

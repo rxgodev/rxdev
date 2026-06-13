@@ -1776,6 +1776,8 @@ export async function buildReview(diff, cfg) {
   logMessage(`REVIEW: Sending ${diff.length} chars to LLM`);
   logMessage(`REVIEW: System prompt: ${REVIEW_SYSTEM_PROMPT.slice(0, 100)}...`);
 
+  const reviewCfg = { ...cfg, model: "llama-3.3-70b-versatile" };
+
   let reviewText;
   try {
     reviewText = await callLlm(
@@ -1783,7 +1785,7 @@ export async function buildReview(diff, cfg) {
         { role: "system", content: REVIEW_SYSTEM_PROMPT },
         { role: "user", content: userPrompt },
       ],
-      cfg,
+      reviewCfg,
       { echo: false, temperature: 0.3, maxTokens: 1500 },
     );
   } catch (e) {
