@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync 
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import readline from "node:readline";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import updateNotifier from "update-notifier";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,7 +48,7 @@ if (update?.latest && update.latest !== pkg.version) {
 
 const DEFAULT_COMMITIGNORE = `# Auto-commit configuration files
 .githooks/
-ai_commit.mjs
+rxdev.mjs
 ai_commit.py
 ai_commit_debug.log
 .env
@@ -57,7 +57,7 @@ ai_commit_debug.log
 `;
 
 // === CONFIGURATION ===
-const CONFIG_DIR = join(homedir(), ".config", "ai-commit");
+const CONFIG_DIR = join(homedir(), ".config", "rxdev");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 const MANAGED_PROJECTS_FILE = join(CONFIG_DIR, "managed-projects.json");
 const TEMPLATES_FILE = join(CONFIG_DIR, "templates.json");
@@ -69,8 +69,8 @@ const DEFAULT_CONFIG = {
   provider: "groq",
 };
 
-// OpenAI-compatible providers (mirror of PROVIDERS in ai_commit.mjs).
-// Keep in sync with .githooks/ai_commit.mjs PROVIDERS.
+// OpenAI-compatible providers (mirror of PROVIDERS in rxdev.mjs).
+// Keep in sync with .githooks/rxdev.mjs PROVIDERS.
 const PROVIDERS = {
   groq: {
     label: "Groq (fast, free tier)",
@@ -186,9 +186,9 @@ function updateProjectHooks(projectPath) {
   if (!existsSync(githooksDir)) return false;
   let updated = false;
 
-  // Update ai_commit.mjs with version/hash check
-  const pySrc = join(SOURCE_GITHOOKS_DIR, "ai_commit.mjs");
-  const pyDst = join(githooksDir, "ai_commit.mjs");
+  // Update rxdev.mjs with version/hash check
+  const pySrc = join(SOURCE_GITHOOKS_DIR, "rxdev.mjs");
+  const pyDst = join(githooksDir, "rxdev.mjs");
   if (existsSync(pySrc)) {
     const latest = readFileSync(pySrc, "utf8");
     if (!existsSync(pyDst)) {
@@ -219,12 +219,12 @@ function updateProjectHooks(projectPath) {
     }
   }
 
-  // Restore prepare-commit-msg if it's broken (missing call to ai_commit.mjs)
+  // Restore prepare-commit-msg if it's broken (missing call to rxdev.mjs)
   const hookSrc = join(SOURCE_GITHOOKS_DIR, "prepare-commit-msg");
   const hookDst = join(githooksDir, "prepare-commit-msg");
   if (existsSync(hookSrc) && existsSync(hookDst)) {
     const installed = readFileSync(hookDst, "utf8");
-    if (!installed.includes("ai_commit.mjs")) {
+    if (!installed.includes("rxdev.mjs")) {
       writeFileSync(hookDst, readFileSync(hookSrc, "utf8"));
       if (process.platform !== "win32") {
         spawnSync("chmod", ["+x", hookDst]);
@@ -238,9 +238,35 @@ function updateProjectHooks(projectPath) {
 
 // === UTILS ===
 
-// The commit hook is now pure Node (ai_commit.mjs) — no Python/pathspec needed.
-// git-filter-repo is only required for `qq filter`, which checks for it lazily
+// The commit hook is now pure Node (rxdev.mjs) — no Python/pathspec needed.
+// git-filter-repo is only required for `rxdev filter`, which checks for it lazily
 // (see checkFilterRepo) and points the user at `pip install git-filter-repo`.
+
+async function installHookForProject(projectPath) {
+  const githooksDir = join(projectPath, ".githooks");
+  if (!existsSync(githooksDir)) mkdirSync(githooksDir, { recursive: true });
+
+  for (const file of ["rxdev.mjs", "prepare-commit-msg"]) {
+    const src = join(SOURCE_GITHOOKS_DIR, file);
+    const dst = join(githooksDir, file);
+    if (!existsSync(src)) continue;
+    const content = readFileSync(src, "utf8");
+    if (file === "rxdev.mjs") {
+      writePyWithHash(dst, content);
+    } else {
+      writeFileSync(dst, content);
+    }
+  }
+
+  if (process.platform !== "win32") {
+    spawnSync("chmod", ["+x", join(githooksDir, "prepare-commit-msg")]);
+  }
+
+  spawnSync("git", ["config", "core.hooksPath", ".githooks"], {
+    stdio: "ignore",
+    cwd: projectPath,
+  });
+}
 
 function setGitHooksPath() {
   if (
@@ -265,17 +291,20 @@ async function askYesNo(question) {
     output: process.stdout,
   });
   return new Promise((resolve) => {
-    rl.question(`${question} (y/n): `, (answer) => {
+    rl.question(`${question} (Y/n): `, (answer) => {
       rl.close();
-      resolve(answer.toLowerCase() === "y");
+      resolve(answer.toLowerCase() !== "n");
     });
   });
 }
 
 async function promptSelect(options, message) {
   const inquirer = await import("inquirer");
+  const choices = options.map((o) =>
+    o.value === "__sep__" ? new inquirer.default.Separator() : o,
+  );
   const { choice } = await inquirer.default.prompt([
-    { type: "list", name: "choice", message, choices: options, pageSize: 20, loop: false },
+    { type: "list", name: "choice", message, choices, pageSize: 20, loop: false },
   ]);
   return choice;
 }
@@ -327,7 +356,7 @@ function saveTemplates(templates) {
 
 async function askForScript(initial) {
   const inquirer = await import("inquirer");
-  const defaultContent = initial || '#!/bin/sh\nnode .githooks/ai_commit.mjs "$1"';
+  const defaultContent = initial || '#!/bin/sh\nnode .githooks/rxdev.mjs "$1"';
   while (true) {
     const { script } = await inquirer.default.prompt([
       {
@@ -365,11 +394,11 @@ function validatePreCommitScript(script) {
   const hasCall = lines.some(
     (line) =>
       /node\s+\.githooks\/ai_commit\.mjs\s+"\$1"/.test(line) ||
-      line.includes("node .githooks/ai_commit.mjs"),
+      line.includes("node .githooks/rxdev.mjs"),
   );
 
   if (!hasCall) {
-    return 'Script must contain: node .githooks/ai_commit.mjs "$1"';
+    return 'Script must contain: node .githooks/rxdev.mjs "$1"';
   }
 
   return null;
@@ -546,32 +575,29 @@ function listProjects() {
 
   if (allProjects.length === 0) {
     console.log("📭 No integrated projects found.");
+    console.log('   Run "rxdev init" in a project to add it.\n');
     return;
   }
 
   console.log(
-    `\n📦 Integrated projects (${valid.length} active${invalid.length ? `, ${invalid.length} missing` : ""}):\n`,
+    `\n📦 Projects (${valid.length} active${invalid.length ? `, ${invalid.length} missing` : ""}):\n`,
   );
 
-  const rows = [];
-
-  valid.forEach((p) => {
+  for (const p of valid) {
     const name = p.split(/[\\/]/).pop();
-    const template = getTemplateForProject(p) || "—";
-    rows.push({ Status: "✅", Name: name, Template: template, Path: p });
-  });
-
-  invalid.forEach((p) => {
-    const name = p.split(/[\\/]/).pop();
-    const template = getTemplateForProject(p) || "—";
-    rows.push({ Status: "❌", Name: name, Template: template, Path: p });
-  });
-
-  console.table(rows);
-
-  if (invalid.length > 0) {
-    console.log('\n⚠️  Missing projects: run "qq uninstall" in them to clean up.\n');
+    const template = getTemplateForProject(p);
+    console.log(`  ✅ ${name}`);
+    console.log(`     Path: ${p}`);
+    if (template) console.log(`     Template: ${template}`);
   }
+
+  for (const p of invalid) {
+    const name = p.split(/[\\/]/).pop();
+    console.log(`  ❌ ${name} (missing)`);
+    console.log(`     Path: ${p}`);
+  }
+
+  console.log("");
 }
 
 // === FILE TREE HELPERS ===
@@ -812,65 +838,69 @@ async function showFileTreePicker(
 // === CONFIG INTERACTION ===
 
 async function configInteractive() {
-  const config = loadConfig();
+  let config = loadConfig();
 
-  const provider = config.provider || "groq";
-  const modelLabel =
-    config.model ||
-    (PROVIDERS[provider]?.defaultModel
-      ? `${PROVIDERS[provider].defaultModel} (default)`
-      : "default");
-  const providerLabel = PROVIDERS[provider]?.label || `custom (${config.apiUrl || "no url"})`;
-  const langLabel = LANGUAGES[config.language] || "Русский";
-  const mainAction = await promptSelect(
-    [
-      { name: "✅ Save & exit", value: "exit" },
-      { name: "─".repeat(30), value: "__sep__" },
-      {
-        name: `🔌 Provider: ${providerLabel}`,
-        value: "provider",
-      },
-      {
-        name: `🧠 Model: ${modelLabel}`,
-        value: "model",
-      },
-      {
-        name: `🌐 Language: ${langLabel}`,
-        value: "language",
-      },
-      {
-        name: `✏️  Custom prompt: ${config.prompt ? "set" : "not set"}`,
-        value: "prompt",
-      },
-      {
-        name: `📝 Custom types: ${config.customTypes?.length ? config.customTypes.join(", ") : "not set"}`,
-        value: "types",
-      },
-      {
-        name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
-        value: "apikey",
-      },
-      {
-        name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
-        value: "coauthor",
-      },
-      {
-        name: `📈 Auto-bump: ${config.bumpVersion ? "enabled" : "disabled"}`,
-        value: "bump",
-      },
-      { name: "📂 Projects & Templates", value: "projects-templates" },
-    ],
-    "Configuration",
-  );
+  while (true) {
+    const provider = config.provider || "groq";
+    const modelLabel =
+      config.model ||
+      (PROVIDERS[provider]?.defaultModel
+        ? `${PROVIDERS[provider].defaultModel} (default)`
+        : "default");
+    const providerLabel = PROVIDERS[provider]?.label || `custom (${config.apiUrl || "no url"})`;
+    const langLabel = LANGUAGES[config.language] || "Русский";
 
-  if (mainAction === "exit") return;
-  if (mainAction === "__sep__") return;
+    console.log("\n⚙️  Configuration\n");
 
-  if (mainAction === "coauthor") {
-    config.coauthor = !config.coauthor;
-    saveConfig(config);
-    console.log(config.coauthor ? "✅ Co-author enabled.\n" : "✅ Co-author disabled.\n");
-  }
+    const mainAction = await promptSelect(
+      [
+        { name: "✅ Save & exit", value: "exit" },
+        { name: "─".repeat(30), value: "__sep__" },
+        {
+          name: `🔌 Provider: ${providerLabel}`,
+          value: "provider",
+        },
+        {
+          name: `🧠 Model: ${modelLabel}`,
+          value: "model",
+        },
+        {
+          name: `🌐 Language: ${langLabel}`,
+          value: "language",
+        },
+        {
+          name: `✏️  Custom prompt: ${config.prompt ? "set" : "not set"}`,
+          value: "prompt",
+        },
+        {
+          name: `📝 Custom types: ${config.customTypes?.length ? config.customTypes.join(", ") : "not set"}`,
+          value: "types",
+        },
+        {
+          name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
+          value: "apikey",
+        },
+        {
+          name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
+          value: "coauthor",
+        },
+        {
+          name: `📈 Auto-bump: ${config.bumpVersion ? "enabled" : "disabled"}`,
+          value: "bump",
+        },
+        { name: "📂 Projects & Templates", value: "projects-templates" },
+      ],
+      "Select setting",
+    );
+
+    if (mainAction === "exit" || mainAction === "__sep__") return;
+
+    if (mainAction === "coauthor") {
+      config.coauthor = !config.coauthor;
+      saveConfig(config);
+      console.log(config.coauthor ? "✅ Co-author enabled.\n" : "✅ Co-author disabled.\n");
+      await new Promise((r) => setTimeout(r, 1000));
+    }
 
   if (mainAction === "bump") {
     config.bumpVersion = !config.bumpVersion;
@@ -939,21 +969,27 @@ async function configInteractive() {
       },
     ]);
     config.model = model.trim();
-    saveConfig(config);
     const keyHint =
       chosen === "ollama"
         ? " (no API key needed)"
         : config.apiKey
           ? ""
           : " — remember to set an API key";
-    console.log(
-      `✅ Provider: ${config.provider}${config.model ? `, model: ${config.model}` : ""}${keyHint}.\n`,
+    const confirm = await askYesNo(
+      `Apply: provider=${config.provider}, model=${config.model || "default"}${keyHint}?`,
     );
+    if (confirm) {
+      saveConfig(config);
+      console.log(`✅ Saved.\n`);
+    } else {
+      console.log("↩️  Cancelled.\n");
+    }
   }
 
   if (mainAction === "model") {
     const inquirer = await import("inquirer");
     const prov = config.provider || "groq";
+    let newModel;
     if (prov === "groq") {
       const { model } = await inquirer.default.prompt([
         {
@@ -967,9 +1003,7 @@ async function configInteractive() {
           default: config.model || "llama-3.1-8b-instant",
         },
       ]);
-      config.model = model;
-      saveConfig(config);
-      console.log(`✅ Model set to ${model.includes("70b") ? "70B" : "8B"}.\n`);
+      newModel = model;
     } else {
       const { model } = await inquirer.default.prompt([
         {
@@ -979,11 +1013,15 @@ async function configInteractive() {
           default: config.model || "",
         },
       ]);
-      config.model = model.trim();
+      newModel = model.trim();
+    }
+    const confirm = await askYesNo(`Set model to "${newModel || "default"}"?`);
+    if (confirm) {
+      config.model = newModel;
       saveConfig(config);
-      console.log(
-        config.model ? `✅ Model set to ${config.model}.\n` : "ℹ️  Using provider default model.\n",
-      );
+      console.log(`✅ Model: ${config.model || "default"}.\n`);
+    } else {
+      console.log("↩️  Cancelled.\n");
     }
   }
 
@@ -995,9 +1033,14 @@ async function configInteractive() {
       })),
       "Select commit message language:",
     );
-    config.language = lang;
-    saveConfig(config);
-    console.log(`✅ Language set to ${LANGUAGES[lang]}.\n`);
+    const confirm = await askYesNo(`Set language to "${LANGUAGES[lang]}"?`);
+    if (confirm) {
+      config.language = lang;
+      saveConfig(config);
+      console.log(`✅ Language: ${LANGUAGES[lang]}.\n`);
+    } else {
+      console.log("↩️  Cancelled.\n");
+    }
   }
 
   if (mainAction === "prompt") {
@@ -1041,38 +1084,89 @@ async function configInteractive() {
   }
 
   if (mainAction === "projects-templates") {
-    const ptAction = await promptSelect(
-      [
-        { name: "📋 List all projects", value: "list-projects" },
-        { name: "🎨 Templates", value: "templates" },
-        { name: "🔌 Disable hook in project", value: "disable-hook" },
-        { name: "⬅️ Back", value: "back" },
-      ],
-      "Projects & Templates",
-    );
+    while (true) {
+      const allProjects = getManagedProjects();
 
-    if (ptAction === "list-projects") {
-      listProjects();
-    } else if (ptAction === "templates") {
-      await manageTemplates();
-    } else if (ptAction === "disable-hook") {
-      const allProjects = getManagedProjects().filter((p) => existsSync(p));
+      const choices = [
+        { name: "✅ Back to main menu", value: "back" },
+        { name: "─".repeat(30), value: "__sep__" },
+      ];
+
       if (allProjects.length === 0) {
-        console.log("📭 No managed projects found.");
+        choices.push({ name: "📭 No projects (run 'rxdev init' to add)", value: "__none__" });
       } else {
-        const target = await promptSelect(
-          allProjects.map((p) => ({ name: `${p.split(/[\\/]/).pop()} → ${p}`, value: p })),
-          "Select project to disable hook:",
-        );
-        const githooks = join(target, ".githooks");
-        if (existsSync(githooks)) {
-          rmSync(githooks, { recursive: true, force: true });
+        for (const p of allProjects) {
+          const name = p.split(/[\\/]/).pop();
+          const exists = existsSync(p);
+          const hasHook = exists && existsSync(join(p, ".githooks"));
+          const status = !exists ? "❌ missing" : hasHook ? "✅ active" : "⚠️  hook off";
+          choices.push({ name: `${name} — ${status}`, value: p });
         }
-        spawnSync("git", ["config", "--unset", "core.hooksPath"], { stdio: "ignore", cwd: target });
-        unregisterProject(target);
-        console.log(`\n✅ Hook disabled for ${target.split(/[\\/]/).pop()}\n`);
+        choices.push({ name: "─".repeat(30), value: "__sep__" });
       }
+
+      choices.push({ name: "🎨 Templates", value: "templates" });
+
+      const selected = await promptSelect(choices, "Projects");
+
+      if (selected === "back" || selected === "__sep__" || selected === "__none__") {
+        if (selected === "__none__") {
+          console.log('ℹ️  Run "rxdev init" in a project to add it.\n');
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+        break;
+      }
+
+      if (selected === "templates") {
+        await manageTemplates();
+        continue;
+      }
+
+      const projectPath = selected;
+      const projectName = projectPath.split(/[\\/]/).pop();
+      const exists = existsSync(projectPath);
+      const hasHook = exists && existsSync(join(projectPath, ".githooks"));
+
+      const actions = [
+        { name: "⬅️  Back", value: "back" },
+        { name: "─".repeat(30), value: "__sep__" },
+      ];
+
+      if (exists && hasHook) {
+        actions.push({ name: "🔌 Disable hook", value: "disable" });
+      } else if (exists && !hasHook) {
+        actions.push({ name: "⚡ Enable hook", value: "enable" });
+      }
+      actions.push({ name: "🗑️  Remove from list", value: "remove" });
+
+      const action = await promptSelect(actions, `${projectName}`);
+
+      if (action === "back" || action === "__sep__") continue;
+
+      if (action === "disable") {
+        const confirm = await askYesNo(`Disable hook in ${projectName}?`);
+        if (confirm) {
+          rmSync(join(projectPath, ".githooks"), { recursive: true, force: true });
+          spawnSync("git", ["config", "--unset", "core.hooksPath"], { stdio: "ignore", cwd: projectPath });
+          console.log(`✅ Hook disabled\n`);
+        }
+      } else if (action === "enable") {
+        const confirm = await askYesNo(`Enable hook in ${projectName}?`);
+        if (confirm) {
+          await installHookForProject(projectPath);
+          console.log(`✅ Hook enabled\n`);
+        }
+      } else if (action === "remove") {
+        const confirm = await askYesNo(`Remove ${projectName} from list?`);
+        if (confirm) {
+          unregisterProject(projectPath);
+          console.log(`✅ Removed from list\n`);
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, 1000));
     }
+  }
   }
 }
 
@@ -1109,7 +1203,7 @@ async function install() {
   const githooksDir = join(process.cwd(), ".githooks");
   if (!existsSync(githooksDir)) mkdirSync(githooksDir, { recursive: true });
 
-  for (const file of ["ai_commit.mjs", "prepare-commit-msg"]) {
+  for (const file of ["rxdev.mjs", "prepare-commit-msg"]) {
     const src = join(SOURCE_GITHOOKS_DIR, file);
     const dst = join(githooksDir, file);
     if (!existsSync(src)) {
@@ -1117,11 +1211,23 @@ async function install() {
       process.exit(1);
     }
     const content = readFileSync(src, "utf8");
-    if (file === "ai_commit.mjs") {
+    if (file === "rxdev.mjs") {
       writePyWithHash(dst, content);
     } else {
       writeFileSync(dst, content);
     }
+  }
+
+  for (const oldFile of ["ai_commit.mjs", "ai_commit.py", "ai_commit.mjs.sha256", "ai_commit.py.sha256"]) {
+    const oldPath = join(githooksDir, oldFile);
+    if (existsSync(oldPath)) {
+      try { unlinkSync(oldPath); } catch {}
+    }
+  }
+
+  const oldLogFile = join(process.cwd(), "ai_commit_debug.log");
+  if (existsSync(oldLogFile)) {
+    try { unlinkSync(oldLogFile); } catch {}
   }
 
   if (process.platform !== "win32") {
@@ -1143,7 +1249,7 @@ async function install() {
   }
   registerProject();
 
-  console.log("🎉 RXCommit installed successfully!");
+  console.log("🎉 RXDev installed successfully!");
 }
 
 function uninstall() {
@@ -1157,7 +1263,7 @@ function uninstall() {
 
   unsetGitHooksPath();
   console.log("✅ Git hooks path reset.");
-  console.log("🗑️ RXCommit uninstalled!");
+  console.log("🗑️ RXDev uninstalled!");
 }
 
 function showStatus() {
@@ -1191,7 +1297,7 @@ function showStatus() {
   const templateName = getTemplateForProject(root) || "—";
   const cfg = loadConfig();
 
-  console.log("\n🔍 RXCommit Status\n");
+  console.log("\n🔍 RXDev Status\n");
   console.log(`📁 Git root:       ${root}`);
   console.log(`⚙️  Hooks path:     ${hooksConfigured ? "✅ .githooks" : "❌ not set"}`);
   console.log(`📜 Hook file:       ${hookExists ? "✅ present" : "❌ missing"}`);
@@ -1205,7 +1311,7 @@ function showStatus() {
       ? "no key needed (local)"
       : hasKey
         ? "API key configured"
-        : "API key needed — run 'qq config'";
+        : "API key needed — run 'rxdev config'";
   console.log(`🌐 Provider:        ${prov}${cfg.model ? ` · ${cfg.model}` : ""} (${keyState})`);
   console.log(`📈 Auto-bump:       ${cfg.bumpVersion ? "✅ enabled" : "— disabled"}`);
   console.log(`🎨 Template:        ${templateName}`);
@@ -1219,7 +1325,7 @@ function doctor() {
   const bad = (s) => `❌ ${s}`;
   const warn = (s) => `⚠️  ${s}`;
 
-  console.log("\n🩺 RXCommit Doctor\n");
+  console.log("\n🩺 RXDev Doctor\n");
 
   // Node version (the hook runtime; >= 18 required)
   const nodeMajor = parseInt(process.versions.node.split(".")[0], 10);
@@ -1229,12 +1335,12 @@ function doctor() {
       : bad(`Node ${process.version} is too old — need >= 18`),
   );
 
-  // git-filter-repo (optional, only for `qq filter`)
+  // git-filter-repo (optional, only for `rxdev filter`)
   const fr = spawnSync("git", ["filter-repo", "--version"], { stdio: "pipe" });
   console.log(
     fr.status === 0
       ? ok("Optional: git-filter-repo")
-      : warn("git-filter-repo not installed (only needed for 'qq filter')"),
+      : warn("git-filter-repo not installed (only needed for 'rxdev filter')"),
   );
 
   // git repo, hooks path, hook files
@@ -1250,17 +1356,17 @@ function doctor() {
   console.log(
     hooksPath === ".githooks"
       ? ok("Hooks path: .githooks")
-      : bad(`Hooks path not set — run 'qq init' (current: ${hooksPath || "unset"})`),
+      : bad(`Hooks path not set — run 'rxdev init' (current: ${hooksPath || "unset"})`),
   );
 
   const hookFile = join(gitRoot, ".githooks", "prepare-commit-msg");
   console.log(
     existsSync(hookFile)
       ? ok("Hook: prepare-commit-msg present")
-      : bad("Hook missing — run 'qq init'"),
+      : bad("Hook missing — run 'rxdev init'"),
   );
 
-  const pyFile = join(gitRoot, ".githooks", "ai_commit.mjs");
+  const pyFile = join(gitRoot, ".githooks", "rxdev.mjs");
   if (existsSync(pyFile)) {
     const hashPath = hashFilePath(pyFile);
     if (existsSync(hashPath)) {
@@ -1268,14 +1374,14 @@ function doctor() {
       const cur = fileHash(readFileSync(pyFile, "utf8"));
       console.log(
         stored === cur
-          ? ok("Hook: ai_commit.mjs integrity OK")
-          : warn("ai_commit.mjs changed since install (hash mismatch)"),
+          ? ok("Hook: rxdev.mjs integrity OK")
+          : warn("rxdev.mjs changed since install (hash mismatch)"),
       );
     } else {
-      console.log(warn("ai_commit.mjs present but no .sha256 sidecar"));
+      console.log(warn("rxdev.mjs present but no .sha256 sidecar"));
     }
   } else {
-    console.log(bad("ai_commit.mjs missing — run 'qq init'"));
+    console.log(bad("rxdev.mjs missing — run 'rxdev init'"));
   }
 
   // provider / key
@@ -1303,7 +1409,7 @@ async function checkFilterRepo() {
   if (r.status !== 0) {
     console.error("❌ git-filter-repo not found. Install it:\n");
     console.error("  pip install git-filter-repo\n");
-    console.error("  Or run: qq init");
+    console.error("  Or run: rxdev init");
     process.exit(1);
   }
   return r.stdout.trim();
@@ -1489,7 +1595,7 @@ async function quickFlow() {
   // ── Header box (only boxed element) ──
   const showHeader = () => {
     clearScreen();
-    const lines = [`${bold}🚀  RXCommit QuickFlow®${reset}`];
+    const lines = [`${bold}🚀  RXDev QuickFlow®${reset}`];
     const w = Math.max(...lines.map((l) => sa(l).length)) + 4;
     const o =
       "╭" +
@@ -1530,11 +1636,25 @@ async function quickFlow() {
   const unstaged = spawnSync("git", ["diff", "--name-only"], { encoding: "utf8" })
     .stdout.trim()
     .split("\n")
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((f) => {
+      try {
+        return existsSync(join(process.cwd(), f));
+      } catch {
+        return false;
+      }
+    });
   const alreadyStaged = spawnSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" })
     .stdout.trim()
     .split("\n")
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((f) => {
+      try {
+        return existsSync(join(process.cwd(), f));
+      } catch {
+        return false;
+      }
+    });
   const allChanged = [...new Set([...unstaged, ...alreadyStaged])];
 
   if (allChanged.length === 0) {
@@ -1563,9 +1683,9 @@ async function quickFlow() {
   }
 
   if (filesToStage.length > 0) {
-    const addResult = spawnSync("git", ["add", ...filesToStage], { stdio: "pipe" });
+    const addResult = spawnSync("git", ["add", "--", ...filesToStage], { stdio: "pipe" });
     if (addResult.status !== 0) {
-      console.error("❌ Failed to stage changes.");
+      console.error(`❌ Failed to stage changes: ${addResult.stderr || "unknown error"}`);
       process.exit(1);
     }
     console.log(`${green}✅ ${filesToStage.length} file(s) staged${reset}\n`);
@@ -1576,10 +1696,23 @@ async function quickFlow() {
   if (secrets.length > 0) {
     console.log(`${yellow}🚨 ${secrets.length} potential secret(s) in staged changes:${reset}`);
     for (const f of secrets) console.log(`   • ${f.type} — ${f.file} (${f.preview})`);
-    const carryOn = await askYesNo("Commit anyway?");
-    if (!carryOn) {
-      console.log(`\n${bold}↩️  Aborted — unstage the secrets and retry.${reset}`);
+    console.log("");
+    const action = await promptSelect(
+      [
+        { name: "⚠️   Commit anyway (risky)", value: "commit" },
+        { name: "🗑️   Unstage secret files & commit", value: "unstage" },
+        { name: "❌   Cancel", value: "cancel" },
+      ],
+      "What to do with secrets?",
+    );
+    if (action === "cancel") {
+      console.log(`\n${bold}↩️  Aborted.${reset}`);
       return;
+    }
+    if (action === "unstage") {
+      const secretFiles = [...new Set(secrets.map((s) => s.file))];
+      spawnSync("git", ["reset", "HEAD", "--", ...secretFiles], { stdio: "pipe" });
+      console.log(`${yellow}🗑️  Unstaged: ${secretFiles.join(", ")}${reset}\n`);
     }
   }
 
@@ -1825,11 +1958,16 @@ async function quickFlow() {
 
 let _hookModule = null;
 async function hook() {
-  if (!_hookModule) _hookModule = await import(join(SOURCE_GITHOOKS_DIR, "ai_commit.mjs"));
+  if (!_hookModule) {
+    const hookPath = pathToFileURL(join(SOURCE_GITHOOKS_DIR, "rxdev.mjs")).href;
+    _hookModule = await import(hookPath);
+  }
   return _hookModule;
 }
 function hookConfig(aic) {
-  return aic.resolveConfig(aic.loadUserConfig());
+  const userConfig = aic.loadUserConfig();
+  const projectConfig = aic.loadProjectConfig(process.cwd());
+  return aic.resolveConfig({ ...userConfig, ...projectConfig });
 }
 
 async function scanSecrets() {
@@ -1848,7 +1986,7 @@ async function scanCommand() {
     console.log(`  • ${f.type} — ${f.file}  (${f.preview})`);
   }
   console.log("\n   Unstage or remove these before committing.");
-  console.log("   Already committed? Use 'qq filter' to purge from history.\n");
+  console.log("   Already committed? Use 'rxdev filter' to purge from history.\n");
 }
 
 async function releaseCommand() {
@@ -1858,16 +1996,13 @@ async function releaseCommand() {
     console.error(`\n❌ ${data?.error || "Could not compute release."}`);
     process.exit(1);
   }
-  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-    encoding: "utf8",
-  }).stdout.trim();
 
   console.log(`\n🏷️  Release\n`);
   console.log(`   Since:   ${data.from || "(no tags — summarizing all history)"}`);
   console.log(`   Current: ${data.current}`);
   console.log(`   Bump:    ${data.bump}  →  ${data.next}`);
   console.log(`   Commits: ${data.count}\n`);
-  console.log("──────── CHANGELOG entry ────────\n");
+  console.log("──────── Release notes ────────\n");
   console.log(data.changelog);
   console.log("─────────────────────────────────\n");
 
@@ -1876,57 +2011,42 @@ async function releaseCommand() {
     return;
   }
 
-  const proceed = await askYesNo(`Write CHANGELOG.md and create tag v${data.next}?`);
+  const tag = `v${data.next}`;
+  const proceed = await askYesNo(`Create tag ${tag} and GitHub Release?`);
   if (!proceed) {
     console.log("↩️  Cancelled.\n");
     return;
   }
 
-  const clPath = join(gitRoot, "CHANGELOG.md");
-  const titleBlock = "# Changelog\n\nAll notable changes to this project are documented here.\n";
-  const entry = `${data.changelog.trim()}\n`;
-  let out;
-  if (existsSync(clPath)) {
-    const existing = readFileSync(clPath, "utf8");
-    const idx = existing.indexOf("\n## ");
-    if (idx !== -1) {
-      out = `${existing.slice(0, idx + 1)}\n${entry}\n${existing.slice(idx + 1)}`;
-    } else {
-      out = `${existing.trimEnd()}\n\n${entry}`;
-    }
-  } else {
-    out = `${titleBlock}\n${entry}`;
-  }
-  writeFileSync(clPath, out);
-  console.log("✅ CHANGELOG.md updated");
-
-  spawnSync("git", ["add", "--", clPath], { stdio: "pipe" });
-  const tag = `v${data.next}`;
-  const commitRes = spawnSync("git", ["commit", "-m", `chore(release): ${tag}`], {
-    stdio: "inherit",
-    env: { ...process.env, NEURO_COMMIT_SKIP_BUMP: "1", GIT_EDITOR: "true" },
-  });
-  if (commitRes.status !== 0) {
-    console.error("❌ Release commit failed (nothing staged?).");
-    process.exit(1);
-  }
   const tagRes = spawnSync("git", ["tag", "-a", tag, "-m", tag], { stdio: "inherit" });
   if (tagRes.status !== 0) {
     console.error(`❌ Failed to create tag ${tag} (already exists?).`);
     process.exit(1);
   }
-  console.log(`✅ Committed and tagged ${tag}`);
+  console.log(`✅ Created tag ${tag}`);
 
-  const doPush = await askYesNo("Push commit and tag to origin?");
-  if (doPush) {
-    const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
-      encoding: "utf8",
-    }).stdout.trim();
-    spawnSync("git", ["push", "origin", branch], { stdio: "inherit" });
-    spawnSync("git", ["push", "origin", tag], { stdio: "inherit" });
-    console.log("✅ Pushed.\n");
+  const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    encoding: "utf8",
+  }).stdout.trim();
+  spawnSync("git", ["push", "origin", branch], { stdio: "inherit" });
+  spawnSync("git", ["push", "origin", tag], { stdio: "inherit" });
+  console.log("✅ Pushed tag");
+
+  const hasGh = spawnSync("gh", ["--version"], { stdio: "pipe" }).status === 0;
+  if (hasGh) {
+    const notesFile = join(tmpdir(), `rxdev-release-${randomBytes(8).toString("hex")}.md`);
+    writeFileSync(notesFile, data.changelog);
+    const ghRes = spawnSync("gh", ["release", "create", tag, "--title", tag, "--notes-file", notesFile], {
+      stdio: "inherit",
+    });
+    try { unlinkSync(notesFile); } catch {}
+    if (ghRes.status === 0) {
+      console.log("✅ GitHub Release created\n");
+    } else {
+      console.log(`⚠️  Failed to create GitHub Release. Create manually:\n   gh release create ${tag}\n`);
+    }
   } else {
-    console.log(`\nℹ️  When ready: git push && git push origin ${tag}\n`);
+    console.log(`ℹ️  Install GitHub CLI to create releases automatically:\n   gh release create ${tag}\n`);
   }
 }
 
@@ -2024,11 +2144,92 @@ async function splitCommand() {
   console.log(`\n✅ Created ${groups.length} commit(s).\n`);
 }
 
+function stripMarkdown(text) {
+  return text
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "  • ")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/`(.+?)`/g, "$1")
+    .trim();
+}
+
+async function reviewCommand() {
+  const aic = await hook();
+  const { diff } = await aic.getStagedDiff();
+  if (!diff) {
+    console.log("ℹ️  No staged changes to review. Stage files first with 'git add'.\n");
+    return;
+  }
+  const cfg = hookConfig(aic);
+  if (!cfg.apiKey && cfg.needsKey) {
+    console.error("❌ No API key configured. Run 'rxdev config' to set it.\n");
+    process.exit(1);
+  }
+  const data = await aic.buildReview(diff, cfg);
+  if (!data || data.error) {
+    console.error(`\n❌ ${data?.error || "Review failed."}`);
+    process.exit(1);
+  }
+  console.log(`\n🔍 Code Review\n`);
+  console.log(stripMarkdown(data.review));
+  if (data.issueCount > 0) {
+    console.log(`\n${"─".repeat(40)}`);
+    console.log(`📋 Found ${data.issueCount} issue(s)`);
+  }
+  console.log("");
+}
+
+async function statsCommand() {
+  const repoName = process.cwd().split(/[\\/]/).pop();
+  const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    encoding: "utf8",
+  }).stdout.trim();
+  console.log(`\n📊 ${repoName}:${branch} — commit statistics:\n`);
+  const aic = await hook();
+  const rangeIdx = args.indexOf("--range");
+  const range = rangeIdx !== -1 ? args[rangeIdx + 1] : "HEAD~20..HEAD";
+
+  let data;
+  try {
+    data = aic.analyzeCommits(range);
+  } catch (e) {
+    console.error(`❌ Error analyzing commits: ${e.message}`);
+    process.exit(1);
+  }
+
+  let badPractices = [];
+  try {
+    badPractices = aic.detectBadPractices(range);
+  } catch (e) {
+    // Ignore bad practices errors
+  }
+
+  if (data.total === 0) {
+    console.log("ℹ️  No commits found in the specified range.\n");
+    return;
+  }
+
+  console.log(`Total commits: ${data.total}`);
+  console.log(`Average message length: ${data.avgMessageLength} chars`);
+  console.log(`Breaking changes: ${data.breakingChanges}`);
+  console.log("\nBy type:");
+  for (const [type, count] of Object.entries(data.byType)) {
+    console.log(`  ${type}: ${count}`);
+  }
+  if (badPractices.length > 0) {
+    console.log(`\n⚠️  Bad practices found: ${badPractices.length}`);
+    for (const issue of badPractices.slice(0, 5)) {
+      console.log(`  - ${issue.message}`);
+    }
+  }
+}
+
 function showHelp() {
-  console.log(`${boldCyan}RXCommit${resetColor} is a AI-powered conventional commit messages ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
+  console.log(`${boldCyan}RXDev${resetColor} is an AI-powered developer workflow tool ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
 ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
-  ${boldCyan}qq${resetColor} <command> [options]
+  ${boldCyan}rxdev${resetColor} <command> [options]
 
 ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}init${resetColor}          Install AI commit hook
@@ -2036,8 +2237,10 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
   ${boldCyan}split${resetColor}         Split staged changes into multiple logical commits
   ${boldCyan}scan${resetColor}          Scan staged changes for secrets/credentials
+  ${boldCyan}review${resetColor}        AI code review of staged changes
+  ${boldCyan}stats${resetColor}         Show commit statistics and bad practices
   ${boldCyan}pr${resetColor}            Generate a pull request title + description
-  ${boldCyan}release${resetColor}       Generate CHANGELOG entry, bump version & tag
+  ${boldCyan}release${resetColor}       Create GitHub Release with tag
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
   ${boldCyan}doctor${resetColor}        Diagnose setup (Node, hooks, provider, key)
@@ -2063,8 +2266,8 @@ if (filteredArgs.includes("--help") || filteredArgs.includes("-h")) {
 }
 
 // === AUTO-UPDATE MANAGED PROJECTS' HOOKS ===
-// Only on an explicit `qq update`. Previously this ran on almost every command,
-// silently rewriting the hooks of OTHER managed repos whenever the user ran qq
+// Only on an explicit `rxdev update`. Previously this ran on almost every command,
+// silently rewriting the hooks of OTHER managed repos whenever the user ran rxdev
 // anywhere — surprising and, across a runtime switch, actively harmful.
 if (cmd === "update") {
   const projects = getManagedProjects().filter((p) => existsSync(p));
@@ -2104,6 +2307,12 @@ async function mainCmd() {
     case "split":
       await splitCommand();
       break;
+    case "review":
+      await reviewCommand();
+      break;
+    case "stats":
+      await statsCommand();
+      break;
     case "scan":
       await scanCommand();
       break;
@@ -2117,7 +2326,7 @@ async function mainCmd() {
       await releaseCommand();
       break;
     case "update": {
-      console.log("Updating RXCommit...\n");
+      console.log("Updating RXDev...\n");
       const isPnpm = __dirname.includes("pnpm") || process.env.PNPM_HOME;
       const pm = isPnpm ? "pnpm" : "npm";
       // npm/pnpm are .cmd shims on Windows, which modern Node refuses to spawn
@@ -2125,12 +2334,12 @@ async function mainCmd() {
       const pmOpts = { stdio: "inherit", shell: process.platform === "win32" };
       const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], pmOpts);
       if (upd.status === 0) {
-        console.log("\n✅ RXCommit updated successfully.");
+        console.log("\n✅ RXDev updated successfully.");
       } else if (pm === "pnpm") {
         console.log("\n⚠️  pnpm update failed, trying npm...\n");
         const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], pmOpts);
         if (npmUpd.status === 0) {
-          console.log("\n✅ RXCommit updated successfully.");
+          console.log("\n✅ RXDev updated successfully.");
         } else {
           console.log(
             "\n❌ Update failed. Try manually:\n  pnpm add -g @rxgodev/rxcommit@latest\n  npm install -g @rxgodev/rxcommit@latest",

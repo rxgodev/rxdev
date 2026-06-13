@@ -1,24 +1,25 @@
 {
-  "name": "@rxgodev/rxcommit",
-  "version": "3.1.0",
-  "description": "AI-powered commit message generator",
+  "name": "@rxgodev/rxdev",
+  "version": "4.0.0",
+  "description": "AI-powered developer workflow tool",
   "keywords": [
     "git",
     "commit",
     "ai",
     "cli",
+    "code-review",
     "conventional-commits",
-    "rxcommit"
+    "rxdev"
   ],
   "license": "MIT",
   "type": "module",
   "bin": {
-    "qq": "bin/ac.js",
-    "rxcommit": "bin/ac.js"
+    "rxdev": "bin/rxdev.js",
+    "qq": "bin/rxdev.js"
   },
   "scripts": {
-    "test": "node --test tests/test_ai_commit.mjs",
-    "test:coverage": "c8 node --test tests/test_ai_commit.mjs",
+    "test": "node --test tests/test_rxdev.mjs",
+    "test:coverage": "c8 node --test tests/test_rxdev.mjs",
     "lint": "npx @biomejs/biome check .githooks/ bin/ tests/",
     "format": "npx @biomejs/biome format --write .githooks/ bin/ tests/"
   },

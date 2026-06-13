@@ -1,6 +1,6 @@
-// RXCommit — the prepare-commit-msg hook (Node, zero dependencies).
+// RXDev — the prepare-commit-msg hook (Node, zero dependencies).
 //
-// Invoked by .githooks/prepare-commit-msg as `node ai_commit.mjs "$1"`. It
+// Invoked by .githooks/prepare-commit-msg as `node rxdev.mjs "$1"`. It
 // generates a Conventional Commit message from the staged diff via any
 // OpenAI-compatible provider, with optional version bumping and secret scanning.
 //
@@ -32,7 +32,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const NEURO_COMMIT_VERSION = "2.19.3";
+export const RXDEV_VERSION = "4.0.0";
 
 export const DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant";
 
@@ -86,18 +86,50 @@ export const DEFAULT_PROVIDER = "groq";
 
 export const REQUEST_TIMEOUT = 60; // seconds
 export const MAX_ATTEMPTS = 3;
-export const MAX_DIFF_LENGTH = 3000;
+export const MAX_DIFF_LENGTH = 16000;
+
+export function truncateDiffSmart(diff, maxChars = MAX_DIFF_LENGTH) {
+  if (diff.length <= maxChars) {
+    return { diff, truncated: false, totalChars: diff.length, includedChars: diff.length };
+  }
+
+  const fileBlocks = diff.split(/(?=^# File: )/m);
+  let result = "";
+  const totalChars = diff.length;
+  let includedChars = 0;
+  let truncated = false;
+  let filesIncluded = 0;
+  const filesTotal = fileBlocks.filter((b) => b.startsWith("# File:")).length;
+
+  for (const block of fileBlocks) {
+    if (includedChars + block.length <= maxChars) {
+      result += block;
+      includedChars += block.length;
+      if (block.startsWith("# File:")) filesIncluded++;
+    } else {
+      truncated = true;
+      break;
+    }
+  }
+
+  if (truncated) {
+    const remaining = filesTotal - filesIncluded;
+    result += `\n\n[diff truncated: ${remaining} more file${remaining > 1 ? "s" : ""} not shown]`;
+  }
+
+  return { diff: result.trim(), truncated, totalChars, includedChars };
+}
 
 // ============================================================
 //  SYSTEM PROMPT
 // ============================================================
 
 export const BODY_LANGUAGE_PROMPTS = {
-  en: "Body: one short WHY sentence in past tense. NO lists, NO file names, NO bullet points.",
-  ru: "Body: ОДНО короткое предложение WHY в прошлом времени. БЕЗ списков, БЕЗ имён файлов.",
-  de: "Body: EIN kurzer WHY-Satz im Präteritum. KEINE Listen, KEINE Dateinamen, KEINE Aufzählungen.",
-  fr: "Body: UNE courte phrase WHY au passé. PAS de listes, PAS de noms de fichiers, PAS de puces.",
-  zh: "Body: 一个短句WHY，过去时。不要列表，不要文件名，不要项目符号。",
+  en: "Body: one short WHY sentence explaining this change. NO lists, NO file names, NO bullet points.",
+  ru: "Body: ОДНО короткое предложение, объясняющее ЭТОТ изменение. БЕЗ списков, БЕЗ имён файлов.",
+  de: "Body: EIN kurzer Satz, der DIESE Änderung erklärt. KEINE Listen, KEINE Dateinamen, KEINE Aufzählungen.",
+  fr: "Body: UNE courte phrase expliquant CE changement. PAS de listes, PAS de noms de fichiers, PAS de puces.",
+  zh: "Body: 一个短句解释这次变更。不要列表，不要文件名，不要项目符号。",
 };
 
 export const BAD_EXAMPLES =
@@ -122,13 +154,27 @@ const TYPE_REGEX_STR = buildTypeRegexStr(validTypes);
 const _TYPE_REGEX = new RegExp(`^(?:${TYPE_REGEX_STR})`, "i");
 const _COMMIT_RE = new RegExp(`^(?:${TYPE_REGEX_STR})(?:\\([^)]*\\))?\\s*:`, "i");
 
+const LANGUAGE_NAMES = {
+  en: "English",
+  ru: "Russian",
+  de: "German",
+  fr: "French",
+  zh: "Chinese",
+};
+
 export function buildSystemPrompt(typesStr, language, customPrompt = "") {
   if (customPrompt) return customPrompt.replace("{types}", typesStr);
   const bodyPrompt = BODY_LANGUAGE_PROMPTS[language] || BODY_LANGUAGE_PROMPTS.ru;
+  const langName = LANGUAGE_NAMES[language] || "Russian";
   return (
-    "Format:\ntype(scope): lowercase description\n\none short WHY sentence\n" +
+    "Generate a Conventional Commit message.\n\n" +
+    "Format (MUST follow exactly):\n" +
+    "type(scope): short description in lowercase\n\n" +
+    "one short WHY sentence explaining this change\n\n" +
     `Valid types: ${typesStr}.\n` +
     `- ${bodyPrompt}\n` +
+    `- IMPORTANT: The body MUST be written in ${langName}. The type and scope stay in English.\n` +
+    `- The description after colon MUST be present and meaningful.\n` +
     `${BAD_EXAMPLES}`
   );
 }
@@ -520,7 +566,7 @@ export const SECRET_PATTERNS = [
   ["JSON Web Token", /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
   [
     "Hardcoded secret assignment",
-    /(api[_-]?key|secret|token|passwd|password)\s*[=:]\s*['"][^'"]{8,}['"]/i,
+    /(api[_-]?key|secret|token|passwd|password)\s*[=:]\s*['"]?[^'"\s]{8,}['"]?/i,
   ],
 ];
 
@@ -827,11 +873,16 @@ export function resolveConfig(userConfig = {}, env = process.env) {
   const provider = String(userConfig.provider || DEFAULT_PROVIDER).toLowerCase();
   const providerDef = PROVIDERS[provider] || {
     url: PROVIDERS[DEFAULT_PROVIDER].url,
-    env: "NEURO_COMMIT_API_KEY",
+    env: "RXDEV_API_KEY",
     defaultModel: DEFAULT_GROQ_MODEL,
     needsKey: false, // custom/unknown provider: don't block, let the endpoint decide
   };
-  const apiKey = userConfig.apiKey || env[providerDef.env] || env.NEURO_COMMIT_API_KEY || "";
+  const apiKey =
+    userConfig.apiKey ||
+    env[providerDef.env] ||
+    env.RXDEV_API_KEY ||
+    env.NEURO_COMMIT_API_KEY ||
+    "";
   const customTypes = Array.isArray(userConfig.customTypes) ? userConfig.customTypes : [];
   const allTypes = [...new Set([...DEFAULT_VALID_TYPES, ...customTypes])];
   const typesStr = [...allTypes].sort().join(", ");
@@ -860,9 +911,52 @@ export function resolveConfig(userConfig = {}, env = process.env) {
 // ============================================================
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CONFIG_DIR = join(homedir(), ".config", "ai-commit");
+const OLD_CONFIG_DIR = join(homedir(), ".config", "ai-commit");
+const CONFIG_DIR = join(homedir(), ".config", "rxdev");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
-const LOG_FILE = join(homedir(), ".config", "ai-commit", "ai_commit_debug.log");
+const LOG_FILE = join(CONFIG_DIR, "rxdev_debug.log");
+
+function migrateOldConfig() {
+  if (existsSync(CONFIG_DIR) || !existsSync(OLD_CONFIG_DIR)) return;
+  try {
+    mkdirSync(CONFIG_DIR, { recursive: true });
+    const oldConfig = join(OLD_CONFIG_DIR, "config.json");
+    if (existsSync(oldConfig)) {
+      writeFileSync(CONFIG_FILE, readFileSync(oldConfig, "utf8"));
+    }
+  } catch {}
+}
+
+export function loadProjectConfig(repoRoot) {
+  const ymlPath = join(repoRoot || ".", "rxdev.yml");
+  if (!existsSync(ymlPath)) return {};
+  try {
+    const content = readFileSync(ymlPath, "utf8");
+    const config = {};
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const match = trimmed.match(/^(\w+):\s*(.+)$/);
+      if (match) {
+        let [, key, value] = match;
+        value = value.trim();
+        if (value === "true") value = true;
+        else if (value === "false") value = false;
+        else if (/^\d+$/.test(value)) value = parseInt(value, 10);
+        else if (value.startsWith("[") && value.endsWith("]")) {
+          value = value
+            .slice(1, -1)
+            .split(",")
+            .map((s) => s.trim());
+        }
+        config[key] = value;
+      }
+    }
+    return config;
+  } catch {
+    return {};
+  }
+}
 const MAX_LOG_BYTES = 512 * 1024;
 
 export function loadUserConfig() {
@@ -901,6 +995,39 @@ export function git(args, cwd) {
 export function findRepoRoot() {
   const out = git(["rev-parse", "--show-toplevel"]).trim();
   return out || null;
+}
+
+export function gatherContext(repoRoot) {
+  const context = {};
+
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], repoRoot).trim();
+  if (branch) context.branch = branch;
+
+  const recentCommits = git(["log", "--oneline", "-3", "--no-decorate"], repoRoot).trim();
+  if (recentCommits) context.recentCommits = recentCommits;
+
+  const issueMatch = branch?.match(/(?:fix|feat|feature|issue|ticket|task|bug)\/?[-_]?(\d+)/i);
+  if (issueMatch) context.issueNumber = issueMatch[1];
+
+  if (context.issueNumber) {
+    try {
+      const result = spawnSync(
+        "gh",
+        ["issue", "view", context.issueNumber, "--json", "title,body"],
+        {
+          encoding: "utf8",
+          timeout: 5000,
+        },
+      );
+      if (result.status === 0) {
+        const issue = JSON.parse(result.stdout);
+        if (issue.title) context.issueTitle = issue.title;
+        if (issue.body) context.issueBody = issue.body.slice(0, 500);
+      }
+    } catch {}
+  }
+
+  return context;
 }
 
 export function filterDiffLines(rawDiff, matcher) {
@@ -979,7 +1106,7 @@ export function callLlm(messages, cfg, opts = {}) {
   if (cfg.needsKey && !cfg.apiKey) {
     return Promise.reject(
       new Error(
-        `API key for provider '${cfg.provider}' is not set. Run 'qq config' to set ` +
+        `API key for provider '${cfg.provider}' is not set. Run 'rxdev config' to set ` +
           `your key, export ${cfg.providerEnv || "the provider env var"}, or switch ` +
           "provider (e.g. 'ollama' runs locally with no key).",
       ),
@@ -1001,7 +1128,7 @@ export function callLlm(messages, cfg, opts = {}) {
 
   const headers = {
     "Content-Type": "application/json",
-    "User-Agent": `rxcommit/${NEURO_COMMIT_VERSION}`,
+    "User-Agent": `rxdev/${RXDEV_VERSION}`,
     "Content-Length": Buffer.byteLength(body),
   };
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
@@ -1088,11 +1215,20 @@ export function callLlm(messages, cfg, opts = {}) {
 }
 
 export async function generateCommitMessage(diff, cfg, opts = {}) {
-  const { echo = true } = opts;
+  const { echo = true, context = {} } = opts;
   const typeRegexStr = buildTypeRegexStr(cfg.validTypes || DEFAULT_VALID_TYPES);
   const typeSet = new Set(cfg.validTypes || DEFAULT_VALID_TYPES);
 
-  const userPrompt = `write a commit (subject + blank line + body explaining why) for:\n\n---\n${diff}\n---`;
+  let contextStr = "";
+  if (context.branch) contextStr += `Branch: ${context.branch}\n`;
+  if (context.recentCommits) contextStr += `Recent commits: ${context.recentCommits}\n`;
+  if (context.issueNumber) contextStr += `Related issue: #${context.issueNumber}\n`;
+  if (context.issueTitle) contextStr += `Issue title: ${context.issueTitle}\n`;
+  if (context.issueBody) contextStr += `Issue description: ${context.issueBody}\n`;
+  if (context.truncated) contextStr += `Note: diff was truncated, showing partial changes\n`;
+  if (contextStr) contextStr = `\nContext:\n${contextStr}\n`;
+
+  const userPrompt = `write a commit (subject + blank line + body explaining why) for:\n\n${contextStr}---\n${diff}\n---`;
   const messages = [
     { role: "system", content: cfg.systemPrompt },
     { role: "user", content: userPrompt },
@@ -1392,11 +1528,11 @@ export function checkConflictingHooks(repoRoot) {
   const conflicts = [];
   if (isDir(join(repoRoot, ".husky"))) {
     conflicts.push(
-      ".husky directory detected — conflicts with RXCommit hooks. Delete it or run `npx husky uninstall`.",
+      ".husky directory detected — conflicts with RXDev hooks. Delete it or run `npx husky uninstall`.",
     );
   }
   if (existsSync(join(repoRoot, "lefthook.yml")) || existsSync(join(repoRoot, "lefthook.yaml"))) {
-    conflicts.push("lefthook config detected — may conflict with RXCommit hooks.");
+    conflicts.push("lefthook config detected — may conflict with RXDev hooks.");
   }
   if (existsSync(join(repoRoot, ".pre-commit-config.yaml"))) {
     conflicts.push(".pre-commit-config.yaml detected — may conflict with core.hooksPath.");
@@ -1515,6 +1651,31 @@ const SPLIT_SYSTEM_PROMPT =
   "Every input file must appear in exactly one group. If the changes are cohesive, return a " +
   "single group. Use lowercase imperative subjects with no trailing period.";
 
+function _groupFilesByModule(files) {
+  const groups = {};
+  for (const f of files) {
+    const parts = f.split("/");
+    let module = parts[0];
+    if (
+      parts.length > 1 &&
+      !["src", "lib", "packages", "apps", "tests", "test", "__tests__"].includes(parts[0])
+    ) {
+      module = parts.slice(0, 2).join("/");
+    }
+    if (!groups[module]) groups[module] = [];
+    groups[module].push(f);
+  }
+  return groups;
+}
+
+function inferCommitType(filename) {
+  if (filename.match(/\.(test|spec)\.(js|ts|mjs|jsx|tsx)$/)) return "test";
+  if (filename.match(/\.(md|txt|rst)$/)) return "docs";
+  if (filename.match(/^(package|Cargo|pyproject|setup|build\.gradle)/)) return "chore";
+  if (filename.match(/^\.(github|gitignore|commitignore|editorconfig)/)) return "chore";
+  return null;
+}
+
 export async function buildSplitPlan(cfg) {
   const staged = git(["diff", "--cached", "--name-only"])
     .split(/\r?\n/)
@@ -1526,36 +1687,63 @@ export async function buildSplitPlan(cfg) {
       staged: [],
     };
   }
-  const parts = staged.map(
-    (f) => `### ${f}\n${git(["diff", "--cached", "--unified=0", "--", f]).slice(0, 700)}`,
-  );
-  const user = `Staged files and their diffs:\n\n${parts.join("\n\n")}`.slice(0, 6000);
 
-  let data;
-  try {
-    const raw = await callLlm(
-      [
-        { role: "system", content: SPLIT_SYSTEM_PROMPT },
-        { role: "user", content: user },
-      ],
-      cfg,
-      { echo: false, clean: false, temperature: 0.1, maxTokens: 900 },
+  const autoGroups = [];
+  const needsLlm = [];
+  for (const f of staged) {
+    const inferredType = inferCommitType(f);
+    if (inferredType) {
+      autoGroups.push({ type: inferredType, file: f });
+    } else {
+      needsLlm.push(f);
+    }
+  }
+
+  let llmGroups = [];
+  if (needsLlm.length > 0) {
+    const parts = needsLlm.map(
+      (f) => `### ${f}\n${git(["diff", "--cached", "--unified=0", "--", f]).slice(0, 700)}`,
     );
-    data = extractJson(raw);
-  } catch (e) {
-    return { error: e.message, groups: [], staged };
+    const user = `Staged files and their diffs:\n\n${parts.join("\n\n")}`.slice(0, 6000);
+
+    let data;
+    try {
+      const raw = await callLlm(
+        [
+          { role: "system", content: SPLIT_SYSTEM_PROMPT },
+          { role: "user", content: user },
+        ],
+        cfg,
+        { echo: false, clean: false, temperature: 0.1, maxTokens: 900 },
+      );
+      data = extractJson(raw);
+    } catch (e) {
+      return { error: e.message, groups: [], staged };
+    }
+    const groups = Array.isArray(data)
+      ? data
+      : data && Array.isArray(data.groups)
+        ? data.groups
+        : null;
+    if (groups?.length) {
+      llmGroups = groups;
+    }
   }
-  const groups = Array.isArray(data)
-    ? data
-    : data && Array.isArray(data.groups)
-      ? data.groups
-      : null;
-  if (!groups?.length) {
-    return { error: "Could not parse a split plan from the model.", groups: [], staged };
-  }
+
   const assigned = [];
   const clean = [];
-  for (const g of groups) {
+
+  for (const ag of autoGroups) {
+    let target = clean.find((g) => g.message.startsWith(ag.type));
+    if (!target) {
+      target = { message: `${ag.type}: update`, files: [], reason: `auto-detected as ${ag.type}` };
+      clean.push(target);
+    }
+    target.files.push(ag.file);
+    assigned.push(ag.file);
+  }
+
+  for (const g of llmGroups) {
     if (!g || typeof g !== "object") continue;
     const files = (g.files || []).filter((f) => staged.includes(f) && !assigned.includes(f));
     if (!files.length) continue;
@@ -1566,8 +1754,164 @@ export async function buildSplitPlan(cfg) {
       reason: String(g.reason || "").trim(),
     });
   }
+
   const unassigned = staged.filter((f) => !assigned.includes(f));
   return { groups: clean, staged, unassigned };
+}
+
+const REVIEW_SYSTEM_PROMPT =
+  "You are a senior code reviewer. You MUST review the code diff provided below. " +
+  "Output a structured review with sections: " +
+  "1. Summary (1-2 sentences about what changed) " +
+  "2. Issues found (if any) with severity: critical/warning/suggestion " +
+  "3. Suggestions for improvement (if any) " +
+  "If no issues found, say 'No issues found. Code looks good.' " +
+  "Do NOT ask for more code. Review what is provided.";
+
+export async function buildReview(diff, cfg) {
+  if (!diff || diff.trim().length === 0) {
+    return { error: "No changes to review", issues: [], review: "" };
+  }
+
+  if (diff.trim().length < 50) {
+    return { review: "Changes too small for meaningful review. Consider making larger changes.", issues: [], issueCount: 0 };
+  }
+
+  const userPrompt = `Review the following code changes:\n\n---\n${diff}\n---`;
+
+  logMessage(`REVIEW: Sending ${diff.length} chars to LLM`);
+  logMessage(`REVIEW: System prompt: ${REVIEW_SYSTEM_PROMPT.slice(0, 100)}...`);
+
+  const reviewCfg = { ...cfg, model: "llama-3.3-70b-versatile" };
+
+  let reviewText;
+  try {
+    reviewText = await callLlm(
+      [
+        { role: "system", content: REVIEW_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      reviewCfg,
+      { echo: false, clean: false, temperature: 0.3, maxTokens: 1500 },
+    );
+  } catch (e) {
+    logMessage(`REVIEW: LLM error: ${e.message}`);
+    return { error: `LLM error: ${e.message}`, issues: [], review: "" };
+  }
+
+  logMessage(`REVIEW: LLM returned ${reviewText?.length || 0} chars: ${reviewText?.slice(0, 100)}...`);
+
+  if (!reviewText || reviewText.trim().length === 0) {
+    return { error: "LLM returned empty response", issues: [], review: "" };
+  }
+
+  const issues = [];
+  const lines = reviewText.split("\n");
+  let currentIssue = null;
+
+  for (const line of lines) {
+    const severityMatch = line.match(/\b(critical|warning|suggestion)\b/i);
+    if (severityMatch) {
+      if (currentIssue) issues.push(currentIssue);
+      currentIssue = {
+        severity: severityMatch[1].toLowerCase(),
+        message: line.replace(/^[\s\-*]+/, "").trim(),
+        file: null,
+        line: null,
+      };
+    } else if (currentIssue && line.trim()) {
+      currentIssue.message += ` ${line.trim()}`;
+    }
+  }
+  if (currentIssue) issues.push(currentIssue);
+
+  return { review: reviewText, issues, issueCount: issues.length };
+}
+
+export async function buildPrReview(_prNumber, cfg) {
+  const prDiff = git(["diff", `origin/main...HEAD`, "--no-color"]);
+  if (!prDiff) {
+    return { error: "Could not fetch PR diff", issues: [] };
+  }
+
+  const truncated = prDiff.slice(0, MAX_DIFF_LENGTH);
+  return buildReview(truncated, cfg);
+}
+
+export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
+  let logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", revRange], repoRoot);
+  if (!logOutput) {
+    logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", "HEAD"], repoRoot);
+  }
+  if (!logOutput) return { total: 0, byType: {}, avgMessageLength: 0, breakingChanges: 0 };
+
+  const commits = logOutput
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const spaceIdx = line.indexOf(" ");
+      if (spaceIdx === -1) return { hash: line, subject: "" };
+      return { hash: line.slice(0, spaceIdx), subject: line.slice(spaceIdx + 1) };
+    });
+
+  const byType = {};
+  let totalLength = 0;
+  let breakingChanges = 0;
+
+  for (const c of commits) {
+    if (!c.subject) continue;
+    const parsed = parseCommit(c.subject);
+    if (parsed.type) {
+      byType[parsed.type] = (byType[parsed.type] || 0) + 1;
+    }
+    totalLength += c.subject.length;
+    if (parsed.breaking) breakingChanges++;
+  }
+
+  return {
+    total: commits.length,
+    byType,
+    avgMessageLength: commits.length ? Math.round(totalLength / commits.length) : 0,
+    breakingChanges,
+  };
+}
+
+export function detectBadPractices(revRange = "HEAD~20..HEAD", repoRoot) {
+  let logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", revRange], repoRoot);
+  if (!logOutput) logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", "HEAD"], repoRoot);
+  if (!logOutput) return [];
+
+  const commits = logOutput
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const spaceIdx = line.indexOf(" ");
+      if (spaceIdx === -1) return { hash: line, subject: "" };
+      return { hash: line.slice(0, spaceIdx), subject: line.slice(spaceIdx + 1) };
+    });
+
+  const issues = [];
+
+  for (const c of commits) {
+    if (!c.subject) continue;
+    if (c.subject.length > 100) {
+      issues.push({
+        severity: "warning",
+        message: `Long commit message (${c.subject.length} chars): ${c.subject.slice(0, 50)}...`,
+        hash: c.hash,
+      });
+    }
+    const parsed = parseCommit(c.subject);
+    if (!parsed.type) {
+      issues.push({
+        severity: "warning",
+        message: `Non-conventional commit: ${c.subject}`,
+        hash: c.hash,
+      });
+    }
+  }
+
+  return issues;
 }
 
 export async function runSubcommand(argv, cfg) {
@@ -1594,6 +1938,22 @@ export async function runSubcommand(argv, cfg) {
       process.stdout.write(JSON.stringify(await buildSplitPlan(cfg)));
       return 0;
     }
+    if (mode === "--review") {
+      const { diff } = getStagedDiff();
+      if (!diff) {
+        process.stdout.write(JSON.stringify({ error: "No staged changes to review" }));
+        return 1;
+      }
+      process.stdout.write(JSON.stringify(await buildReview(diff, cfg)));
+      return 0;
+    }
+    if (mode === "--analytics") {
+      const range = opt("--range") || "HEAD~50..HEAD";
+      const stats = analyzeCommits(range);
+      const badPractices = detectBadPractices(range);
+      process.stdout.write(JSON.stringify({ stats, badPractices }));
+      return 0;
+    }
     process.stdout.write(JSON.stringify({ error: `unknown mode: ${mode}` }));
     return 1;
   } catch (e) {
@@ -1606,7 +1966,7 @@ export async function runSubcommand(argv, cfg) {
 //  COMMIT MESSAGE COMPOSITION + MAIN FLOW
 // ============================================================
 
-const COAUTHOR_TRAILER = "Co-authored-by: RXCommit <autocommitrxgo@gmail.com>";
+const COAUTHOR_TRAILER = "Co-authored-by: rxdevbot <rxdevbot@users.noreply.github.com>";
 
 // Fit the staged diff into a token budget WITHOUT dropping whole files: every
 // changed file keeps its "# File:" header, and the remaining budget is split
@@ -1666,7 +2026,7 @@ export function composeMessage(message, { bumps = [], kind = "patch", addCoautho
 
 export function writeErrorToCommit(msgFile, errMsg) {
   try {
-    writeFileSync(msgFile, `# RXCommit: ${errMsg}\n`, "utf8");
+    writeFileSync(msgFile, `# RXDev: ${errMsg}\n`, "utf8");
   } catch {}
 }
 
@@ -1683,7 +2043,7 @@ export async function main(commitMsgFile, cfg, opts = {}) {
     return 0;
   }
 
-  if (echo) process.stdout.write(`[+] RXCommit v${NEURO_COMMIT_VERSION} started\n`);
+  if (echo) process.stdout.write(`[+] RXDev v${RXDEV_VERSION} started\n`);
 
   const repoRoot = findRepoRoot();
   if (repoRoot) {
@@ -1705,8 +2065,11 @@ export async function main(commitMsgFile, cfg, opts = {}) {
     return 0;
   }
 
-  const promptDiff = buildPromptDiff(diff, MAX_DIFF_LENGTH);
-  let message = await generateCommitMessage(promptDiff, cfg, { echo });
+  const promptDiff = buildPromptDiff(diff, cfg.maxDiffLength || MAX_DIFF_LENGTH);
+  const context = gatherContext(repoRoot);
+  context.truncated = promptDiff.length < diff.length;
+
+  let message = await generateCommitMessage(promptDiff, cfg, { echo, context });
   if (message === null) {
     message = generateFallbackMessage(promptDiff);
     logMessage(`Fallback message generated (${message.length} chars)`);
@@ -1714,7 +2077,7 @@ export async function main(commitMsgFile, cfg, opts = {}) {
 
   let bumps = [];
   let kind = "patch";
-  if (cfg.bumpVersion && !process.env.NEURO_COMMIT_SKIP_BUMP) {
+  if (cfg.bumpVersion && !process.env.RXDEV_SKIP_BUMP && !process.env.NEURO_COMMIT_SKIP_BUMP) {
     kind = determineBumpKind(message);
     bumps = bumpProjectVersion(kind, message, repoRoot);
     if (bumps.length) {
@@ -1740,7 +2103,11 @@ export async function main(commitMsgFile, cfg, opts = {}) {
 // ── Script entrypoint (inert when imported, e.g. by tests) ──
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  const cfg = resolveConfig(loadUserConfig());
+  migrateOldConfig();
+  const repoRoot = findRepoRoot();
+  const projectConfig = loadProjectConfig(repoRoot);
+  const userConfig = { ...loadUserConfig(), ...projectConfig };
+  const cfg = resolveConfig(userConfig);
   const arg = process.argv[2];
   if (arg?.startsWith("--")) {
     runSubcommand(process.argv.slice(2), cfg).then((code) => process.exit(code));

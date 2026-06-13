@@ -24,16 +24,16 @@ jobs:
         run: npx @biomejs/biome check .githooks/ bin/ tests/
       - name: Syntax check
         run: |
-          node --check bin/ac.js
-          node --check .githooks/ai_commit.mjs
+          node --check bin/rxdev.js
+          node --check .githooks/rxdev.mjs
       - name: Hook unit tests
-        run: node --test tests/test_ai_commit.mjs
+        run: node --test tests/test_rxdev.mjs
       - name: CLI tests
         run: node --test tests/test_cli.mjs
       - name: Coverage
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 22
-        run: npx c8 --reporter=lcov node --test tests/test_ai_commit.mjs
+        run: npx c8 --reporter=lcov node --test tests/test_rxdev.mjs
       - name: CLI smoke test
         run: |
-          node bin/ac.js version
-          node bin/ac.js --help
+          node bin/rxdev.js version
+          node bin/rxdev.js --help
