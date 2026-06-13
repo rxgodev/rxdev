@@ -1288,10 +1288,12 @@ export function discoverManifests(repoRoot) {
   return found;
 }
 
-let _manifestCache = null;
+// Cache keyed by repoRoot so a process that touches more than one repo (tests,
+// future multi-repo flows) never gets another repo's manifest list.
+const _manifestCache = new Map();
 export function getManifests(repoRoot) {
-  if (!_manifestCache) _manifestCache = discoverManifests(repoRoot);
-  return _manifestCache;
+  if (!_manifestCache.has(repoRoot)) _manifestCache.set(repoRoot, discoverManifests(repoRoot));
+  return _manifestCache.get(repoRoot);
 }
 
 export function manifestGetVersion(content, def) {
