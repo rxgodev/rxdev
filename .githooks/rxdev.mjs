@@ -86,7 +86,39 @@ export const DEFAULT_PROVIDER = "groq";
 
 export const REQUEST_TIMEOUT = 60; // seconds
 export const MAX_ATTEMPTS = 3;
-export const MAX_DIFF_LENGTH = 3000;
+export const MAX_DIFF_LENGTH = 16000;
+
+export function truncateDiffSmart(diff, maxChars = MAX_DIFF_LENGTH) {
+  if (diff.length <= maxChars) {
+    return { diff, truncated: false, totalChars: diff.length, includedChars: diff.length };
+  }
+
+  const fileBlocks = diff.split(/(?=^# File: )/m);
+  let result = "";
+  let totalChars = diff.length;
+  let includedChars = 0;
+  let truncated = false;
+  let filesIncluded = 0;
+  let filesTotal = fileBlocks.filter((b) => b.startsWith("# File:")).length;
+
+  for (const block of fileBlocks) {
+    if (includedChars + block.length <= maxChars) {
+      result += block;
+      includedChars += block.length;
+      if (block.startsWith("# File:")) filesIncluded++;
+    } else {
+      truncated = true;
+      break;
+    }
+  }
+
+  if (truncated) {
+    const remaining = filesTotal - filesIncluded;
+    result += `\n\n[diff truncated: ${remaining} more file${remaining > 1 ? "s" : ""} not shown]`;
+  }
+
+  return { diff: result.trim(), truncated, totalChars, includedChars };
+}
 
 // ============================================================
 //  SYSTEM PROMPT
@@ -903,6 +935,21 @@ export function findRepoRoot() {
   return out || null;
 }
 
+export function gatherContext(repoRoot) {
+  const context = {};
+
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], repoRoot).trim();
+  if (branch) context.branch = branch;
+
+  const recentCommits = git(["log", "--oneline", "-3", "--no-decorate"], repoRoot).trim();
+  if (recentCommits) context.recentCommits = recentCommits;
+
+  const issueMatch = branch?.match(/(?:fix|feat|feature|issue|ticket|task|bug)\/?[-_]?(\d+)/i);
+  if (issueMatch) context.issueNumber = issueMatch[1];
+
+  return context;
+}
+
 export function filterDiffLines(rawDiff, matcher) {
   const filtered = [];
   let currentFile = null;
@@ -1088,11 +1135,17 @@ export function callLlm(messages, cfg, opts = {}) {
 }
 
 export async function generateCommitMessage(diff, cfg, opts = {}) {
-  const { echo = true } = opts;
+  const { echo = true, context = {} } = opts;
   const typeRegexStr = buildTypeRegexStr(cfg.validTypes || DEFAULT_VALID_TYPES);
   const typeSet = new Set(cfg.validTypes || DEFAULT_VALID_TYPES);
 
-  const userPrompt = `write a commit (subject + blank line + body explaining why) for:\n\n---\n${diff}\n---`;
+  let contextStr = "";
+  if (context.branch) contextStr += `Branch: ${context.branch}\n`;
+  if (context.recentCommits) contextStr += `Recent commits: ${context.recentCommits}\n`;
+  if (context.truncated) contextStr += `Note: diff was truncated, showing partial changes\n`;
+  if (contextStr) contextStr = `\nContext:\n${contextStr}\n`;
+
+  const userPrompt = `write a commit (subject + blank line + body explaining why) for:\n\n${contextStr}---\n${diff}\n---`;
   const messages = [
     { role: "system", content: cfg.systemPrompt },
     { role: "user", content: userPrompt },
@@ -1657,9 +1710,17 @@ export async function main(commitMsgFile, cfg, opts = {}) {
     return 0;
   }
 
-  let message = await generateCommitMessage(diff.slice(0, MAX_DIFF_LENGTH), cfg, { echo });
+  const { diff: truncatedDiff, truncated } = truncateDiffSmart(diff, cfg.maxDiffLength || MAX_DIFF_LENGTH);
+  if (truncated) {
+    logMessage(`Diff truncated: ${diff.length} chars → ${truncatedDiff.length} chars`);
+  }
+
+  const context = gatherContext(repoRoot);
+  context.truncated = truncated;
+
+  let message = await generateCommitMessage(truncatedDiff, cfg, { echo, context });
   if (message === null) {
-    message = generateFallbackMessage(diff.slice(0, MAX_DIFF_LENGTH));
+    message = generateFallbackMessage(truncatedDiff);
     logMessage(`Fallback message generated (${message.length} chars)`);
   }
 
