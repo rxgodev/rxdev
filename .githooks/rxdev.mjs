@@ -1583,6 +1583,28 @@ const SPLIT_SYSTEM_PROMPT =
   "Every input file must appear in exactly one group. If the changes are cohesive, return a " +
   "single group. Use lowercase imperative subjects with no trailing period.";
 
+function groupFilesByModule(files) {
+  const groups = {};
+  for (const f of files) {
+    const parts = f.split("/");
+    let module = parts[0];
+    if (parts.length > 1 && !["src", "lib", "packages", "apps", "tests", "test", "__tests__"].includes(parts[0])) {
+      module = parts.slice(0, 2).join("/");
+    }
+    if (!groups[module]) groups[module] = [];
+    groups[module].push(f);
+  }
+  return groups;
+}
+
+function inferCommitType(filename) {
+  if (filename.match(/\.(test|spec)\.(js|ts|mjs|jsx|tsx)$/)) return "test";
+  if (filename.match(/\.(md|txt|rst)$/)) return "docs";
+  if (filename.match(/^(package|Cargo|pyproject|setup|build\.gradle)/)) return "chore";
+  if (filename.match(/^\.(github|gitignore|commitignore|editorconfig)/)) return "chore";
+  return null;
+}
+
 export async function buildSplitPlan(cfg) {
   const staged = git(["diff", "--cached", "--name-only"])
     .split(/\r?\n/)
@@ -1594,36 +1616,63 @@ export async function buildSplitPlan(cfg) {
       staged: [],
     };
   }
-  const parts = staged.map(
-    (f) => `### ${f}\n${git(["diff", "--cached", "--unified=0", "--", f]).slice(0, 700)}`,
-  );
-  const user = `Staged files and their diffs:\n\n${parts.join("\n\n")}`.slice(0, 6000);
 
-  let data;
-  try {
-    const raw = await callLlm(
-      [
-        { role: "system", content: SPLIT_SYSTEM_PROMPT },
-        { role: "user", content: user },
-      ],
-      cfg,
-      { echo: false, clean: false, temperature: 0.1, maxTokens: 900 },
+  const autoGroups = [];
+  const needsLlm = [];
+  for (const f of staged) {
+    const inferredType = inferCommitType(f);
+    if (inferredType) {
+      autoGroups.push({ type: inferredType, file: f });
+    } else {
+      needsLlm.push(f);
+    }
+  }
+
+  let llmGroups = [];
+  if (needsLlm.length > 0) {
+    const parts = needsLlm.map(
+      (f) => `### ${f}\n${git(["diff", "--cached", "--unified=0", "--", f]).slice(0, 700)}`,
     );
-    data = extractJson(raw);
-  } catch (e) {
-    return { error: e.message, groups: [], staged };
+    const user = `Staged files and their diffs:\n\n${parts.join("\n\n")}`.slice(0, 6000);
+
+    let data;
+    try {
+      const raw = await callLlm(
+        [
+          { role: "system", content: SPLIT_SYSTEM_PROMPT },
+          { role: "user", content: user },
+        ],
+        cfg,
+        { echo: false, clean: false, temperature: 0.1, maxTokens: 900 },
+      );
+      data = extractJson(raw);
+    } catch (e) {
+      return { error: e.message, groups: [], staged };
+    }
+    const groups = Array.isArray(data)
+      ? data
+      : data && Array.isArray(data.groups)
+        ? data.groups
+        : null;
+    if (groups?.length) {
+      llmGroups = groups;
+    }
   }
-  const groups = Array.isArray(data)
-    ? data
-    : data && Array.isArray(data.groups)
-      ? data.groups
-      : null;
-  if (!groups?.length) {
-    return { error: "Could not parse a split plan from the model.", groups: [], staged };
-  }
+
   const assigned = [];
   const clean = [];
-  for (const g of groups) {
+
+  for (const ag of autoGroups) {
+    let target = clean.find((g) => g.message.startsWith(ag.type));
+    if (!target) {
+      target = { message: `${ag.type}: update`, files: [], reason: `auto-detected as ${ag.type}` };
+      clean.push(target);
+    }
+    target.files.push(ag.file);
+    assigned.push(ag.file);
+  }
+
+  for (const g of llmGroups) {
     if (!g || typeof g !== "object") continue;
     const files = (g.files || []).filter((f) => staged.includes(f) && !assigned.includes(f));
     if (!files.length) continue;
@@ -1634,6 +1683,7 @@ export async function buildSplitPlan(cfg) {
       reason: String(g.reason || "").trim(),
     });
   }
+
   const unassigned = staged.filter((f) => !assigned.includes(f));
   return { groups: clean, staged, unassigned };
 }
