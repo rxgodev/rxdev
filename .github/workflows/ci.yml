@@ -6,26 +6,34 @@ on:
   pull_request:
 
 jobs:
-  node:
-    name: Node ${{ matrix.node-version }}
-    runs-on: ubuntu-latest
+  test:
+    name: Node ${{ matrix.node-version }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         node-version: [18, 20, 22]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm install --no-audit --no-fund
+      - name: Lint
+        run: npx @biomejs/biome check .githooks/ bin/ tests/
       - name: Syntax check
         run: |
           node --check bin/ac.js
           node --check .githooks/ai_commit.mjs
       - name: Hook unit tests
         run: node --test tests/test_ai_commit.mjs
+      - name: CLI tests
+        run: node --test tests/test_cli.mjs
+      - name: Coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 22
+        run: npx c8 --reporter=lcov node --test tests/test_ai_commit.mjs
       - name: CLI smoke test
         run: |
           node bin/ac.js version
-          node bin/ac.js --help >/dev/null
+          node bin/ac.js --help

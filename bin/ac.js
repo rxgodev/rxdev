@@ -1,22 +1,18 @@
 #!/usr/bin/env node
-import { spawnSync, spawn } from "child_process";
-import { existsSync, writeFileSync, readFileSync, mkdirSync, rmSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import readline from "readline";
-import { homedir, tmpdir } from "os";
+import { spawn, spawnSync } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import readline from "node:readline";
+import { fileURLToPath } from "node:url";
 import updateNotifier from "update-notifier";
-import { unlinkSync } from "fs";
-import { createHash } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SOURCE_GITHOOKS_DIR = join(__dirname, "../.githooks");
 
-const pkg = JSON.parse(
-  readFileSync(join(__dirname, "../package.json"), "utf8"),
-);
-
+const pkg = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf8"));
 
 const update = updateNotifier({
   pkg,
@@ -24,8 +20,12 @@ const update = updateNotifier({
 }).update;
 
 if (update?.latest && update.latest !== pkg.version) {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequences
   const s = (str) => str.replace(/\x1b\[[0-9;]*m/g, "");
-  const RED = "\x1b[31m", GREEN = "\x1b[32m", DIM = "\x1b[38;5;244m", RST = "\x1b[0m";
+  const RED = "\x1b[31m",
+    GREEN = "\x1b[32m",
+    DIM = "\x1b[38;5;244m",
+    RST = "\x1b[0m";
 
   const lines = [
     `Update available: ${RED}${pkg.version}${RST} → ${GREEN}${update.latest}${RST}`,
@@ -33,9 +33,9 @@ if (update?.latest && update.latest !== pkg.version) {
   ];
 
   const maxWidth = Math.max(...lines.map((l) => s(l).length)) + 8;
-  const top = "   ╭" + "─".repeat(maxWidth) + "╮";
-  const bottom = "   ╰" + "─".repeat(maxWidth) + "╯";
-  const pad = "   │" + " ".repeat(maxWidth) + "│";
+  const top = `   ╭${"─".repeat(maxWidth)}╮`;
+  const bottom = `   ╰${"─".repeat(maxWidth)}╯`;
+  const pad = `   │${" ".repeat(maxWidth)}│`;
 
   let out = `\n${top}\n${pad}\n`;
   for (const line of lines) {
@@ -70,10 +70,19 @@ const DEFAULT_CONFIG = {
 };
 
 // OpenAI-compatible providers (mirror of PROVIDERS in ai_commit.mjs).
+// Keep in sync with .githooks/ai_commit.mjs PROVIDERS.
 const PROVIDERS = {
-  groq: { label: "Groq (fast, free tier)", env: "GROQ_API_KEY", defaultModel: "llama-3.1-8b-instant" },
+  groq: {
+    label: "Groq (fast, free tier)",
+    env: "GROQ_API_KEY",
+    defaultModel: "llama-3.1-8b-instant",
+  },
   openai: { label: "OpenAI", env: "OPENAI_API_KEY", defaultModel: "gpt-4o-mini" },
-  openrouter: { label: "OpenRouter", env: "OPENROUTER_API_KEY", defaultModel: "openai/gpt-4o-mini" },
+  openrouter: {
+    label: "OpenRouter",
+    env: "OPENROUTER_API_KEY",
+    defaultModel: "openai/gpt-4o-mini",
+  },
   ollama: { label: "Ollama (local, no key, private)", env: null, defaultModel: "llama3.1" },
 };
 
@@ -97,7 +106,7 @@ function loadConfig() {
         ...JSON.parse(readFileSync(CONFIG_FILE, "utf8")),
       };
     }
-  } catch (e) {
+  } catch (_e) {
     console.warn("⚠️ Failed to load config, using defaults.");
   }
   return { ...DEFAULT_CONFIG };
@@ -111,9 +120,7 @@ function saveConfig(config) {
 function getManagedProjects() {
   if (!existsSync(MANAGED_PROJECTS_FILE)) return [];
   try {
-    return (
-      JSON.parse(readFileSync(MANAGED_PROJECTS_FILE, "utf8")).projects || []
-    );
+    return JSON.parse(readFileSync(MANAGED_PROJECTS_FILE, "utf8")).projects || [];
   } catch {
     return [];
   }
@@ -139,10 +146,7 @@ function unregisterProject(targetPath) {
   try {
     const data = JSON.parse(readFileSync(MANAGED_PROJECTS_FILE, "utf8"));
     const filtered = data.projects.filter((p) => p !== (targetPath || process.cwd()));
-    writeFileSync(
-      MANAGED_PROJECTS_FILE,
-      JSON.stringify({ projects: filtered }, null, 2),
-    );
+    writeFileSync(MANAGED_PROJECTS_FILE, JSON.stringify({ projects: filtered }, null, 2));
   } catch {}
 }
 
@@ -151,7 +155,7 @@ function fileHash(content) {
 }
 
 function hashFilePath(pyPath) {
-  return pyPath + ".sha256";
+  return `${pyPath}.sha256`;
 }
 
 function writePyWithHash(path, content) {
@@ -203,9 +207,13 @@ function updateProjectHooks(projectPath) {
         const curVer = getPyVersion(current);
         const latVer = getPyVersion(latest);
         if (!curVer || !latVer) {
-          if (current !== latest) { writePyWithHash(pyDst, latest); updated = true; }
+          if (current !== latest) {
+            writePyWithHash(pyDst, latest);
+            updated = true;
+          }
         } else if (semverGt(latVer, curVer)) {
-          writePyWithHash(pyDst, latest); updated = true;
+          writePyWithHash(pyDst, latest);
+          updated = true;
         }
       }
     }
@@ -216,7 +224,7 @@ function updateProjectHooks(projectPath) {
   const hookDst = join(githooksDir, "prepare-commit-msg");
   if (existsSync(hookSrc) && existsSync(hookDst)) {
     const installed = readFileSync(hookDst, "utf8");
-    if (!installed.includes('ai_commit.mjs')) {
+    if (!installed.includes("ai_commit.mjs")) {
       writeFileSync(hookDst, readFileSync(hookSrc, "utf8"));
       if (process.platform !== "win32") {
         spawnSync("chmod", ["+x", hookDst]);
@@ -273,9 +281,21 @@ async function promptSelect(options, message) {
 }
 
 function spawnAsync(cmd, args, options = {}) {
-  return new Promise((resolve) => {
-    const proc = spawn(cmd, args, { ...options, stdio: "ignore" });
-    proc.on("close", resolve);
+  const { timeout = 30000, ...spawnOpts } = options;
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, args, { ...spawnOpts, stdio: "ignore" });
+    const timer = setTimeout(() => {
+      proc.kill();
+      reject(new Error(`spawn ${cmd} timed out after ${timeout}ms`));
+    }, timeout);
+    proc.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      resolve(code);
+    });
   });
 }
 
@@ -307,8 +327,7 @@ function saveTemplates(templates) {
 
 async function askForScript(initial) {
   const inquirer = await import("inquirer");
-  const defaultContent =
-    initial || '#!/bin/sh\nnode .githooks/ai_commit.mjs "$1"';
+  const defaultContent = initial || '#!/bin/sh\nnode .githooks/ai_commit.mjs "$1"';
   while (true) {
     const { script } = await inquirer.default.prompt([
       {
@@ -343,9 +362,10 @@ function validatePreCommitScript(script) {
     return "First line must be: #!/bin/sh";
   }
 
-  const hasCall = lines.some((line) =>
-    /node\s+\.githooks\/ai_commit\.mjs\s+"\$1"/.test(line) ||
-    line.includes("node .githooks/ai_commit.mjs"),
+  const hasCall = lines.some(
+    (line) =>
+      /node\s+\.githooks\/ai_commit\.mjs\s+"\$1"/.test(line) ||
+      line.includes("node .githooks/ai_commit.mjs"),
   );
 
   if (!hasCall) {
@@ -411,8 +431,7 @@ async function applyTemplateToProjects(templateName) {
 async function inspectTemplate(name) {
   const templates = loadTemplates();
   const tpl = templates[name];
-  const scriptPreview =
-    tpl.script.length > 60 ? tpl.script.slice(0, 57) + "..." : tpl.script;
+  const scriptPreview = tpl.script.length > 60 ? `${tpl.script.slice(0, 57)}...` : tpl.script;
 
   const action = await promptSelect(
     [
@@ -438,9 +457,7 @@ async function inspectTemplate(name) {
       console.log("✅ Template updated.");
 
       if (tpl.appliedTo && tpl.appliedTo.length > 0) {
-        console.log(
-          `\n🔄 Updating template in ${tpl.appliedTo.length} project(s)...`,
-        );
+        console.log(`\n🔄 Updating template in ${tpl.appliedTo.length} project(s)...`);
         for (const proj of tpl.appliedTo) {
           if (!existsSync(proj)) {
             console.warn(`⚠️  Skipped missing project: ${proj}`);
@@ -553,9 +570,7 @@ function listProjects() {
   console.table(rows);
 
   if (invalid.length > 0) {
-    console.log(
-      '\n⚠️  Missing projects: run "qq uninstall" in them to clean up.\n',
-    );
+    console.log('\n⚠️  Missing projects: run "qq uninstall" in them to clean up.\n');
   }
 }
 
@@ -580,13 +595,13 @@ function buildFileTree(files, prefix = "  ") {
     }
 
     for (const name of Object.keys(subdirs).sort()) {
-      const fullPath = dirPath + "/" + name;
+      const fullPath = `${dirPath}/${name}`;
       choices.push({ name: `${indent}📁 ${name}/`, value: `__dir__${fullPath}` });
       addDir(fullPath, subdirs[name], indent + prefix);
     }
 
     for (const f of localFiles.sort()) {
-      choices.push({ name: `${indent}${f}`, value: dirPath + "/" + f });
+      choices.push({ name: `${indent}${f}`, value: `${dirPath}/${f}` });
     }
   }
 
@@ -621,7 +636,7 @@ function expandDirSelections(selected, allFiles) {
   for (const s of selected) {
     if (s.startsWith("__dir__")) {
       const dir = s.slice(7);
-      expanded.push(...allFiles.filter(f => f === dir || f.startsWith(dir + "/")));
+      expanded.push(...allFiles.filter((f) => f === dir || f.startsWith(`${dir}/`)));
     } else {
       expanded.push(s);
     }
@@ -633,16 +648,24 @@ function addBackChoice(choices) {
   return [...choices, { name: "⬅️  Back", value: "__back__" }];
 }
 
-async function showFileTreePicker(allFiles, alreadyStaged, message, keepDirValues = false, allLabel) {
-  const headerItems = allLabel ? [
-    { value: "__all__", label: allLabel, isDir: false },
-    { value: "__sep__", label: "─".repeat(30), isDir: false },
-  ] : [];
+async function showFileTreePicker(
+  allFiles,
+  alreadyStaged,
+  message,
+  keepDirValues = false,
+  allLabel,
+) {
+  const headerItems = allLabel
+    ? [
+        { value: "__all__", label: allLabel, isDir: false },
+        { value: "__sep__", label: "─".repeat(30), isDir: false },
+      ]
+    : [];
 
   const tree = buildFileTree(allFiles);
   const items = [
     ...headerItems,
-    ...tree.map(c => ({
+    ...tree.map((c) => ({
       value: c.value,
       label: c.name,
       isDir: c.value.startsWith("__dir__"),
@@ -653,13 +676,18 @@ async function showFileTreePicker(allFiles, alreadyStaged, message, keepDirValue
   for (const item of items) {
     if (item.isDir) {
       const dirPath = item.value.slice(7);
-      dirFiles[item.value] = allFiles.filter(f => f.startsWith(dirPath + "/"));
+      dirFiles[item.value] = allFiles.filter((f) => f.startsWith(`${dirPath}/`));
     }
   }
 
   const checked = new Set();
   for (const item of items) {
-    if (!item.isDir && item.value !== "__all__" && item.value !== "__sep__" && alreadyStaged.includes(item.value)) {
+    if (
+      !item.isDir &&
+      item.value !== "__all__" &&
+      item.value !== "__sep__" &&
+      alreadyStaged.includes(item.value)
+    ) {
       checked.add(item.value);
     }
   }
@@ -696,7 +724,7 @@ async function showFileTreePicker(allFiles, alreadyStaged, message, keepDirValue
         let mark;
         if (item.isDir) {
           const files = dirFiles[item.value] || [];
-          const cnt = files.filter(f => checked.has(f)).length;
+          const cnt = files.filter((f) => checked.has(f)).length;
           if (cnt === 0) mark = "◻";
           else if (cnt === files.length) mark = "◼";
           else mark = "▣";
@@ -705,7 +733,8 @@ async function showFileTreePicker(allFiles, alreadyStaged, message, keepDirValue
         }
         process.stdout.write(`${ptr} ${mark} ${item.label}\n`);
       }
-      if (items.length > end) process.stdout.write(`  \x1b[2m... ${items.length - end} more\x1b[22m\n`);
+      if (items.length > end)
+        process.stdout.write(`  \x1b[2m... ${items.length - end} more\x1b[22m\n`);
       else process.stdout.write("\n");
     }
 
@@ -713,16 +742,20 @@ async function showFileTreePicker(allFiles, alreadyStaged, message, keepDirValue
       process.stdin.setRawMode(origRaw);
       process.stdin.pause();
       process.stdin.removeAllListeners("keypress");
-      const selected = [...checked].filter(v => !v.startsWith("__dir__") && v !== "__all__" && v !== "__sep__");
+      const selected = [...checked].filter(
+        (v) => !v.startsWith("__dir__") && v !== "__all__" && v !== "__sep__",
+      );
       if (keepDirValues) {
-        const dirs = items.filter(i => i.isDir && (dirFiles[i.value] || []).every(f => checked.has(f))).map(i => i.value);
+        const dirs = items
+          .filter((i) => i.isDir && (dirFiles[i.value] || []).every((f) => checked.has(f)))
+          .map((i) => i.value);
         resolve([...new Set([...selected, ...dirs])]);
       } else {
         resolve(selected);
       }
     }
 
-    function onKeypress(str, key) {
+    function onKeypress(_str, key) {
       if (!key) return;
       if (key.name === "up" || (key.ctrl && key.name === "p")) {
         if (cursor > 0) cursor--;
@@ -732,7 +765,10 @@ async function showFileTreePicker(allFiles, alreadyStaged, message, keepDirValue
         draw();
       } else if (key.name === "space") {
         const item = items[cursor];
-        if (item.value === "__sep__") { draw(); return; }
+        if (item.value === "__sep__") {
+          draw();
+          return;
+        }
         if (item.value === "__all__") {
           const allOn = checked.has("__all__");
           if (allOn) {
@@ -747,7 +783,7 @@ async function showFileTreePicker(allFiles, alreadyStaged, message, keepDirValue
           }
         } else if (item.isDir) {
           const files = dirFiles[item.value] || [];
-          if (files.every(f => checked.has(f))) {
+          if (files.every((f) => checked.has(f))) {
             for (const f of files) checked.delete(f);
           } else {
             for (const f of files) checked.add(f);
@@ -779,8 +815,11 @@ async function configInteractive() {
   const config = loadConfig();
 
   const provider = config.provider || "groq";
-  const modelLabel = config.model
-    || (PROVIDERS[provider]?.defaultModel ? `${PROVIDERS[provider].defaultModel} (default)` : "default");
+  const modelLabel =
+    config.model ||
+    (PROVIDERS[provider]?.defaultModel
+      ? `${PROVIDERS[provider].defaultModel} (default)`
+      : "default");
   const providerLabel = PROVIDERS[provider]?.label || `custom (${config.apiUrl || "no url"})`;
   const langLabel = LANGUAGES[config.language] || "Русский";
   const mainAction = await promptSelect(
@@ -830,30 +869,25 @@ async function configInteractive() {
   if (mainAction === "coauthor") {
     config.coauthor = !config.coauthor;
     saveConfig(config);
-    console.log(
-      config.coauthor
-        ? "✅ Co-author enabled.\n"
-        : "✅ Co-author disabled.\n",
-    );
+    console.log(config.coauthor ? "✅ Co-author enabled.\n" : "✅ Co-author disabled.\n");
   }
 
   if (mainAction === "bump") {
     config.bumpVersion = !config.bumpVersion;
     saveConfig(config);
-    console.log(
-      config.bumpVersion
-        ? "✅ Auto-bump enabled.\n"
-        : "✅ Auto-bump disabled.\n",
-    );
+    console.log(config.bumpVersion ? "✅ Auto-bump enabled.\n" : "✅ Auto-bump disabled.\n");
   }
 
   if (mainAction === "apikey") {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     const masked = config.apiKey
-      ? config.apiKey.slice(0, 8) + "..." + config.apiKey.slice(-4)
+      ? `${config.apiKey.slice(0, 8)}...${config.apiKey.slice(-4)}`
       : "not set";
     const key = await new Promise((resolve) => {
-      rl.question(`🔑 API key (current: ${masked})\n   Enter new key (or empty to clear): `, resolve);
+      rl.question(
+        `🔑 API key (current: ${masked})\n   Enter new key (or empty to clear): `,
+        resolve,
+      );
     });
     rl.close();
     config.apiKey = key.trim();
@@ -906,10 +940,15 @@ async function configInteractive() {
     ]);
     config.model = model.trim();
     saveConfig(config);
-    const keyHint = chosen === "ollama"
-      ? " (no API key needed)"
-      : (config.apiKey ? "" : " — remember to set an API key");
-    console.log(`✅ Provider: ${config.provider}${config.model ? `, model: ${config.model}` : ""}${keyHint}.\n`);
+    const keyHint =
+      chosen === "ollama"
+        ? " (no API key needed)"
+        : config.apiKey
+          ? ""
+          : " — remember to set an API key";
+    console.log(
+      `✅ Provider: ${config.provider}${config.model ? `, model: ${config.model}` : ""}${keyHint}.\n`,
+    );
   }
 
   if (mainAction === "model") {
@@ -942,7 +981,9 @@ async function configInteractive() {
       ]);
       config.model = model.trim();
       saveConfig(config);
-      console.log(config.model ? `✅ Model set to ${config.model}.\n` : "ℹ️  Using provider default model.\n");
+      console.log(
+        config.model ? `✅ Model set to ${config.model}.\n` : "ℹ️  Using provider default model.\n",
+      );
     }
   }
 
@@ -988,13 +1029,14 @@ async function configInteractive() {
         default: (config.customTypes || []).join(", "),
       },
     ]);
-    const parsed = types.split(",").map((t) => t.trim()).filter(Boolean);
+    const parsed = types
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
     config.customTypes = parsed;
     saveConfig(config);
     console.log(
-      parsed.length
-        ? `✅ Custom types: ${parsed.join(", ")}\n`
-        : "ℹ️  Custom types cleared.\n",
+      parsed.length ? `✅ Custom types: ${parsed.join(", ")}\n` : "ℹ️  Custom types cleared.\n",
     );
   }
 
@@ -1019,7 +1061,7 @@ async function configInteractive() {
         console.log("📭 No managed projects found.");
       } else {
         const target = await promptSelect(
-          allProjects.map(p => ({ name: `${p.split(/[\\/]/).pop()} → ${p}`, value: p })),
+          allProjects.map((p) => ({ name: `${p.split(/[\\/]/).pop()} → ${p}`, value: p })),
           "Select project to disable hook:",
         );
         const githooks = join(target, ".githooks");
@@ -1052,7 +1094,7 @@ async function addToGitignore() {
 
   const shouldAdd = await askYesNo("Add .githooks/ to .gitignore?");
   if (shouldAdd) {
-    const newContent = content.trimEnd() + `\n${entry}\n`;
+    const newContent = `${content.trimEnd()}\n${entry}\n`;
     writeFileSync(gitignorePath, newContent);
     console.log("✅ Added .githooks/ to .gitignore");
   }
@@ -1119,7 +1161,7 @@ function uninstall() {
 }
 
 function showStatus() {
-  const cwd = process.cwd();
+  const _cwd = process.cwd();
   const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], {
     stdio: "pipe",
     encoding: "utf8",
@@ -1139,8 +1181,7 @@ function showStatus() {
     stdio: "pipe",
     encoding: "utf8",
   });
-  const configuredHooksPath =
-    hooksPathResult.status === 0 ? hooksPathResult.stdout.trim() : null;
+  const configuredHooksPath = hooksPathResult.status === 0 ? hooksPathResult.stdout.trim() : null;
   const hooksConfigured = configuredHooksPath === ".githooks";
 
   const hookExists = existsSync(hookPath);
@@ -1152,23 +1193,21 @@ function showStatus() {
 
   console.log("\n🔍 RXCommit Status\n");
   console.log(`📁 Git root:       ${root}`);
-  console.log(
-    `⚙️  Hooks path:     ${hooksConfigured ? "✅ .githooks" : "❌ not set"}`,
-  );
-  console.log(
-    `📜 Hook file:       ${hookExists ? "✅ present" : "❌ missing"}`,
-  );
-  console.log(
-    `📄 .commitignore:   ${commitignoreExists ? "✅ exists" : "⚠️ missing"}`,
-  );
+  console.log(`⚙️  Hooks path:     ${hooksConfigured ? "✅ .githooks" : "❌ not set"}`);
+  console.log(`📜 Hook file:       ${hookExists ? "✅ present" : "❌ missing"}`);
+  console.log(`📄 .commitignore:   ${commitignoreExists ? "✅ exists" : "⚠️ missing"}`);
   const prov = cfg.provider || "groq";
   const envName = PROVIDERS[prov]?.env;
-  const hasKey = !!cfg.apiKey || (envName && !!process.env[envName]) || !!process.env.NEURO_COMMIT_API_KEY;
-  const keyState = prov === "ollama" ? "no key needed (local)" : (hasKey ? "API key configured" : "API key needed — run 'qq config'");
+  const hasKey =
+    !!cfg.apiKey || (envName && !!process.env[envName]) || !!process.env.NEURO_COMMIT_API_KEY;
+  const keyState =
+    prov === "ollama"
+      ? "no key needed (local)"
+      : hasKey
+        ? "API key configured"
+        : "API key needed — run 'qq config'";
   console.log(`🌐 Provider:        ${prov}${cfg.model ? ` · ${cfg.model}` : ""} (${keyState})`);
-  console.log(
-    `📈 Auto-bump:       ${cfg.bumpVersion ? "✅ enabled" : "— disabled"}`,
-  );
+  console.log(`📈 Auto-bump:       ${cfg.bumpVersion ? "✅ enabled" : "— disabled"}`);
   console.log(`🎨 Template:        ${templateName}`);
   console.log("");
 }
@@ -1184,15 +1223,19 @@ function doctor() {
 
   // Node version (the hook runtime; >= 18 required)
   const nodeMajor = parseInt(process.versions.node.split(".")[0], 10);
-  console.log(nodeMajor >= 18
-    ? ok(`Node: ${process.version}`)
-    : bad(`Node ${process.version} is too old — need >= 18`));
+  console.log(
+    nodeMajor >= 18
+      ? ok(`Node: ${process.version}`)
+      : bad(`Node ${process.version} is too old — need >= 18`),
+  );
 
   // git-filter-repo (optional, only for `qq filter`)
   const fr = spawnSync("git", ["filter-repo", "--version"], { stdio: "pipe" });
-  console.log(fr.status === 0
-    ? ok("Optional: git-filter-repo")
-    : warn("git-filter-repo not installed (only needed for 'qq filter')"));
+  console.log(
+    fr.status === 0
+      ? ok("Optional: git-filter-repo")
+      : warn("git-filter-repo not installed (only needed for 'qq filter')"),
+  );
 
   // git repo, hooks path, hook files
   const rootRes = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" });
@@ -1204,12 +1247,18 @@ function doctor() {
   const gitRoot = rootRes.stdout.trim();
   const hp = spawnSync("git", ["config", "core.hooksPath"], { encoding: "utf8" });
   const hooksPath = hp.status === 0 ? hp.stdout.trim() : "";
-  console.log(hooksPath === ".githooks"
-    ? ok("Hooks path: .githooks")
-    : bad(`Hooks path not set — run 'qq init' (current: ${hooksPath || "unset"})`));
+  console.log(
+    hooksPath === ".githooks"
+      ? ok("Hooks path: .githooks")
+      : bad(`Hooks path not set — run 'qq init' (current: ${hooksPath || "unset"})`),
+  );
 
   const hookFile = join(gitRoot, ".githooks", "prepare-commit-msg");
-  console.log(existsSync(hookFile) ? ok("Hook: prepare-commit-msg present") : bad("Hook missing — run 'qq init'"));
+  console.log(
+    existsSync(hookFile)
+      ? ok("Hook: prepare-commit-msg present")
+      : bad("Hook missing — run 'qq init'"),
+  );
 
   const pyFile = join(gitRoot, ".githooks", "ai_commit.mjs");
   if (existsSync(pyFile)) {
@@ -1217,7 +1266,11 @@ function doctor() {
     if (existsSync(hashPath)) {
       const stored = readFileSync(hashPath, "utf8").trim();
       const cur = fileHash(readFileSync(pyFile, "utf8"));
-      console.log(stored === cur ? ok("Hook: ai_commit.mjs integrity OK") : warn("ai_commit.mjs changed since install (hash mismatch)"));
+      console.log(
+        stored === cur
+          ? ok("Hook: ai_commit.mjs integrity OK")
+          : warn("ai_commit.mjs changed since install (hash mismatch)"),
+      );
     } else {
       console.log(warn("ai_commit.mjs present but no .sha256 sidecar"));
     }
@@ -1229,12 +1282,15 @@ function doctor() {
   const cfg = loadConfig();
   const prov = cfg.provider || "groq";
   const envName = PROVIDERS[prov]?.env;
-  const hasKey = !!cfg.apiKey || (envName && !!process.env[envName]) || !!process.env.NEURO_COMMIT_API_KEY;
+  const hasKey =
+    !!cfg.apiKey || (envName && !!process.env[envName]) || !!process.env.NEURO_COMMIT_API_KEY;
   console.log(`\n🌐 Provider: ${prov}${cfg.model ? ` · ${cfg.model}` : ""}`);
   if (prov === "ollama") {
     console.log(ok("API key: not required (local)"));
   } else {
-    console.log(hasKey ? ok("API key: configured") : bad(`API key: not set (config or ${envName || "env"})`));
+    console.log(
+      hasKey ? ok("API key: configured") : bad(`API key: not set (config or ${envName || "env"})`),
+    );
   }
   console.log(`📈 Auto-bump: ${cfg.bumpVersion ? "enabled" : "disabled"}`);
   console.log("");
@@ -1257,7 +1313,9 @@ async function filterHistory() {
   const version = await checkFilterRepo();
   console.log(`\n🔧 git-filter-repo ${version}\n`);
 
-  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout.trim();
+  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    encoding: "utf8",
+  }).stdout.trim();
   console.log(`📁 Repository: ${gitRoot}\n`);
 
   const bold = "\x1b[1m";
@@ -1269,49 +1327,58 @@ async function filterHistory() {
   const inq = await import("inquirer");
 
   while (true) {
-      const operation = await promptSelect(
-        [
-          { name: "🗑️  Remove file/folder from history", value: "remove-file" },
-          { name: "🔑 Replace text in history (e.g. secret key)", value: "replace-text" },
-          { name: "⬅️  Back", value: "back" },
-        ],
-        "Select operation:",
+    const operation = await promptSelect(
+      [
+        { name: "🗑️  Remove file/folder from history", value: "remove-file" },
+        { name: "🔑 Replace text in history (e.g. secret key)", value: "replace-text" },
+        { name: "⬅️  Back", value: "back" },
+      ],
+      "Select operation:",
+    );
+
+    if (operation === "back") return;
+
+    const args = ["filter-repo", "--force"];
+    let replaceTextFile = null;
+
+    if (operation === "remove-file") {
+      const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" })
+        .stdout.trim()
+        .split("\n")
+        .filter(Boolean);
+      const filePaths = await showFileTreePicker(
+        allFiles,
+        [],
+        "Select files/folders to remove from history:",
+        true,
+        null,
       );
+      if (!filePaths.length) continue;
+      const expanded = expandDirSelections(filePaths, allFiles);
+      for (const fp of expanded) args.push("--path", fp, "--invert-paths");
 
-      if (operation === "back") return;
-
-      let args = ["filter-repo", "--force"];
-      let replaceTextFile = null;
-
-      if (operation === "remove-file") {
-        const allFiles = spawnSync("git", ["ls-files"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
-        const filePaths = await showFileTreePicker(allFiles, [], "Select files/folders to remove from history:", true, null);
-        if (!filePaths.length) continue;
-        const expanded = expandDirSelections(filePaths, allFiles);
-        for (const fp of expanded) args.push("--path", fp, "--invert-paths");
-
-        const inqConfirm = await import("inquirer");
-        const { addGitignore } = await inqConfirm.default.prompt([
-          { type: "confirm", name: "addGitignore", message: "Add to .gitignore?", default: true },
-        ]);
-        if (addGitignore) {
-          const gitignorePath = join(gitRoot, ".gitignore");
-          let content = "";
-          if (existsSync(gitignorePath)) content = readFileSync(gitignorePath, "utf8");
-          const gitignoreEntries = filePaths
-            .filter(f => f.startsWith("__dir__"))
-            .map(f => f.slice(7) + "/")
-            .concat(filePaths.filter(f => !f.startsWith("__dir__") && !f.startsWith("__")));
-          let added = 0;
-          for (const entry of [...new Set(gitignoreEntries)]) {
-            if (!content.includes(entry)) {
-              content = content.trimEnd() + `\n${entry}\n`;
-              added++;
-            }
+      const inqConfirm = await import("inquirer");
+      const { addGitignore } = await inqConfirm.default.prompt([
+        { type: "confirm", name: "addGitignore", message: "Add to .gitignore?", default: true },
+      ]);
+      if (addGitignore) {
+        const gitignorePath = join(gitRoot, ".gitignore");
+        let content = "";
+        if (existsSync(gitignorePath)) content = readFileSync(gitignorePath, "utf8");
+        const gitignoreEntries = filePaths
+          .filter((f) => f.startsWith("__dir__"))
+          .map((f) => `${f.slice(7)}/`)
+          .concat(filePaths.filter((f) => !f.startsWith("__dir__") && !f.startsWith("__")));
+        let added = 0;
+        for (const entry of [...new Set(gitignoreEntries)]) {
+          if (!content.includes(entry)) {
+            content = `${content.trimEnd()}\n${entry}\n`;
+            added++;
           }
-          writeFileSync(gitignorePath, content);
-          if (added > 0) console.log(`✅ Added ${added} entr(ies) to .gitignore`);
         }
+        writeFileSync(gitignorePath, content);
+        if (added > 0) console.log(`✅ Added ${added} entr(ies) to .gitignore`);
+      }
     } else if (operation === "replace-text") {
       const { search, replace } = await inq.default.prompt([
         { type: "input", name: "search", message: "Text to find:" },
@@ -1323,8 +1390,8 @@ async function filterHistory() {
       const s = search.trim();
       const r = replace.trim();
       const expr = r ? `literal:${s}==>${r}` : `literal:${s}`;
-      replaceTextFile = join(tmpdir(), `rxcommit-replace-${process.pid}.txt`);
-      writeFileSync(replaceTextFile, expr + "\n");
+      replaceTextFile = join(tmpdir(), `rxcommit-replace-${randomBytes(8).toString("hex")}.txt`);
+      writeFileSync(replaceTextFile, `${expr}\n`);
       args.push("--replace-text", replaceTextFile);
     }
 
@@ -1347,7 +1414,11 @@ async function filterHistory() {
 
     console.log(`\n🔄 Rewriting history...\n`);
     const result = spawnSync("git", args, { stdio: "inherit" });
-    if (replaceTextFile) { try { unlinkSync(replaceTextFile); } catch {} }
+    if (replaceTextFile) {
+      try {
+        unlinkSync(replaceTextFile);
+      } catch {}
+    }
     if (result.status !== 0) {
       console.error("\n❌ History rewrite failed.");
       process.exit(1);
@@ -1371,6 +1442,7 @@ async function quickFlow() {
   const cyan = "\x1b[36m";
   const yellow = "\x1b[33m";
 
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequences
   const sa = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
   const clearScreen = () => process.stdout.write("\x1b[2J\x1b[H");
@@ -1380,12 +1452,24 @@ async function quickFlow() {
     clearScreen();
     const lines = [`${bold}🚀  RXCommit QuickFlow®${reset}`];
     const w = Math.max(...lines.map((l) => sa(l).length)) + 4;
-    const o = "╭" + "─".repeat(w) + "╮\n" +
-      "│" + " ".repeat(w) + "│\n" +
-      "│" + " ".repeat(Math.floor((w - sa(lines[0]).length) / 2)) + lines[0] +
-      " ".repeat(w - sa(lines[0]).length - Math.floor((w - sa(lines[0]).length) / 2)) + "│\n" +
-      "│" + " ".repeat(w) + "│\n" +
-      "╰" + "─".repeat(w) + "╯\n";
+    const o =
+      "╭" +
+      "─".repeat(w) +
+      "╮\n" +
+      "│" +
+      " ".repeat(w) +
+      "│\n" +
+      "│" +
+      " ".repeat(Math.floor((w - sa(lines[0]).length) / 2)) +
+      lines[0] +
+      " ".repeat(w - sa(lines[0]).length - Math.floor((w - sa(lines[0]).length) / 2)) +
+      "│\n" +
+      "│" +
+      " ".repeat(w) +
+      "│\n" +
+      "╰" +
+      "─".repeat(w) +
+      "╯\n";
     process.stdout.write(o);
   };
 
@@ -1404,8 +1488,14 @@ async function quickFlow() {
 
   console.log(`\n${sep(`${bold}📂  Stage Changes${reset}`)}\n`);
 
-  const unstaged = spawnSync("git", ["diff", "--name-only"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
-  const alreadyStaged = spawnSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
+  const unstaged = spawnSync("git", ["diff", "--name-only"], { encoding: "utf8" })
+    .stdout.trim()
+    .split("\n")
+    .filter(Boolean);
+  const alreadyStaged = spawnSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" })
+    .stdout.trim()
+    .split("\n")
+    .filter(Boolean);
   const allChanged = [...new Set([...unstaged, ...alreadyStaged])];
 
   if (allChanged.length === 0) {
@@ -1415,11 +1505,17 @@ async function quickFlow() {
   let filesToStage = [];
 
   if (allChanged.length > 0) {
-    const selected = await showFileTreePicker(allChanged, alreadyStaged, "Select files to stage:", false, "📦 Stage all files");
+    const selected = await showFileTreePicker(
+      allChanged,
+      alreadyStaged,
+      "Select files to stage:",
+      false,
+      "📦 Stage all files",
+    );
 
     if (selected.length === 0) return;
 
-    const hasAll = selected.some(v => v === "__all__");
+    const hasAll = selected.some((v) => v === "__all__");
     if (hasAll) {
       filesToStage = allChanged;
     } else {
@@ -1429,7 +1525,10 @@ async function quickFlow() {
 
   if (filesToStage.length > 0) {
     const addResult = spawnSync("git", ["add", ...filesToStage], { stdio: "pipe" });
-    if (addResult.status !== 0) { console.error("❌ Failed to stage changes."); process.exit(1); }
+    if (addResult.status !== 0) {
+      console.error("❌ Failed to stage changes.");
+      process.exit(1);
+    }
     console.log(`${green}✅ ${filesToStage.length} file(s) staged${reset}\n`);
   }
 
@@ -1439,7 +1538,10 @@ async function quickFlow() {
     console.log(`${yellow}🚨 ${secrets.length} potential secret(s) in staged changes:${reset}`);
     for (const f of secrets) console.log(`   • ${f.type} — ${f.file} (${f.preview})`);
     const carryOn = await askYesNo("Commit anyway?");
-    if (!carryOn) { console.log(`\n${bold}↩️  Aborted — unstage the secrets and retry.${reset}`); return; }
+    if (!carryOn) {
+      console.log(`\n${bold}↩️  Aborted — unstage the secrets and retry.${reset}`);
+      return;
+    }
   }
 
   // ================================================================
@@ -1450,50 +1552,66 @@ async function quickFlow() {
   console.log(`\n${sep(`${bold}💬  Generating Commit Message${reset}`)}\n`);
   console.log(`${dim}AI is analyzing your staged changes...${reset}\n`);
 
-  const makeCommit = (skipBump) => new Promise((resolve) => {
-    const child = spawn("git", ["commit", "--quiet"], {
-      stdio: ["inherit", "pipe", "pipe"],
-      env: { ...process.env, GIT_EDITOR: "true", ...(skipBump ? { NEURO_COMMIT_SKIP_BUMP: "1" } : {}) },
-      detached: true,
-    });
+  const makeCommit = (skipBump) =>
+    new Promise((resolve) => {
+      const child = spawn("git", ["commit", "--quiet"], {
+        stdio: ["inherit", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          GIT_EDITOR: "true",
+          ...(skipBump ? { NEURO_COMMIT_SKIP_BUMP: "1" } : {}),
+        },
+        detached: true,
+      });
 
-    let cancelled = false;
-    const onSig = () => {
-      cancelled = true;
-      try {
-        if (process.platform === "win32") {
-          spawnSync("taskkill", ["/f", "/t", "/pid", String(child.pid)], { stdio: "ignore" });
-        } else {
-          child.kill("SIGTERM");
-        }
-      } catch {}
-    };
-    process.on("SIGINT", onSig);
+      let cancelled = false;
+      const onSig = () => {
+        cancelled = true;
+        try {
+          if (process.platform === "win32") {
+            spawnSync("taskkill", ["/f", "/t", "/pid", String(child.pid)], { stdio: "ignore" });
+          } else {
+            child.kill("SIGTERM");
+          }
+        } catch {}
+      };
+      process.on("SIGINT", onSig);
 
-    child.stdout.on("data", (d) => {
-      process.stdout.write(d.toString());
-    });
+      child.stdout.on("data", (d) => {
+        process.stdout.write(d.toString());
+      });
 
-    child.stderr.on("data", (d) => {
-      if (!cancelled) process.stderr.write(d);
-    });
+      child.stderr.on("data", (d) => {
+        if (!cancelled) process.stderr.write(d);
+      });
 
-    child.on("close", (code) => {
-      process.removeListener("SIGINT", onSig);
-      resolve(cancelled ? null : code);
+      child.on("close", (code) => {
+        process.removeListener("SIGINT", onSig);
+        resolve(cancelled ? null : code);
+      });
     });
-  });
 
   const commitCode = await makeCommit();
   console.log("");
-  if (commitCode === null) { process.exit(130); }
+  if (commitCode === null) {
+    process.exit(130);
+  }
   if (commitCode !== 0) {
     const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
     try {
       const raw = readFileSync(commitMsgFile, "utf8");
-      const userLines = raw.split("\n").filter(l => {
+      const userLines = raw.split("\n").filter((l) => {
         const t = l.trim();
-        return t && !t.startsWith("# On ") && !t.startsWith("# Please") && !t.startsWith("# It looks") && !t.startsWith("# Your branch") && !t.startsWith("# Changes") && !t.startsWith("# Untracked") && !t.startsWith("#");
+        return (
+          t &&
+          !t.startsWith("# On ") &&
+          !t.startsWith("# Please") &&
+          !t.startsWith("# It looks") &&
+          !t.startsWith("# Your branch") &&
+          !t.startsWith("# Changes") &&
+          !t.startsWith("# Untracked") &&
+          !t.startsWith("#")
+        );
       });
       if (userLines.length > 0) {
         console.log(`\n${userLines.join("\n")}\n`);
@@ -1504,10 +1622,17 @@ async function quickFlow() {
   }
 
   const commitMsgFile = join(process.cwd(), ".git", "COMMIT_EDITMSG");
-  let currentMessage = readFileSync(commitMsgFile, "utf8").trim()
-    .split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").trim();
+  let currentMessage = readFileSync(commitMsgFile, "utf8")
+    .trim()
+    .split("\n")
+    .filter((l) => !l.trim().startsWith("#"))
+    .join("\n")
+    .trim();
 
-  if (!currentMessage) { console.error("❌ Empty commit message"); process.exit(1); }
+  if (!currentMessage) {
+    console.error("❌ Empty commit message");
+    process.exit(1);
+  }
 
   // ================================================================
   //  REVIEW LOOP
@@ -1553,17 +1678,32 @@ async function quickFlow() {
     if (action === "edit") {
       writeFileSync(commitMsgFile, currentMessage, "utf8");
       const defaultEditor = process.platform === "win32" ? "notepad" : "vi";
-      const editor = process.env.GIT_EDITOR || process.env.VISUAL || process.env.EDITOR || defaultEditor;
+      const editor =
+        process.env.GIT_EDITOR || process.env.VISUAL || process.env.EDITOR || defaultEditor;
       const editRes = spawnSync(editor, [commitMsgFile], { stdio: "inherit", shell: false });
-      if (editRes.status !== 0) { console.log(`\n${yellow}↩️  Edit cancelled${reset}`); continue; }
-      const edited = readFileSync(commitMsgFile, "utf8").trim()
-        .split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").trim();
-      if (!edited) { console.log(`\n${yellow}❌ Empty message${reset}`); continue; }
+      if (editRes.status !== 0) {
+        console.log(`\n${yellow}↩️  Edit cancelled${reset}`);
+        continue;
+      }
+      const edited = readFileSync(commitMsgFile, "utf8")
+        .trim()
+        .split("\n")
+        .filter((l) => !l.trim().startsWith("#"))
+        .join("\n")
+        .trim();
+      if (!edited) {
+        console.log(`\n${yellow}❌ Empty message${reset}`);
+        continue;
+      }
       writeFileSync(commitMsgFile, edited, "utf8");
       const amend = spawnSync("git", ["commit", "--amend", "-F", commitMsgFile], {
-        stdio: "inherit", env: { ...process.env, GIT_EDITOR: "true" },
+        stdio: "inherit",
+        env: { ...process.env, GIT_EDITOR: "true" },
       });
-      if (amend.status !== 0) { console.error("❌ Amend failed"); process.exit(1); }
+      if (amend.status !== 0) {
+        console.error("❌ Amend failed");
+        process.exit(1);
+      }
       currentMessage = edited;
       showReview();
     }
@@ -1575,11 +1715,23 @@ async function quickFlow() {
       console.log(`${dim}AI is re-analyzing your changes...${reset}\n`);
       const c = await makeCommit(true);
       console.log("");
-      if (c === null) { process.exit(130); }
-      if (c !== 0) { console.error("❌ Failed to regenerate"); process.exit(1); }
-      currentMessage = readFileSync(commitMsgFile, "utf8").trim()
-        .split("\n").filter((l) => !l.trim().startsWith("#")).join("\n").trim();
-      if (!currentMessage) { console.error("❌ Empty message"); process.exit(1); }
+      if (c === null) {
+        process.exit(130);
+      }
+      if (c !== 0) {
+        console.error("❌ Failed to regenerate");
+        process.exit(1);
+      }
+      currentMessage = readFileSync(commitMsgFile, "utf8")
+        .trim()
+        .split("\n")
+        .filter((l) => !l.trim().startsWith("#"))
+        .join("\n")
+        .trim();
+      if (!currentMessage) {
+        console.error("❌ Empty message");
+        process.exit(1);
+      }
       showReview();
     }
   }
@@ -1591,25 +1743,42 @@ async function quickFlow() {
 
   console.log(`\n${sep(`${bold}⬆️  Push Changes${reset}`)}\n`);
 
-  const remotes = spawnSync("git", ["remote"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
-  const allBranches = spawnSync("git", ["branch", "--format=%(refname:short)"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
-  const currentBranch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).stdout.trim();
+  const remotes = spawnSync("git", ["remote"], { encoding: "utf8" })
+    .stdout.trim()
+    .split("\n")
+    .filter(Boolean);
+  const allBranches = spawnSync("git", ["branch", "--format=%(refname:short)"], {
+    encoding: "utf8",
+  })
+    .stdout.trim()
+    .split("\n")
+    .filter(Boolean);
+  const _currentBranch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    encoding: "utf8",
+  }).stdout.trim();
 
   const remoteChoices = addBackChoice(
-    remotes.length ? remotes.map(r => ({ name: r, value: r })) : [{ name: "origin", value: "origin" }]
+    remotes.length
+      ? remotes.map((r) => ({ name: r, value: r }))
+      : [{ name: "origin", value: "origin" }],
   );
   const remote = await promptSelect(remoteChoices, "Select remote:");
   if (remote === "__back__") return;
 
   const branchChoices = addBackChoice(
-    allBranches.length ? allBranches.map(b => ({ name: b, value: b })) : [{ name: "main", value: "main" }]
+    allBranches.length
+      ? allBranches.map((b) => ({ name: b, value: b }))
+      : [{ name: "main", value: "main" }],
   );
   const branch = await promptSelect(branchChoices, "Select branch:");
   if (branch === "__back__") return;
 
   console.log(`\n⬆️  Pushing to ${remote}/${branch}...`);
   const push = spawnSync("git", ["push", remote, branch], { stdio: "inherit" });
-  if (push.status !== 0) { console.error("\n❌ Push failed"); process.exit(1); }
+  if (push.status !== 0) {
+    console.error("\n❌ Push failed");
+    process.exit(1);
+  }
   console.log(`${green}✅ Pushed successfully${reset}\n`);
 }
 
@@ -1650,7 +1819,9 @@ async function releaseCommand() {
     console.error(`\n❌ ${data?.error || "Could not compute release."}`);
     process.exit(1);
   }
-  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout.trim();
+  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    encoding: "utf8",
+  }).stdout.trim();
 
   console.log(`\n🏷️  Release\n`);
   console.log(`   Since:   ${data.from || "(no tags — summarizing all history)"}`);
@@ -1674,18 +1845,18 @@ async function releaseCommand() {
 
   const clPath = join(gitRoot, "CHANGELOG.md");
   const titleBlock = "# Changelog\n\nAll notable changes to this project are documented here.\n";
-  const entry = data.changelog.trim() + "\n";
+  const entry = `${data.changelog.trim()}\n`;
   let out;
   if (existsSync(clPath)) {
     const existing = readFileSync(clPath, "utf8");
     const idx = existing.indexOf("\n## ");
     if (idx !== -1) {
-      out = existing.slice(0, idx + 1) + "\n" + entry + "\n" + existing.slice(idx + 1);
+      out = `${existing.slice(0, idx + 1)}\n${entry}\n${existing.slice(idx + 1)}`;
     } else {
-      out = existing.trimEnd() + "\n\n" + entry;
+      out = `${existing.trimEnd()}\n\n${entry}`;
     }
   } else {
-    out = titleBlock + "\n" + entry;
+    out = `${titleBlock}\n${entry}`;
   }
   writeFileSync(clPath, out);
   console.log("✅ CHANGELOG.md updated");
@@ -1709,7 +1880,9 @@ async function releaseCommand() {
 
   const doPush = await askYesNo("Push commit and tag to origin?");
   if (doPush) {
-    const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).stdout.trim();
+    const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      encoding: "utf8",
+    }).stdout.trim();
     spawnSync("git", ["push", "origin", branch], { stdio: "inherit" });
     spawnSync("git", ["push", "origin", tag], { stdio: "inherit" });
     console.log("✅ Pushed.\n");
@@ -1718,9 +1891,8 @@ async function releaseCommand() {
   }
 }
 
-async function prCommand() {
-  const baseIdx = args.indexOf("--base");
-  const base = baseIdx !== -1 ? args[baseIdx + 1] : null;
+async function prCommand(baseArg) {
+  const base = baseArg || null;
   console.log("\n💬 Generating pull request description...\n");
   const aic = await hook();
   const data = await aic.buildPrInfo(base, hookConfig(aic));
@@ -1736,10 +1908,16 @@ async function prCommand() {
   if (hasGh) {
     const create = await askYesNo(`Create the PR with gh (base: ${data.base})?`);
     if (create) {
-      const tmp = join(tmpdir(), `rxcommit-pr-${process.pid}.md`);
+      const tmp = join(tmpdir(), `rxcommit-pr-${randomBytes(8).toString("hex")}.md`);
       writeFileSync(tmp, data.body);
-      const r = spawnSync("gh", ["pr", "create", "--base", data.base, "--title", data.title, "--body-file", tmp], { stdio: "inherit" });
-      try { unlinkSync(tmp); } catch {}
+      const r = spawnSync(
+        "gh",
+        ["pr", "create", "--base", data.base, "--title", data.title, "--body-file", tmp],
+        { stdio: "inherit" },
+      );
+      try {
+        unlinkSync(tmp);
+      } catch {}
       if (r.status !== 0) console.error("❌ gh pr create failed.");
     }
   } else {
@@ -1765,7 +1943,9 @@ async function splitCommand() {
   groups.forEach((g, i) => {
     console.log(`  ${i + 1}. ${g.message}`);
     if (g.reason) console.log(`      ↳ ${g.reason}`);
-    g.files.forEach((f) => console.log(`        - ${f}`));
+    for (const f of g.files) {
+      console.log(`        - ${f}`);
+    }
     console.log("");
   });
   if (data.unassigned?.length) {
@@ -1888,31 +2068,39 @@ async function mainCmd() {
     case "scan":
       await scanCommand();
       break;
-    case "pr":
-      await prCommand();
+    case "pr": {
+      const baseIdx = args.indexOf("--base");
+      const base = baseIdx !== -1 ? args[baseIdx + 1] : null;
+      await prCommand(base);
       break;
+    }
     case "release":
       await releaseCommand();
       break;
-    case "update":
+    case "update": {
       console.log("Updating RXCommit...\n");
       const isPnpm = __dirname.includes("pnpm") || process.env.PNPM_HOME;
       const pm = isPnpm ? "pnpm" : "npm";
-      const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit", shell: true });
+      const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit" });
       if (upd.status === 0) {
         console.log("\n✅ RXCommit updated successfully.");
       } else if (pm === "pnpm") {
         console.log("\n⚠️  pnpm update failed, trying npm...\n");
-        const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit", shell: true });
+        const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], {
+          stdio: "inherit",
+        });
         if (npmUpd.status === 0) {
           console.log("\n✅ RXCommit updated successfully.");
         } else {
-          console.log("\n❌ Update failed. Try manually:\n  pnpm add -g @rxgodev/rxcommit@latest\n  npm install -g @rxgodev/rxcommit@latest");
+          console.log(
+            "\n❌ Update failed. Try manually:\n  pnpm add -g @rxgodev/rxcommit@latest\n  npm install -g @rxgodev/rxcommit@latest",
+          );
         }
       } else {
         console.log(`\n❌ Update failed. Try manually:\n  npm install -g @rxgodev/rxcommit@latest`);
       }
       break;
+    }
     case "version":
       console.log(`v${pkg.version}`);
       break;
@@ -1920,6 +2108,11 @@ async function mainCmd() {
       showHelp();
   }
 }
+process.on("unhandledRejection", (e) => {
+  console.error(`\n❌ Unhandled error: ${e.message || e}`);
+  process.exit(1);
+});
+
 mainCmd().catch((e) => {
   console.error(`\n❌ Error: ${e.message}`);
   process.exit(1);

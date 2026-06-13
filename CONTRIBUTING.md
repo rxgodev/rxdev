@@ -7,10 +7,10 @@ Thank you for considering contributing! Here's how to get started.
 ```bash
 # Clone the repo
 git clone https://github.com/rxgodev/rxcommit.git
-cd neuro-commit
+cd rxcommit
 
 # Install dependencies
-pnpm install
+npm install
 
 # Make your changes, then test
 node bin/ac.js --help
@@ -19,17 +19,18 @@ node bin/ac.js --help
 ## Code Style
 
 - Follow existing conventions in the codebase
-- Python: PEP 8 (4 spaces, no trailing whitespace)
 - JavaScript: 2-space indentation, semicolons
+- Use Biome for formatting and linting: `npm run format` and `npm run lint`
 - Keep functions focused and small
 
 ## Before Submitting
 
-1. Test your changes manually:
+1. Run tests: `npm test`
+2. Run linter: `npm run lint`
+3. Test your changes manually:
    - `node bin/ac.js status`
    - `node bin/ac.js --help`
-   - `python .githooks/ai_commit.py --help` (verify it parses)
-2. Update documentation (README, translations in `docs/languages/`) if your change affects user-facing features
+4. Update documentation (README, translations in `docs/languages/`) if your change affects user-facing features
 
 ## Pull Request Process
 
@@ -44,4 +45,4 @@ Open an issue at https://github.com/rxgodev/rxcommit/issues with:
 - A clear description of the problem
 - Steps to reproduce
 - Expected vs actual behavior
-- Your OS, Node.js version, and Python version
+- Your OS and Node.js version

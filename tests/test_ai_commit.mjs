@@ -1,14 +1,15 @@
 // Node tests for the pure logic in .githooks/ai_commit.mjs.
 // Mirrors tests/test_ai_commit.py so the port can be cross-checked 1:1.
 // Run with:  node --test tests/test_ai_commit.mjs
-import { test } from "node:test";
+
 import assert from "node:assert/strict";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { createServer } from "node:http";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 function tmpGitRepo() {
   const root = mkdtempSync(join(tmpdir(), "nc-git-"));
@@ -19,23 +20,30 @@ function tmpGitRepo() {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-const aic = await import(join(here, "..", ".githooks", "ai_commit.mjs"));
+const aicPath = join(here, "..", ".githooks", "ai_commit.mjs");
+const aic = await import(pathToFileURL(aicPath).href);
 
 // Local SSE server helpers for callLlm tests (no network, no keys).
 function sseServer(chunks) {
-  return createServer((req, res) => {
+  return createServer((_req, res) => {
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     for (const c of chunks) res.write(c);
     res.end();
   });
 }
 function listen(server) {
-  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server.address().port)));
+  return new Promise((resolve) =>
+    server.listen(0, "127.0.0.1", () => resolve(server.address().port)),
+  );
 }
 
 test("parseSemver: valid", () => {
   assert.deepEqual(aic.parseSemver("1.2.3"), {
-    major: 1, minor: 2, patch: 3, prerelease: null, build: null,
+    major: 1,
+    minor: 2,
+    patch: 3,
+    prerelease: null,
+    build: null,
   });
 });
 
@@ -103,9 +111,9 @@ test("isValidCommitMessage: valid", () => {
 
 test("isValidCommitMessage: invalid", () => {
   assert.equal(aic.isValidCommitMessage("feat: add thing."), false); // trailing period
-  assert.equal(aic.isValidCommitMessage("Feat: add"), false);        // uppercase type
-  assert.equal(aic.isValidCommitMessage("feat: добавить"), false);   // cyrillic
-  assert.equal(aic.isValidCommitMessage("nope: x"), false);          // unknown type
+  assert.equal(aic.isValidCommitMessage("Feat: add"), false); // uppercase type
+  assert.equal(aic.isValidCommitMessage("feat: добавить"), false); // cyrillic
+  assert.equal(aic.isValidCommitMessage("nope: x"), false); // unknown type
   assert.equal(aic.isValidCommitMessage(""), false);
 });
 
@@ -118,7 +126,10 @@ test("cleanLlmResponse: skip preamble", () => {
 });
 
 test("cleanLlmResponse: subject + body", () => {
-  assert.equal(aic.cleanLlmResponse("feat: add\n\nbecause reasons"), "feat: add\n\nbecause reasons");
+  assert.equal(
+    aic.cleanLlmResponse("feat: add\n\nbecause reasons"),
+    "feat: add\n\nbecause reasons",
+  );
 });
 
 test("cleanLlmResponse: fallback when no subject", () => {
@@ -205,8 +216,8 @@ test("scanDiffForSecrets: masking hides full secret", () => {
 
 test("extractJson", () => {
   assert.deepEqual(aic.extractJson('{"a": 1}'), { a: 1 });
-  assert.deepEqual(aic.extractJson("```json\n{\"a\": 1}\n```"), { a: 1 });
-  assert.deepEqual(aic.extractJson("Sure! Here:\n{\"a\": 1}\nDone"), { a: 1 });
+  assert.deepEqual(aic.extractJson('```json\n{"a": 1}\n```'), { a: 1 });
+  assert.deepEqual(aic.extractJson('Sure! Here:\n{"a": 1}\nDone'), { a: 1 });
   assert.deepEqual(aic.extractJson('[{"x": 1}, {"y": 2}]'), [{ x: 1 }, { y: 2 }]);
   assert.equal(aic.extractJson("not json at all"), null);
 });
@@ -261,15 +272,20 @@ test("readCommitignore: strips comments and blanks", () => {
 
 test("CommitignoreMatcher: bare name, dir, glob, anchor, negation", () => {
   const m = new aic.CommitignoreMatcher([
-    ".githooks/", "ai_commit.py", ".env", "*.log", "/root.txt", "!keep.log",
+    ".githooks/",
+    "ai_commit.py",
+    ".env",
+    "*.log",
+    "/root.txt",
+    "!keep.log",
   ]);
   assert.equal(m.ignores(".githooks/ai_commit.py"), true);
-  assert.equal(m.ignores("src/ai_commit.py"), true);   // bare name at any depth
+  assert.equal(m.ignores("src/ai_commit.py"), true); // bare name at any depth
   assert.equal(m.ignores(".env"), true);
-  assert.equal(m.ignores("a/b.log"), true);            // *.log anywhere
-  assert.equal(m.ignores("keep.log"), false);          // negated after *.log
-  assert.equal(m.ignores("root.txt"), true);           // anchored at root
-  assert.equal(m.ignores("sub/root.txt"), false);      // anchored: not nested
+  assert.equal(m.ignores("a/b.log"), true); // *.log anywhere
+  assert.equal(m.ignores("keep.log"), false); // negated after *.log
+  assert.equal(m.ignores("root.txt"), true); // anchored at root
+  assert.equal(m.ignores("sub/root.txt"), false); // anchored: not nested
   assert.equal(m.ignores("src/app.js"), false);
 });
 
@@ -301,12 +317,22 @@ test("resolveConfig: ollama needs no key", () => {
 });
 
 test("resolveConfig: key from env, then config wins", () => {
-  assert.equal(aic.resolveConfig({ provider: "openai" }, { OPENAI_API_KEY: "sk-env" }).apiKey, "sk-env");
-  assert.equal(aic.resolveConfig({ provider: "openai", apiKey: "sk-cfg" }, { OPENAI_API_KEY: "sk-env" }).apiKey, "sk-cfg");
+  assert.equal(
+    aic.resolveConfig({ provider: "openai" }, { OPENAI_API_KEY: "sk-env" }).apiKey,
+    "sk-env",
+  );
+  assert.equal(
+    aic.resolveConfig({ provider: "openai", apiKey: "sk-cfg" }, { OPENAI_API_KEY: "sk-env" })
+      .apiKey,
+    "sk-cfg",
+  );
 });
 
 test("resolveConfig: custom provider + apiUrl, custom types", () => {
-  const c = aic.resolveConfig({ provider: "custom", apiUrl: "http://x/v1/chat/completions", customTypes: ["hotfix"] }, {});
+  const c = aic.resolveConfig(
+    { provider: "custom", apiUrl: "http://x/v1/chat/completions", customTypes: ["hotfix"] },
+    {},
+  );
   assert.equal(c.apiUrl, "http://x/v1/chat/completions");
   assert.equal(c.needsKey, false);
   assert.ok(c.validTypes.includes("hotfix"));
@@ -346,7 +372,13 @@ test("callLlm: parses an SSE stream", async () => {
   ]);
   const port = await listen(server);
   try {
-    const cfg = { provider: "test", apiUrl: `http://127.0.0.1:${port}/v1`, apiKey: "", needsKey: false, model: "m" };
+    const cfg = {
+      provider: "test",
+      apiUrl: `http://127.0.0.1:${port}/v1`,
+      apiKey: "",
+      needsKey: false,
+      model: "m",
+    };
     const out = await aic.callLlm([{ role: "user", content: "x" }], cfg, { echo: false });
     assert.equal(out, "feat: add thing");
   } finally {
@@ -361,8 +393,17 @@ test("callLlm: clean=false returns raw text", async () => {
   ]);
   const port = await listen(server);
   try {
-    const cfg = { provider: "test", apiUrl: `http://127.0.0.1:${port}/v1`, apiKey: "", needsKey: false, model: "m" };
-    const out = await aic.callLlm([{ role: "user", content: "x" }], cfg, { echo: false, clean: false });
+    const cfg = {
+      provider: "test",
+      apiUrl: `http://127.0.0.1:${port}/v1`,
+      apiKey: "",
+      needsKey: false,
+      model: "m",
+    };
+    const out = await aic.callLlm([{ role: "user", content: "x" }], cfg, {
+      echo: false,
+      clean: false,
+    });
     assert.equal(out, "Here is:\nfeat: x");
   } finally {
     server.close();
@@ -370,10 +411,19 @@ test("callLlm: clean=false returns raw text", async () => {
 });
 
 test("callLlm: 429 rejects with rate-limit message", async () => {
-  const server = createServer((req, res) => { res.writeHead(429); res.end("slow down"); });
+  const server = createServer((_req, res) => {
+    res.writeHead(429);
+    res.end("slow down");
+  });
   const port = await listen(server);
   try {
-    const cfg = { provider: "test", apiUrl: `http://127.0.0.1:${port}/v1`, apiKey: "", needsKey: false, model: "m" };
+    const cfg = {
+      provider: "test",
+      apiUrl: `http://127.0.0.1:${port}/v1`,
+      apiKey: "",
+      needsKey: false,
+      model: "m",
+    };
     await assert.rejects(
       () => aic.callLlm([{ role: "user", content: "x" }], cfg, { echo: false }),
       /rate limit/i,
@@ -385,7 +435,18 @@ test("callLlm: 429 rejects with rate-limit message", async () => {
 
 test("callLlm: missing key rejects", async () => {
   await assert.rejects(
-    () => aic.callLlm([], { provider: "groq", needsKey: true, apiKey: "", apiUrl: "http://x/v1", providerEnv: "GROQ_API_KEY" }, { echo: false }),
+    () =>
+      aic.callLlm(
+        [],
+        {
+          provider: "groq",
+          needsKey: true,
+          apiKey: "",
+          apiUrl: "http://x/v1",
+          providerEnv: "GROQ_API_KEY",
+        },
+        { echo: false },
+      ),
     /API key/,
   );
 });
@@ -397,7 +458,10 @@ test("generateCommitMessage: returns a validated message", async () => {
   ]);
   const port = await listen(server);
   try {
-    const cfg = aic.resolveConfig({ provider: "custom", apiUrl: `http://127.0.0.1:${port}/v1` }, {});
+    const cfg = aic.resolveConfig(
+      { provider: "custom", apiUrl: `http://127.0.0.1:${port}/v1` },
+      {},
+    );
     const msg = await aic.generateCommitMessage("# File: a.js\n+x", cfg, { echo: false });
     assert.equal(msg, "feat: add a real thing");
   } finally {
@@ -406,10 +470,16 @@ test("generateCommitMessage: returns a validated message", async () => {
 });
 
 test("generateCommitMessage: null after repeated failures", async () => {
-  const server = createServer((req, res) => { res.writeHead(500); res.end("boom"); });
+  const server = createServer((_req, res) => {
+    res.writeHead(500);
+    res.end("boom");
+  });
   const port = await listen(server);
   try {
-    const cfg = aic.resolveConfig({ provider: "custom", apiUrl: `http://127.0.0.1:${port}/v1` }, {});
+    const cfg = aic.resolveConfig(
+      { provider: "custom", apiUrl: `http://127.0.0.1:${port}/v1` },
+      {},
+    );
     const msg = await aic.generateCommitMessage("diff", cfg, { echo: false });
     assert.equal(msg, null);
   } finally {
@@ -451,7 +521,10 @@ test("discoverManifests: finds manifests, skips node_modules", () => {
 test("bumpProjectVersion: bumps package.json + pyproject.toml", () => {
   const root = mkdtempSync(join(tmpdir(), "nc-bump-"));
   try {
-    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "x", version: "1.2.3" }, null, 2) + "\n");
+    writeFileSync(
+      join(root, "package.json"),
+      `${JSON.stringify({ name: "x", version: "1.2.3" }, null, 2)}\n`,
+    );
     writeFileSync(join(root, "pyproject.toml"), '[project]\nname = "x"\nversion = "1.2.3"\n');
 
     const bumps = aic.bumpProjectVersion("minor", "feat: add", root);
@@ -469,7 +542,9 @@ test("bumpProjectVersion: bumps package.json + pyproject.toml", () => {
 
 test("composeMessage: bump footer + co-author", () => {
   const out = aic.composeMessage("feat: x", {
-    bumps: [["package.json", "1.0.0", "1.1.0"]], kind: "minor", addCoauthor: true,
+    bumps: [["package.json", "1.0.0", "1.1.0"]],
+    kind: "minor",
+    addCoauthor: true,
   });
   assert.ok(out.startsWith("feat: x"));
   assert.ok(out.includes("Bump version (minor):"));
@@ -520,7 +595,12 @@ test("main: end-to-end writes the generated message into the commit file", async
     spawnSync("git", ["add", "hello.txt"], { cwd: repo });
     process.chdir(repo);
     const cfg = aic.resolveConfig(
-      { provider: "custom", apiUrl: `http://127.0.0.1:${port}/v1`, coauthor: true, bumpVersion: false },
+      {
+        provider: "custom",
+        apiUrl: `http://127.0.0.1:${port}/v1`,
+        coauthor: true,
+        bumpVersion: false,
+      },
       {},
     );
     const msgFile = join(repo, "MSG");

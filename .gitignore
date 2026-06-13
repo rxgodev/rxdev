@@ -8,6 +8,12 @@ node_modules/
 .npmrc
 npmrc
 
+# RXCommit debug log
+ai_commit_debug.log
+
+# Coverage reports
+coverage/
+
 # C extensions
 *.so
 
