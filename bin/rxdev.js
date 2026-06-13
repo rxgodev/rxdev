@@ -242,6 +242,32 @@ function updateProjectHooks(projectPath) {
 // git-filter-repo is only required for `rxdev filter`, which checks for it lazily
 // (see checkFilterRepo) and points the user at `pip install git-filter-repo`.
 
+async function installHookForProject(projectPath) {
+  const githooksDir = join(projectPath, ".githooks");
+  if (!existsSync(githooksDir)) mkdirSync(githooksDir, { recursive: true });
+
+  for (const file of ["rxdev.mjs", "prepare-commit-msg"]) {
+    const src = join(SOURCE_GITHOOKS_DIR, file);
+    const dst = join(githooksDir, file);
+    if (!existsSync(src)) continue;
+    const content = readFileSync(src, "utf8");
+    if (file === "rxdev.mjs") {
+      writePyWithHash(dst, content);
+    } else {
+      writeFileSync(dst, content);
+    }
+  }
+
+  if (process.platform !== "win32") {
+    spawnSync("chmod", ["+x", join(githooksDir, "prepare-commit-msg")]);
+  }
+
+  spawnSync("git", ["config", "core.hooksPath", ".githooks"], {
+    stdio: "ignore",
+    cwd: projectPath,
+  });
+}
+
 function setGitHooksPath() {
   if (
     spawnSync("git", ["config", "core.hooksPath", ".githooks"], {
@@ -1056,68 +1082,80 @@ async function configInteractive() {
 
   if (mainAction === "projects-templates") {
     while (true) {
-      const ptAction = await promptSelect(
-        [
-          { name: "✅ Back to main menu", value: "back" },
-          { name: "─".repeat(30), value: "__sep__" },
-          { name: "📋 List all projects", value: "list-projects" },
-          { name: "🎨 Templates", value: "templates" },
-          { name: "🔌 Disable hook in project", value: "disable-hook" },
-          { name: "🗑️  Remove project from list", value: "remove-project" },
-        ],
-        "Projects & Templates",
-      );
+      const allProjects = getManagedProjects();
 
-      if (ptAction === "back" || ptAction === "__sep__") break;
+      const choices = [
+        { name: "✅ Back to main menu", value: "back" },
+        { name: "─".repeat(30), value: "__sep__" },
+        { name: "🎨 Templates", value: "templates" },
+      ];
 
-      if (ptAction === "list-projects") {
-        listProjects();
-        await new Promise((r) => setTimeout(r, 2000));
-      } else if (ptAction === "templates") {
-        await manageTemplates();
-      } else if (ptAction === "disable-hook") {
-        const allProjects = getManagedProjects().filter((p) => existsSync(p));
-        if (allProjects.length === 0) {
-          console.log("📭 No managed projects found.\n");
-        } else {
-          const target = await promptSelect(
-            allProjects.map((p) => ({
-              name: `${p.split(/[\\/]/).pop()} → ${p}`,
-              value: p,
-            })),
-            "Select project to disable hook:",
-          );
-          const confirm = await askYesNo(`Disable hook in ${target.split(/[\\/]/).pop()}?`);
-          if (confirm) {
-            const githooks = join(target, ".githooks");
-            if (existsSync(githooks)) {
-              rmSync(githooks, { recursive: true, force: true });
-            }
-            spawnSync("git", ["config", "--unset", "core.hooksPath"], {
-              stdio: "ignore",
-              cwd: target,
-            });
-            unregisterProject(target);
-            console.log(`✅ Hook disabled for ${target.split(/[\\/]/).pop()}\n`);
-          }
+      if (allProjects.length === 0) {
+        choices.push({ name: "📭 No projects (run 'rxdev init' to add)", value: "__none__" });
+      } else {
+        for (const p of allProjects) {
+          const name = p.split(/[\\/]/).pop();
+          const exists = existsSync(p);
+          const hasHook = exists && existsSync(join(p, ".githooks"));
+          const status = !exists ? "❌ missing" : hasHook ? "✅ active" : "⚠️  hook off";
+          choices.push({ name: `${name} — ${status}`, value: p });
         }
-      } else if (ptAction === "remove-project") {
-        const allProjects = getManagedProjects();
-        if (allProjects.length === 0) {
-          console.log("📭 No projects in list.\n");
-        } else {
-          const target = await promptSelect(
-            allProjects.map((p) => ({
-              name: `${p.split(/[\\/]/).pop()} → ${p}`,
-              value: p,
-            })),
-            "Select project to remove:",
-          );
-          const confirm = await askYesNo(`Remove ${target.split(/[\\/]/).pop()} from list?`);
-          if (confirm) {
-            unregisterProject(target);
-            console.log(`✅ Removed from list\n`);
-          }
+      }
+
+      const selected = await promptSelect(choices, "Projects");
+
+      if (selected === "back" || selected === "__sep__" || selected === "__none__") {
+        if (selected === "__none__") {
+          console.log('ℹ️  Run "rxdev init" in a project to add it.\n');
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+        break;
+      }
+
+      if (selected === "templates") {
+        await manageTemplates();
+        continue;
+      }
+
+      const projectPath = selected;
+      const projectName = projectPath.split(/[\\/]/).pop();
+      const exists = existsSync(projectPath);
+      const hasHook = exists && existsSync(join(projectPath, ".githooks"));
+
+      const actions = [
+        { name: "⬅️  Back", value: "back" },
+        { name: "─".repeat(30), value: "__sep__" },
+      ];
+
+      if (exists && hasHook) {
+        actions.push({ name: "🔌 Disable hook", value: "disable" });
+      } else if (exists && !hasHook) {
+        actions.push({ name: "⚡ Enable hook", value: "enable" });
+      }
+      actions.push({ name: "🗑️  Remove from list", value: "remove" });
+
+      const action = await promptSelect(actions, `${projectName}`);
+
+      if (action === "back" || action === "__sep__") continue;
+
+      if (action === "disable") {
+        const confirm = await askYesNo(`Disable hook in ${projectName}?`);
+        if (confirm) {
+          rmSync(join(projectPath, ".githooks"), { recursive: true, force: true });
+          spawnSync("git", ["config", "--unset", "core.hooksPath"], { stdio: "ignore", cwd: projectPath });
+          console.log(`✅ Hook disabled\n`);
+        }
+      } else if (action === "enable") {
+        const confirm = await askYesNo(`Enable hook in ${projectName}?`);
+        if (confirm) {
+          await installHookForProject(projectPath);
+          console.log(`✅ Hook enabled\n`);
+        }
+      } else if (action === "remove") {
+        const confirm = await askYesNo(`Remove ${projectName} from list?`);
+        if (confirm) {
+          unregisterProject(projectPath);
+          console.log(`✅ Removed from list\n`);
         }
       }
 
