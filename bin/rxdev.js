@@ -2105,6 +2105,16 @@ async function splitCommand() {
   console.log(`\n✅ Created ${groups.length} commit(s).\n`);
 }
 
+function stripMarkdown(text) {
+  return text
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "  • ")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/`(.+?)`/g, "$1")
+    .trim();
+}
+
 async function reviewCommand() {
   const aic = await hook();
   const { diff } = await aic.getStagedDiff();
@@ -2123,7 +2133,7 @@ async function reviewCommand() {
     process.exit(1);
   }
   console.log(`\n🔍 Code Review\n`);
-  console.log(data.review);
+  console.log(stripMarkdown(data.review));
   if (data.issueCount > 0) {
     console.log(`\n${"─".repeat(40)}`);
     console.log(`📋 Found ${data.issueCount} issue(s)`);
