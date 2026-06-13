@@ -1948,7 +1948,7 @@ export async function runSubcommand(argv, cfg) {
 //  COMMIT MESSAGE COMPOSITION + MAIN FLOW
 // ============================================================
 
-const COAUTHOR_TRAILER = "Co-authored-by: RXDev <autocommitrxgo@gmail.com>";
+const COAUTHOR_TRAILER = "Co-authored-by: rxdevbot <rxdevbot@users.noreply.github.com>";
 
 export function composeMessage(message, { bumps = [], kind = "patch", addCoauthor = false } = {}) {
   let out = message;

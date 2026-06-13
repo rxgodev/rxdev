@@ -57,7 +57,7 @@ ai_commit_debug.log
 `;
 
 // === CONFIGURATION ===
-const CONFIG_DIR = join(homedir(), ".config", "ai-commit");
+const CONFIG_DIR = join(homedir(), ".config", "rxdev");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 const MANAGED_PROJECTS_FILE = join(CONFIG_DIR, "managed-projects.json");
 const TEMPLATES_FILE = join(CONFIG_DIR, "templates.json");
@@ -265,9 +265,9 @@ async function askYesNo(question) {
     output: process.stdout,
   });
   return new Promise((resolve) => {
-    rl.question(`${question} (y/n): `, (answer) => {
+    rl.question(`${question} (Y/n): `, (answer) => {
       rl.close();
-      resolve(answer.toLowerCase() === "y");
+      resolve(answer.toLowerCase() !== "n");
     });
   });
 }
@@ -1584,6 +1584,7 @@ async function quickFlow() {
   if (secrets.length > 0) {
     console.log(`${yellow}🚨 ${secrets.length} potential secret(s) in staged changes:${reset}`);
     for (const f of secrets) console.log(`   • ${f.type} — ${f.file} (${f.preview})`);
+    console.log("");
     const action = await promptSelect(
       [
         { name: "⚠️   Commit anyway (risky)", value: "commit" },
@@ -1883,16 +1884,13 @@ async function releaseCommand() {
     console.error(`\n❌ ${data?.error || "Could not compute release."}`);
     process.exit(1);
   }
-  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-    encoding: "utf8",
-  }).stdout.trim();
 
   console.log(`\n🏷️  Release\n`);
   console.log(`   Since:   ${data.from || "(no tags — summarizing all history)"}`);
   console.log(`   Current: ${data.current}`);
   console.log(`   Bump:    ${data.bump}  →  ${data.next}`);
   console.log(`   Commits: ${data.count}\n`);
-  console.log("──────── CHANGELOG entry ────────\n");
+  console.log("──────── Release notes ────────\n");
   console.log(data.changelog);
   console.log("─────────────────────────────────\n");
 
@@ -1901,57 +1899,42 @@ async function releaseCommand() {
     return;
   }
 
-  const proceed = await askYesNo(`Write CHANGELOG.md and create tag v${data.next}?`);
+  const tag = `v${data.next}`;
+  const proceed = await askYesNo(`Create tag ${tag} and GitHub Release?`);
   if (!proceed) {
     console.log("↩️  Cancelled.\n");
     return;
   }
 
-  const clPath = join(gitRoot, "CHANGELOG.md");
-  const titleBlock = "# Changelog\n\nAll notable changes to this project are documented here.\n";
-  const entry = `${data.changelog.trim()}\n`;
-  let out;
-  if (existsSync(clPath)) {
-    const existing = readFileSync(clPath, "utf8");
-    const idx = existing.indexOf("\n## ");
-    if (idx !== -1) {
-      out = `${existing.slice(0, idx + 1)}\n${entry}\n${existing.slice(idx + 1)}`;
-    } else {
-      out = `${existing.trimEnd()}\n\n${entry}`;
-    }
-  } else {
-    out = `${titleBlock}\n${entry}`;
-  }
-  writeFileSync(clPath, out);
-  console.log("✅ CHANGELOG.md updated");
-
-  spawnSync("git", ["add", "--", clPath], { stdio: "pipe" });
-  const tag = `v${data.next}`;
-  const commitRes = spawnSync("git", ["commit", "-m", `chore(release): ${tag}`], {
-    stdio: "inherit",
-    env: { ...process.env, NEURO_COMMIT_SKIP_BUMP: "1", GIT_EDITOR: "true" },
-  });
-  if (commitRes.status !== 0) {
-    console.error("❌ Release commit failed (nothing staged?).");
-    process.exit(1);
-  }
   const tagRes = spawnSync("git", ["tag", "-a", tag, "-m", tag], { stdio: "inherit" });
   if (tagRes.status !== 0) {
     console.error(`❌ Failed to create tag ${tag} (already exists?).`);
     process.exit(1);
   }
-  console.log(`✅ Committed and tagged ${tag}`);
+  console.log(`✅ Created tag ${tag}`);
 
-  const doPush = await askYesNo("Push commit and tag to origin?");
-  if (doPush) {
-    const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
-      encoding: "utf8",
-    }).stdout.trim();
-    spawnSync("git", ["push", "origin", branch], { stdio: "inherit" });
-    spawnSync("git", ["push", "origin", tag], { stdio: "inherit" });
-    console.log("✅ Pushed.\n");
+  const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    encoding: "utf8",
+  }).stdout.trim();
+  spawnSync("git", ["push", "origin", branch], { stdio: "inherit" });
+  spawnSync("git", ["push", "origin", tag], { stdio: "inherit" });
+  console.log("✅ Pushed tag");
+
+  const hasGh = spawnSync("gh", ["--version"], { stdio: "pipe" }).status === 0;
+  if (hasGh) {
+    const notesFile = join(tmpdir(), `rxdev-release-${randomBytes(8).toString("hex")}.md`);
+    writeFileSync(notesFile, data.changelog);
+    const ghRes = spawnSync("gh", ["release", "create", tag, "--title", tag, "--notes-file", notesFile], {
+      stdio: "inherit",
+    });
+    try { unlinkSync(notesFile); } catch {}
+    if (ghRes.status === 0) {
+      console.log("✅ GitHub Release created\n");
+    } else {
+      console.log(`⚠️  Failed to create GitHub Release. Create manually:\n   gh release create ${tag}\n`);
+    }
   } else {
-    console.log(`\nℹ️  When ready: git push && git push origin ${tag}\n`);
+    console.log(`ℹ️  Install GitHub CLI to create releases automatically:\n   gh release create ${tag}\n`);
   }
 }
 
