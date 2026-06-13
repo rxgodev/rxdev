@@ -1990,10 +1990,7 @@ async function splitCommand() {
 async function reviewCommand() {
   console.log("\n🔍 Reviewing staged changes...\n");
   const aic = await hook();
-  const data = await aic.buildReview(
-    (await aic.getStagedDiff()).diff,
-    hookConfig(aic),
-  );
+  const data = await aic.buildReview((await aic.getStagedDiff()).diff, hookConfig(aic));
   if (!data || data.error) {
     console.error(`\n❌ ${data?.error || "Review failed."}`);
     process.exit(1);

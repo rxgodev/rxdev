@@ -95,11 +95,11 @@ export function truncateDiffSmart(diff, maxChars = MAX_DIFF_LENGTH) {
 
   const fileBlocks = diff.split(/(?=^# File: )/m);
   let result = "";
-  let totalChars = diff.length;
+  const totalChars = diff.length;
   let includedChars = 0;
   let truncated = false;
   let filesIncluded = 0;
-  let filesTotal = fileBlocks.filter((b) => b.startsWith("# File:")).length;
+  const filesTotal = fileBlocks.filter((b) => b.startsWith("# File:")).length;
 
   for (const block of fileBlocks) {
     if (includedChars + block.length <= maxChars) {
@@ -863,7 +863,12 @@ export function resolveConfig(userConfig = {}, env = process.env) {
     defaultModel: DEFAULT_GROQ_MODEL,
     needsKey: false, // custom/unknown provider: don't block, let the endpoint decide
   };
-  const apiKey = userConfig.apiKey || env[providerDef.env] || env.RXDEV_API_KEY || env.NEURO_COMMIT_API_KEY || "";
+  const apiKey =
+    userConfig.apiKey ||
+    env[providerDef.env] ||
+    env.RXDEV_API_KEY ||
+    env.NEURO_COMMIT_API_KEY ||
+    "";
   const customTypes = Array.isArray(userConfig.customTypes) ? userConfig.customTypes : [];
   const allTypes = [...new Set([...DEFAULT_VALID_TYPES, ...customTypes])];
   const typesStr = [...allTypes].sort().join(", ");
@@ -925,7 +930,10 @@ export function loadProjectConfig(repoRoot) {
         else if (value === "false") value = false;
         else if (/^\d+$/.test(value)) value = parseInt(value, 10);
         else if (value.startsWith("[") && value.endsWith("]")) {
-          value = value.slice(1, -1).split(",").map((s) => s.trim());
+          value = value
+            .slice(1, -1)
+            .split(",")
+            .map((s) => s.trim());
         }
         config[key] = value;
       }
@@ -989,10 +997,14 @@ export function gatherContext(repoRoot) {
 
   if (context.issueNumber) {
     try {
-      const result = spawnSync("gh", ["issue", "view", context.issueNumber, "--json", "title,body"], {
-        encoding: "utf8",
-        timeout: 5000,
-      });
+      const result = spawnSync(
+        "gh",
+        ["issue", "view", context.issueNumber, "--json", "title,body"],
+        {
+          encoding: "utf8",
+          timeout: 5000,
+        },
+      );
       if (result.status === 0) {
         const issue = JSON.parse(result.stdout);
         if (issue.title) context.issueTitle = issue.title;
@@ -1623,12 +1635,15 @@ const SPLIT_SYSTEM_PROMPT =
   "Every input file must appear in exactly one group. If the changes are cohesive, return a " +
   "single group. Use lowercase imperative subjects with no trailing period.";
 
-function groupFilesByModule(files) {
+function _groupFilesByModule(files) {
   const groups = {};
   for (const f of files) {
     const parts = f.split("/");
     let module = parts[0];
-    if (parts.length > 1 && !["src", "lib", "packages", "apps", "tests", "test", "__tests__"].includes(parts[0])) {
+    if (
+      parts.length > 1 &&
+      !["src", "lib", "packages", "apps", "tests", "test", "__tests__"].includes(parts[0])
+    ) {
       module = parts.slice(0, 2).join("/");
     }
     if (!groups[module]) groups[module] = [];
@@ -1761,12 +1776,12 @@ export async function buildReview(diff, cfg) {
       if (currentIssue) issues.push(currentIssue);
       currentIssue = {
         severity: severityMatch[1].toLowerCase(),
-        message: line.replace(/^[\s\-\*]+/, "").trim(),
+        message: line.replace(/^[\s\-*]+/, "").trim(),
         file: null,
         line: null,
       };
     } else if (currentIssue && line.trim()) {
-      currentIssue.message += " " + line.trim();
+      currentIssue.message += ` ${line.trim()}`;
     }
   }
   if (currentIssue) issues.push(currentIssue);
@@ -1774,7 +1789,7 @@ export async function buildReview(diff, cfg) {
   return { review: reviewText, issues, issueCount: issues.length };
 }
 
-export async function buildPrReview(prNumber, cfg) {
+export async function buildPrReview(_prNumber, cfg) {
   const prDiff = git(["diff", `origin/main...HEAD`, "--no-color"]);
   if (!prDiff) {
     return { error: "Could not fetch PR diff", issues: [] };
@@ -1788,10 +1803,13 @@ export function analyzeCommits(revRange = "HEAD~50..HEAD", repoRoot) {
   const logOutput = git(["log", "--pretty=format:%H|%s|%b", revRange], repoRoot);
   if (!logOutput) return { total: 0, byType: {}, avgMessageLength: 0, breakingChanges: 0 };
 
-  const commits = logOutput.split("\n").filter(Boolean).map((line) => {
-    const [hash, subject, ...bodyParts] = line.split("|");
-    return { hash, subject, body: bodyParts.join("|") };
-  });
+  const commits = logOutput
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [hash, subject, ...bodyParts] = line.split("|");
+      return { hash, subject, body: bodyParts.join("|") };
+    });
 
   const byType = {};
   let totalLength = 0;
@@ -1818,20 +1836,31 @@ export function detectBadPractices(revRange = "HEAD~50..HEAD", repoRoot) {
   const logOutput = git(["log", "--pretty=format:%H|%s", revRange], repoRoot);
   if (!logOutput) return [];
 
-  const commits = logOutput.split("\n").filter(Boolean).map((line) => {
-    const [hash, subject] = line.split("|");
-    return { hash, subject };
-  });
+  const commits = logOutput
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [hash, subject] = line.split("|");
+      return { hash, subject };
+    });
 
   const issues = [];
 
   for (const c of commits) {
     if (c.subject.length > 100) {
-      issues.push({ severity: "warning", message: `Long commit message (${c.subject.length} chars): ${c.subject.slice(0, 50)}...`, hash: c.hash });
+      issues.push({
+        severity: "warning",
+        message: `Long commit message (${c.subject.length} chars): ${c.subject.slice(0, 50)}...`,
+        hash: c.hash,
+      });
     }
     const parsed = parseCommit(c.subject);
     if (!parsed.type) {
-      issues.push({ severity: "warning", message: `Non-conventional commit: ${c.subject}`, hash: c.hash });
+      issues.push({
+        severity: "warning",
+        message: `Non-conventional commit: ${c.subject}`,
+        hash: c.hash,
+      });
     }
   }
 
@@ -1943,7 +1972,10 @@ export async function main(commitMsgFile, cfg, opts = {}) {
     return 0;
   }
 
-  const { diff: truncatedDiff, truncated } = truncateDiffSmart(diff, cfg.maxDiffLength || MAX_DIFF_LENGTH);
+  const { diff: truncatedDiff, truncated } = truncateDiffSmart(
+    diff,
+    cfg.maxDiffLength || MAX_DIFF_LENGTH,
+  );
   if (truncated) {
     logMessage(`Diff truncated: ${diff.length} chars → ${truncatedDiff.length} chars`);
   }
