@@ -2049,30 +2049,6 @@ async function splitCommand() {
   console.log(`\n✅ Created ${groups.length} commit(s).\n`);
 }
 
-async function reviewCommand() {
-  console.log("\n🔍 Reviewing staged changes...\n");
-  const aic = await hook();
-  const { diff } = await aic.getStagedDiff();
-  if (!diff) {
-    console.log("ℹ️  No staged changes to review. Stage files first with 'git add'.\n");
-    return;
-  }
-  const cfg = hookConfig(aic);
-  if (!cfg.apiKey && cfg.needsKey) {
-    console.error("❌ No API key configured. Run 'rxdev config' to set it.\n");
-    process.exit(1);
-  }
-  const data = await aic.buildReview(diff, cfg);
-  if (!data || data.error) {
-    console.error(`\n❌ ${data?.error || "Review failed."}`);
-    process.exit(1);
-  }
-  console.log(data.review);
-  if (data.issueCount > 0) {
-    console.log(`\n📋 Found ${data.issueCount} issue(s)\n`);
-  }
-}
-
 async function statsCommand() {
   console.log("\n📊 Commit statistics:\n");
   const aic = await hook();
@@ -2126,7 +2102,6 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
   ${boldCyan}split${resetColor}         Split staged changes into multiple logical commits
   ${boldCyan}scan${resetColor}          Scan staged changes for secrets/credentials
-  ${boldCyan}review${resetColor}        AI code review of staged changes
   ${boldCyan}stats${resetColor}         Show commit statistics and bad practices
   ${boldCyan}pr${resetColor}            Generate a pull request title + description
   ${boldCyan}release${resetColor}       Generate CHANGELOG entry, bump version & tag
@@ -2195,9 +2170,6 @@ async function mainCmd() {
       break;
     case "split":
       await splitCommand();
-      break;
-    case "review":
-      await reviewCommand();
       break;
     case "stats":
       await statsCommand();

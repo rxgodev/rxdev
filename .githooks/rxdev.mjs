@@ -1753,73 +1753,6 @@ export async function buildSplitPlan(cfg) {
   return { groups: clean, staged, unassigned };
 }
 
-const REVIEW_SYSTEM_PROMPT =
-  "You are a senior code reviewer. You MUST review the code diff provided below. " +
-  "Output a structured review with sections: " +
-  "1. Summary (1-2 sentences about what changed) " +
-  "2. Issues found (if any) with severity: critical/warning/suggestion " +
-  "3. Suggestions for improvement (if any) " +
-  "If no issues found, say 'No issues found. Code looks good.' " +
-  "Do NOT ask for more code. Review what is provided.";
-
-export async function buildReview(diff, cfg) {
-  if (!diff || diff.trim().length === 0) {
-    return { error: "No changes to review", issues: [], review: "" };
-  }
-
-  const userPrompt = `Review the following code changes:\n\n---\n${diff}\n---`;
-
-  let reviewText;
-  try {
-    reviewText = await callLlm(
-      [
-        { role: "system", content: REVIEW_SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-      cfg,
-      { echo: false, temperature: 0.3, maxTokens: 1500 },
-    );
-  } catch (e) {
-    return { error: `LLM error: ${e.message}`, issues: [], review: "" };
-  }
-
-  if (!reviewText || reviewText.trim().length === 0) {
-    return { error: "LLM returned empty response", issues: [], review: "" };
-  }
-
-  const issues = [];
-  const lines = reviewText.split("\n");
-  let currentIssue = null;
-
-  for (const line of lines) {
-    const severityMatch = line.match(/\b(critical|warning|suggestion)\b/i);
-    if (severityMatch) {
-      if (currentIssue) issues.push(currentIssue);
-      currentIssue = {
-        severity: severityMatch[1].toLowerCase(),
-        message: line.replace(/^[\s\-*]+/, "").trim(),
-        file: null,
-        line: null,
-      };
-    } else if (currentIssue && line.trim()) {
-      currentIssue.message += ` ${line.trim()}`;
-    }
-  }
-  if (currentIssue) issues.push(currentIssue);
-
-  return { review: reviewText, issues, issueCount: issues.length };
-}
-
-export async function buildPrReview(_prNumber, cfg) {
-  const prDiff = git(["diff", `origin/main...HEAD`, "--no-color"]);
-  if (!prDiff) {
-    return { error: "Could not fetch PR diff", issues: [] };
-  }
-
-  const truncated = prDiff.slice(0, MAX_DIFF_LENGTH);
-  return buildReview(truncated, cfg);
-}
-
 export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
   let logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", revRange], repoRoot);
   if (!logOutput) {
@@ -1918,15 +1851,6 @@ export async function runSubcommand(argv, cfg) {
     }
     if (mode === "--split") {
       process.stdout.write(JSON.stringify(await buildSplitPlan(cfg)));
-      return 0;
-    }
-    if (mode === "--review") {
-      const { diff } = getStagedDiff();
-      if (!diff) {
-        process.stdout.write(JSON.stringify({ error: "No staged changes to review" }));
-        return 1;
-      }
-      process.stdout.write(JSON.stringify(await buildReview(diff, cfg)));
       return 0;
     }
     if (mode === "--analytics") {
