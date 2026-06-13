@@ -1424,10 +1424,12 @@ export function discoverManifests(repoRoot) {
   return found;
 }
 
-let _manifestCache = null;
+// Cache keyed by repoRoot so a process that touches more than one repo (tests,
+// future multi-repo flows) never gets another repo's manifest list.
+const _manifestCache = new Map();
 export function getManifests(repoRoot) {
-  if (!_manifestCache) _manifestCache = discoverManifests(repoRoot);
-  return _manifestCache;
+  if (!_manifestCache.has(repoRoot)) _manifestCache.set(repoRoot, discoverManifests(repoRoot));
+  return _manifestCache.get(repoRoot);
 }
 
 export function manifestGetVersion(content, def) {
@@ -1966,6 +1968,52 @@ export async function runSubcommand(argv, cfg) {
 
 const COAUTHOR_TRAILER = "Co-authored-by: rxdevbot <rxdevbot@users.noreply.github.com>";
 
+// Fit the staged diff into a token budget WITHOUT dropping whole files: every
+// changed file keeps its "# File:" header, and the remaining budget is split
+// evenly across files (truncated files get a "… (N more changed lines)" marker).
+// Beats a blind slice(0, maxLen), which would silently omit all later files.
+export function buildPromptDiff(diff, maxLen = MAX_DIFF_LENGTH) {
+  if (diff.length <= maxLen) return diff;
+
+  const blocks = [];
+  let cur = null;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("# File: ")) {
+      cur = { header: line, body: [] };
+      blocks.push(cur);
+    } else if (cur) {
+      cur.body.push(line);
+    }
+  }
+  // No per-file structure (e.g. the binary-files fallback) — fall back to a slice.
+  if (!blocks.length) return diff.slice(0, maxLen);
+
+  // Reserve space for every header and a possible truncation marker per file,
+  // so the body budget never pushes a later file's header past the limit.
+  const MARKER_RESERVE = 28; // ~ "… (NN more changed lines)"
+  const headerCost = blocks.reduce((n, b) => n + b.header.length + 1, 0);
+  const bodyBudget = Math.max(0, maxLen - headerCost - blocks.length * MARKER_RESERVE);
+  const perFile = Math.floor(bodyBudget / blocks.length);
+
+  const out = [];
+  for (const b of blocks) {
+    out.push(b.header);
+    let used = 0;
+    let kept = 0;
+    for (const line of b.body) {
+      if (used + line.length + 1 > perFile) break;
+      out.push(line);
+      used += line.length + 1;
+      kept++;
+    }
+    const dropped = b.body.length - kept;
+    if (dropped > 0) out.push(`… (${dropped} more changed line${dropped === 1 ? "" : "s"})`);
+  }
+
+  const result = out.join("\n");
+  return result.length > maxLen ? result.slice(0, maxLen) : result;
+}
+
 export function composeMessage(message, { bumps = [], kind = "patch", addCoauthor = false } = {}) {
   let out = message;
   if (bumps.length) {
@@ -2017,20 +2065,13 @@ export async function main(commitMsgFile, cfg, opts = {}) {
     return 0;
   }
 
-  const { diff: truncatedDiff, truncated } = truncateDiffSmart(
-    diff,
-    cfg.maxDiffLength || MAX_DIFF_LENGTH,
-  );
-  if (truncated) {
-    logMessage(`Diff truncated: ${diff.length} chars → ${truncatedDiff.length} chars`);
-  }
-
+  const promptDiff = buildPromptDiff(diff, cfg.maxDiffLength || MAX_DIFF_LENGTH);
   const context = gatherContext(repoRoot);
-  context.truncated = truncated;
+  context.truncated = promptDiff.length < diff.length;
 
-  let message = await generateCommitMessage(truncatedDiff, cfg, { echo, context });
+  let message = await generateCommitMessage(promptDiff, cfg, { echo, context });
   if (message === null) {
-    message = generateFallbackMessage(truncatedDiff);
+    message = generateFallbackMessage(promptDiff);
     logMessage(`Fallback message generated (${message.length} chars)`);
   }
 
