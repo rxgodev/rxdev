@@ -1090,7 +1090,6 @@ async function configInteractive() {
       const choices = [
         { name: "✅ Back to main menu", value: "back" },
         { name: "─".repeat(30), value: "__sep__" },
-        { name: "🎨 Templates", value: "templates" },
       ];
 
       if (allProjects.length === 0) {
@@ -1103,7 +1102,10 @@ async function configInteractive() {
           const status = !exists ? "❌ missing" : hasHook ? "✅ active" : "⚠️  hook off";
           choices.push({ name: `${name} — ${status}`, value: p });
         }
+        choices.push({ name: "─".repeat(30), value: "__sep__" });
       }
+
+      choices.push({ name: "🎨 Templates", value: "templates" });
 
       const selected = await promptSelect(choices, "Projects");
 
