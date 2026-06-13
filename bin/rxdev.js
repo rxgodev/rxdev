@@ -566,40 +566,6 @@ async function askToContinue() {
   ]);
 }
 
-// === PROJECTS LIST (TABLE) ===
-
-function listProjects() {
-  const allProjects = getManagedProjects();
-  const valid = allProjects.filter((p) => existsSync(p));
-  const invalid = allProjects.filter((p) => !existsSync(p));
-
-  if (allProjects.length === 0) {
-    console.log("📭 No integrated projects found.");
-    console.log('   Run "rxdev init" in a project to add it.\n');
-    return;
-  }
-
-  console.log(
-    `\n📦 Projects (${valid.length} active${invalid.length ? `, ${invalid.length} missing` : ""}):\n`,
-  );
-
-  for (const p of valid) {
-    const name = p.split(/[\\/]/).pop();
-    const template = getTemplateForProject(p);
-    console.log(`  ✅ ${name}`);
-    console.log(`     Path: ${p}`);
-    if (template) console.log(`     Template: ${template}`);
-  }
-
-  for (const p of invalid) {
-    const name = p.split(/[\\/]/).pop();
-    console.log(`  ❌ ${name} (missing)`);
-    console.log(`     Path: ${p}`);
-  }
-
-  console.log("");
-}
-
 // === FILE TREE HELPERS ===
 
 function buildFileTree(files, prefix = "  ") {
@@ -838,7 +804,7 @@ async function showFileTreePicker(
 // === CONFIG INTERACTION ===
 
 async function configInteractive() {
-  let config = loadConfig();
+  const config = loadConfig();
 
   while (true) {
     const provider = config.provider || "groq";
@@ -902,271 +868,274 @@ async function configInteractive() {
       await new Promise((r) => setTimeout(r, 1000));
     }
 
-  if (mainAction === "bump") {
-    config.bumpVersion = !config.bumpVersion;
-    saveConfig(config);
-    console.log(config.bumpVersion ? "✅ Auto-bump enabled.\n" : "✅ Auto-bump disabled.\n");
-  }
-
-  if (mainAction === "apikey") {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const masked = config.apiKey
-      ? `${config.apiKey.slice(0, 8)}...${config.apiKey.slice(-4)}`
-      : "not set";
-    const key = await new Promise((resolve) => {
-      rl.question(
-        `🔑 API key (current: ${masked})\n   Enter new key (or empty to clear): `,
-        resolve,
-      );
-    });
-    rl.close();
-    config.apiKey = key.trim();
-    saveConfig(config);
-    console.log(
-      config.apiKey
-        ? "✅ API key saved.\n"
-        : "ℹ️  API key cleared. Fallback generator will be used.\n",
-    );
-  }
-
-  if (mainAction === "provider") {
-    const inquirer = await import("inquirer");
-    const { provider: chosen } = await inquirer.default.prompt([
-      {
-        type: "list",
-        name: "provider",
-        message: "Select LLM provider:",
-        choices: [
-          ...Object.entries(PROVIDERS).map(([value, p]) => ({ name: p.label, value })),
-          { name: "Custom (any OpenAI-compatible endpoint)", value: "custom" },
-        ],
-        default: config.provider || "groq",
-      },
-    ]);
-
-    if (chosen === "custom") {
-      const { apiUrl } = await inquirer.default.prompt([
-        {
-          type: "input",
-          name: "apiUrl",
-          message: "Chat-completions URL (…/v1/chat/completions):",
-          default: config.apiUrl || "",
-        },
-      ]);
-      config.provider = "custom";
-      config.apiUrl = apiUrl.trim();
-    } else {
-      config.provider = chosen;
-      delete config.apiUrl;
-    }
-
-    const { model } = await inquirer.default.prompt([
-      {
-        type: "input",
-        name: "model",
-        message: `Model name (empty = provider default${PROVIDERS[chosen]?.defaultModel ? `: ${PROVIDERS[chosen].defaultModel}` : ""}):`,
-        default: config.model || "",
-      },
-    ]);
-    config.model = model.trim();
-    const keyHint =
-      chosen === "ollama"
-        ? " (no API key needed)"
-        : config.apiKey
-          ? ""
-          : " — remember to set an API key";
-    const confirm = await askYesNo(
-      `Apply: provider=${config.provider}, model=${config.model || "default"}${keyHint}?`,
-    );
-    if (confirm) {
+    if (mainAction === "bump") {
+      config.bumpVersion = !config.bumpVersion;
       saveConfig(config);
-      console.log(`✅ Saved.\n`);
-    } else {
-      console.log("↩️  Cancelled.\n");
+      console.log(config.bumpVersion ? "✅ Auto-bump enabled.\n" : "✅ Auto-bump disabled.\n");
     }
-  }
 
-  if (mainAction === "model") {
-    const inquirer = await import("inquirer");
-    const prov = config.provider || "groq";
-    let newModel;
-    if (prov === "groq") {
-      const { model } = await inquirer.default.prompt([
+    if (mainAction === "apikey") {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const masked = config.apiKey
+        ? `${config.apiKey.slice(0, 8)}...${config.apiKey.slice(-4)}`
+        : "not set";
+      const key = await new Promise((resolve) => {
+        rl.question(
+          `🔑 API key (current: ${masked})\n   Enter new key (or empty to clear): `,
+          resolve,
+        );
+      });
+      rl.close();
+      config.apiKey = key.trim();
+      saveConfig(config);
+      console.log(
+        config.apiKey
+          ? "✅ API key saved.\n"
+          : "ℹ️  API key cleared. Fallback generator will be used.\n",
+      );
+    }
+
+    if (mainAction === "provider") {
+      const inquirer = await import("inquirer");
+      const { provider: chosen } = await inquirer.default.prompt([
         {
           type: "list",
-          name: "model",
-          message: "Select Groq model:",
+          name: "provider",
+          message: "Select LLM provider:",
           choices: [
-            { name: "Llama 3.1 8B (faster, 560 t/s)", value: "llama-3.1-8b-instant" },
-            { name: "Llama 3.3 70B (smarter, 280 t/s)", value: "llama-3.3-70b-versatile" },
+            ...Object.entries(PROVIDERS).map(([value, p]) => ({ name: p.label, value })),
+            { name: "Custom (any OpenAI-compatible endpoint)", value: "custom" },
           ],
-          default: config.model || "llama-3.1-8b-instant",
+          default: config.provider || "groq",
         },
       ]);
-      newModel = model;
-    } else {
+
+      if (chosen === "custom") {
+        const { apiUrl } = await inquirer.default.prompt([
+          {
+            type: "input",
+            name: "apiUrl",
+            message: "Chat-completions URL (…/v1/chat/completions):",
+            default: config.apiUrl || "",
+          },
+        ]);
+        config.provider = "custom";
+        config.apiUrl = apiUrl.trim();
+      } else {
+        config.provider = chosen;
+        delete config.apiUrl;
+      }
+
       const { model } = await inquirer.default.prompt([
         {
           type: "input",
           name: "model",
-          message: `Model name for ${prov} (empty = default${PROVIDERS[prov]?.defaultModel ? `: ${PROVIDERS[prov].defaultModel}` : ""}):`,
+          message: `Model name (empty = provider default${PROVIDERS[chosen]?.defaultModel ? `: ${PROVIDERS[chosen].defaultModel}` : ""}):`,
           default: config.model || "",
         },
       ]);
-      newModel = model.trim();
-    }
-    const confirm = await askYesNo(`Set model to "${newModel || "default"}"?`);
-    if (confirm) {
-      config.model = newModel;
-      saveConfig(config);
-      console.log(`✅ Model: ${config.model || "default"}.\n`);
-    } else {
-      console.log("↩️  Cancelled.\n");
-    }
-  }
-
-  if (mainAction === "language") {
-    const lang = await promptSelect(
-      Object.entries(LANGUAGES).map(([code, name]) => ({
-        name: `${name} (${code})`,
-        value: code,
-      })),
-      "Select commit message language:",
-    );
-    const confirm = await askYesNo(`Set language to "${LANGUAGES[lang]}"?`);
-    if (confirm) {
-      config.language = lang;
-      saveConfig(config);
-      console.log(`✅ Language: ${LANGUAGES[lang]}.\n`);
-    } else {
-      console.log("↩️  Cancelled.\n");
-    }
-  }
-
-  if (mainAction === "prompt") {
-    const inquirer = await import("inquirer");
-    const { prompt } = await inquirer.default.prompt([
-      {
-        type: "editor",
-        name: "prompt",
-        message: "Edit system prompt (use {types} placeholder for allowed types):",
-        default: config.prompt || "",
-      },
-    ]);
-    config.prompt = prompt.trim();
-    saveConfig(config);
-    console.log(
-      config.prompt
-        ? "✅ Custom prompt saved.\n"
-        : "ℹ️  Custom prompt cleared. Default prompt will be used.\n",
-    );
-  }
-
-  if (mainAction === "types") {
-    const inquirer = await import("inquirer");
-    const { types } = await inquirer.default.prompt([
-      {
-        type: "input",
-        name: "types",
-        message: "Extra commit types (comma-separated, e.g. hotfix, deps, i18n):",
-        default: (config.customTypes || []).join(", "),
-      },
-    ]);
-    const parsed = types
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-    config.customTypes = parsed;
-    saveConfig(config);
-    console.log(
-      parsed.length ? `✅ Custom types: ${parsed.join(", ")}\n` : "ℹ️  Custom types cleared.\n",
-    );
-  }
-
-  if (mainAction === "projects-templates") {
-    while (true) {
-      const allProjects = getManagedProjects();
-
-      const choices = [
-        { name: "✅ Back to main menu", value: "back" },
-        { name: "─".repeat(30), value: "__sep__" },
-      ];
-
-      if (allProjects.length === 0) {
-        choices.push({ name: "📭 No projects (run 'rxdev init' to add)", value: "__none__" });
+      config.model = model.trim();
+      const keyHint =
+        chosen === "ollama"
+          ? " (no API key needed)"
+          : config.apiKey
+            ? ""
+            : " — remember to set an API key";
+      const confirm = await askYesNo(
+        `Apply: provider=${config.provider}, model=${config.model || "default"}${keyHint}?`,
+      );
+      if (confirm) {
+        saveConfig(config);
+        console.log(`✅ Saved.\n`);
       } else {
-        for (const p of allProjects) {
-          const name = p.split(/[\\/]/).pop();
-          const exists = existsSync(p);
-          const hasHook = exists && existsSync(join(p, ".githooks"));
-          const status = !exists ? "❌ missing" : hasHook ? "✅ active" : "⚠️  hook off";
-          choices.push({ name: `${name} — ${status}`, value: p });
-        }
-        choices.push({ name: "─".repeat(30), value: "__sep__" });
+        console.log("↩️  Cancelled.\n");
       }
-
-      choices.push({ name: "🎨 Templates", value: "templates" });
-
-      const selected = await promptSelect(choices, "Projects");
-
-      if (selected === "back" || selected === "__sep__" || selected === "__none__") {
-        if (selected === "__none__") {
-          console.log('ℹ️  Run "rxdev init" in a project to add it.\n');
-          await new Promise((r) => setTimeout(r, 1500));
-        }
-        break;
-      }
-
-      if (selected === "templates") {
-        await manageTemplates();
-        continue;
-      }
-
-      const projectPath = selected;
-      const projectName = projectPath.split(/[\\/]/).pop();
-      const exists = existsSync(projectPath);
-      const hasHook = exists && existsSync(join(projectPath, ".githooks"));
-
-      const actions = [
-        { name: "⬅️  Back", value: "back" },
-        { name: "─".repeat(30), value: "__sep__" },
-      ];
-
-      if (exists && hasHook) {
-        actions.push({ name: "🔌 Disable hook", value: "disable" });
-      } else if (exists && !hasHook) {
-        actions.push({ name: "⚡ Enable hook", value: "enable" });
-      }
-      actions.push({ name: "🗑️  Remove from list", value: "remove" });
-
-      const action = await promptSelect(actions, `${projectName}`);
-
-      if (action === "back" || action === "__sep__") continue;
-
-      if (action === "disable") {
-        const confirm = await askYesNo(`Disable hook in ${projectName}?`);
-        if (confirm) {
-          rmSync(join(projectPath, ".githooks"), { recursive: true, force: true });
-          spawnSync("git", ["config", "--unset", "core.hooksPath"], { stdio: "ignore", cwd: projectPath });
-          console.log(`✅ Hook disabled\n`);
-        }
-      } else if (action === "enable") {
-        const confirm = await askYesNo(`Enable hook in ${projectName}?`);
-        if (confirm) {
-          await installHookForProject(projectPath);
-          console.log(`✅ Hook enabled\n`);
-        }
-      } else if (action === "remove") {
-        const confirm = await askYesNo(`Remove ${projectName} from list?`);
-        if (confirm) {
-          unregisterProject(projectPath);
-          console.log(`✅ Removed from list\n`);
-        }
-      }
-
-      await new Promise((r) => setTimeout(r, 1000));
     }
-  }
+
+    if (mainAction === "model") {
+      const inquirer = await import("inquirer");
+      const prov = config.provider || "groq";
+      let newModel;
+      if (prov === "groq") {
+        const { model } = await inquirer.default.prompt([
+          {
+            type: "list",
+            name: "model",
+            message: "Select Groq model:",
+            choices: [
+              { name: "Llama 3.1 8B (faster, 560 t/s)", value: "llama-3.1-8b-instant" },
+              { name: "Llama 3.3 70B (smarter, 280 t/s)", value: "llama-3.3-70b-versatile" },
+            ],
+            default: config.model || "llama-3.1-8b-instant",
+          },
+        ]);
+        newModel = model;
+      } else {
+        const { model } = await inquirer.default.prompt([
+          {
+            type: "input",
+            name: "model",
+            message: `Model name for ${prov} (empty = default${PROVIDERS[prov]?.defaultModel ? `: ${PROVIDERS[prov].defaultModel}` : ""}):`,
+            default: config.model || "",
+          },
+        ]);
+        newModel = model.trim();
+      }
+      const confirm = await askYesNo(`Set model to "${newModel || "default"}"?`);
+      if (confirm) {
+        config.model = newModel;
+        saveConfig(config);
+        console.log(`✅ Model: ${config.model || "default"}.\n`);
+      } else {
+        console.log("↩️  Cancelled.\n");
+      }
+    }
+
+    if (mainAction === "language") {
+      const lang = await promptSelect(
+        Object.entries(LANGUAGES).map(([code, name]) => ({
+          name: `${name} (${code})`,
+          value: code,
+        })),
+        "Select commit message language:",
+      );
+      const confirm = await askYesNo(`Set language to "${LANGUAGES[lang]}"?`);
+      if (confirm) {
+        config.language = lang;
+        saveConfig(config);
+        console.log(`✅ Language: ${LANGUAGES[lang]}.\n`);
+      } else {
+        console.log("↩️  Cancelled.\n");
+      }
+    }
+
+    if (mainAction === "prompt") {
+      const inquirer = await import("inquirer");
+      const { prompt } = await inquirer.default.prompt([
+        {
+          type: "editor",
+          name: "prompt",
+          message: "Edit system prompt (use {types} placeholder for allowed types):",
+          default: config.prompt || "",
+        },
+      ]);
+      config.prompt = prompt.trim();
+      saveConfig(config);
+      console.log(
+        config.prompt
+          ? "✅ Custom prompt saved.\n"
+          : "ℹ️  Custom prompt cleared. Default prompt will be used.\n",
+      );
+    }
+
+    if (mainAction === "types") {
+      const inquirer = await import("inquirer");
+      const { types } = await inquirer.default.prompt([
+        {
+          type: "input",
+          name: "types",
+          message: "Extra commit types (comma-separated, e.g. hotfix, deps, i18n):",
+          default: (config.customTypes || []).join(", "),
+        },
+      ]);
+      const parsed = types
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      config.customTypes = parsed;
+      saveConfig(config);
+      console.log(
+        parsed.length ? `✅ Custom types: ${parsed.join(", ")}\n` : "ℹ️  Custom types cleared.\n",
+      );
+    }
+
+    if (mainAction === "projects-templates") {
+      while (true) {
+        const allProjects = getManagedProjects();
+
+        const choices = [
+          { name: "✅ Back to main menu", value: "back" },
+          { name: "─".repeat(30), value: "__sep__" },
+        ];
+
+        if (allProjects.length === 0) {
+          choices.push({ name: "📭 No projects (run 'rxdev init' to add)", value: "__none__" });
+        } else {
+          for (const p of allProjects) {
+            const name = p.split(/[\\/]/).pop();
+            const exists = existsSync(p);
+            const hasHook = exists && existsSync(join(p, ".githooks"));
+            const status = !exists ? "❌ missing" : hasHook ? "✅ active" : "⚠️  hook off";
+            choices.push({ name: `${name} — ${status}`, value: p });
+          }
+          choices.push({ name: "─".repeat(30), value: "__sep__" });
+        }
+
+        choices.push({ name: "🎨 Templates", value: "templates" });
+
+        const selected = await promptSelect(choices, "Projects");
+
+        if (selected === "back" || selected === "__sep__" || selected === "__none__") {
+          if (selected === "__none__") {
+            console.log('ℹ️  Run "rxdev init" in a project to add it.\n');
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+          break;
+        }
+
+        if (selected === "templates") {
+          await manageTemplates();
+          continue;
+        }
+
+        const projectPath = selected;
+        const projectName = projectPath.split(/[\\/]/).pop();
+        const exists = existsSync(projectPath);
+        const hasHook = exists && existsSync(join(projectPath, ".githooks"));
+
+        const actions = [
+          { name: "⬅️  Back", value: "back" },
+          { name: "─".repeat(30), value: "__sep__" },
+        ];
+
+        if (exists && hasHook) {
+          actions.push({ name: "🔌 Disable hook", value: "disable" });
+        } else if (exists && !hasHook) {
+          actions.push({ name: "⚡ Enable hook", value: "enable" });
+        }
+        actions.push({ name: "🗑️  Remove from list", value: "remove" });
+
+        const action = await promptSelect(actions, `${projectName}`);
+
+        if (action === "back" || action === "__sep__") continue;
+
+        if (action === "disable") {
+          const confirm = await askYesNo(`Disable hook in ${projectName}?`);
+          if (confirm) {
+            rmSync(join(projectPath, ".githooks"), { recursive: true, force: true });
+            spawnSync("git", ["config", "--unset", "core.hooksPath"], {
+              stdio: "ignore",
+              cwd: projectPath,
+            });
+            console.log(`✅ Hook disabled\n`);
+          }
+        } else if (action === "enable") {
+          const confirm = await askYesNo(`Enable hook in ${projectName}?`);
+          if (confirm) {
+            await installHookForProject(projectPath);
+            console.log(`✅ Hook enabled\n`);
+          }
+        } else if (action === "remove") {
+          const confirm = await askYesNo(`Remove ${projectName} from list?`);
+          if (confirm) {
+            unregisterProject(projectPath);
+            console.log(`✅ Removed from list\n`);
+          }
+        }
+
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
   }
 }
 
@@ -1218,16 +1187,25 @@ async function install() {
     }
   }
 
-  for (const oldFile of ["ai_commit.mjs", "ai_commit.py", "ai_commit.mjs.sha256", "ai_commit.py.sha256"]) {
+  for (const oldFile of [
+    "ai_commit.mjs",
+    "ai_commit.py",
+    "ai_commit.mjs.sha256",
+    "ai_commit.py.sha256",
+  ]) {
     const oldPath = join(githooksDir, oldFile);
     if (existsSync(oldPath)) {
-      try { unlinkSync(oldPath); } catch {}
+      try {
+        unlinkSync(oldPath);
+      } catch {}
     }
   }
 
   const oldLogFile = join(process.cwd(), "ai_commit_debug.log");
   if (existsSync(oldLogFile)) {
-    try { unlinkSync(oldLogFile); } catch {}
+    try {
+      unlinkSync(oldLogFile);
+    } catch {}
   }
 
   if (process.platform !== "win32") {
@@ -2036,17 +2014,27 @@ async function releaseCommand() {
   if (hasGh) {
     const notesFile = join(tmpdir(), `rxdev-release-${randomBytes(8).toString("hex")}.md`);
     writeFileSync(notesFile, data.changelog);
-    const ghRes = spawnSync("gh", ["release", "create", tag, "--title", tag, "--notes-file", notesFile], {
-      stdio: "inherit",
-    });
-    try { unlinkSync(notesFile); } catch {}
+    const ghRes = spawnSync(
+      "gh",
+      ["release", "create", tag, "--title", tag, "--notes-file", notesFile],
+      {
+        stdio: "inherit",
+      },
+    );
+    try {
+      unlinkSync(notesFile);
+    } catch {}
     if (ghRes.status === 0) {
       console.log("✅ GitHub Release created\n");
     } else {
-      console.log(`⚠️  Failed to create GitHub Release. Create manually:\n   gh release create ${tag}\n`);
+      console.log(
+        `⚠️  Failed to create GitHub Release. Create manually:\n   gh release create ${tag}\n`,
+      );
     }
   } else {
-    console.log(`ℹ️  Install GitHub CLI to create releases automatically:\n   gh release create ${tag}\n`);
+    console.log(
+      `ℹ️  Install GitHub CLI to create releases automatically:\n   gh release create ${tag}\n`,
+    );
   }
 }
 
@@ -2201,7 +2189,7 @@ async function statsCommand() {
   let badPractices = [];
   try {
     badPractices = aic.detectBadPractices(range);
-  } catch (e) {
+  } catch {
     // Ignore bad practices errors
   }
 
