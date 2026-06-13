@@ -1535,7 +1535,14 @@ async function quickFlow() {
   const alreadyStaged = spawnSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" })
     .stdout.trim()
     .split("\n")
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((f) => {
+      try {
+        return existsSync(join(process.cwd(), f));
+      } catch {
+        return false;
+      }
+    });
   const allChanged = [...new Set([...unstaged, ...alreadyStaged])];
 
   if (allChanged.length === 0) {
@@ -2054,8 +2061,8 @@ async function reviewCommand() {
   }
 }
 
-async function analyticsCommand() {
-  console.log("\n📊 Analyzing commit history...\n");
+async function statsCommand() {
+  console.log("\n📊 Commit statistics:\n");
   const aic = await hook();
   const rangeIdx = args.indexOf("--range");
   const range = rangeIdx !== -1 ? args[rangeIdx + 1] : "HEAD~20..HEAD";
@@ -2108,7 +2115,7 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}split${resetColor}         Split staged changes into multiple logical commits
   ${boldCyan}scan${resetColor}          Scan staged changes for secrets/credentials
   ${boldCyan}review${resetColor}        AI code review of staged changes
-  ${boldCyan}analytics${resetColor}     Show commit statistics and bad practices
+  ${boldCyan}stats${resetColor}         Show commit statistics and bad practices
   ${boldCyan}pr${resetColor}            Generate a pull request title + description
   ${boldCyan}release${resetColor}       Generate CHANGELOG entry, bump version & tag
   ${boldCyan}uninstall${resetColor}     Remove hook
@@ -2180,8 +2187,8 @@ async function mainCmd() {
     case "review":
       await reviewCommand();
       break;
-    case "analytics":
-      await analyticsCommand();
+    case "stats":
+      await statsCommand();
       break;
     case "scan":
       await scanCommand();

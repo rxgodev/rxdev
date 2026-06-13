@@ -1102,7 +1102,7 @@ export function callLlm(messages, cfg, opts = {}) {
   if (cfg.needsKey && !cfg.apiKey) {
     return Promise.reject(
       new Error(
-        `API key for provider '${cfg.provider}' is not set. Run 'qq config' to set ` +
+        `API key for provider '${cfg.provider}' is not set. Run 'rxdev config' to set ` +
           `your key, export ${cfg.providerEnv || "the provider env var"}, or switch ` +
           "provider (e.g. 'ollama' runs locally with no key).",
       ),
