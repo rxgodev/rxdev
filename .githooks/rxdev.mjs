@@ -125,11 +125,11 @@ export function truncateDiffSmart(diff, maxChars = MAX_DIFF_LENGTH) {
 // ============================================================
 
 export const BODY_LANGUAGE_PROMPTS = {
-  en: "Body: one short WHY sentence in past tense. NO lists, NO file names, NO bullet points.",
-  ru: "Body: ОДНО короткое предложение WHY в прошлом времени. БЕЗ списков, БЕЗ имён файлов.",
-  de: "Body: EIN kurzer WHY-Satz im Präteritum. KEINE Listen, KEINE Dateinamen, KEINE Aufzählungen.",
-  fr: "Body: UNE courte phrase WHY au passé. PAS de listes, PAS de noms de fichiers, PAS de puces.",
-  zh: "Body: 一个短句WHY，过去时。不要列表，不要文件名，不要项目符号。",
+  en: "Body: one short WHY sentence explaining this change. NO lists, NO file names, NO bullet points.",
+  ru: "Body: ОДНО короткое предложение, объясняющее ЭТОТ изменение. БЕЗ списков, БЕЗ имён файлов.",
+  de: "Body: EIN kurzer Satz, der DIESE Änderung erklärt. KEINE Listen, KEINE Dateinamen, KEINE Aufzählungen.",
+  fr: "Body: UNE courte phrase expliquant CE changement. PAS de listes, PAS de noms de fichiers, PAS de puces.",
+  zh: "Body: 一个短句解释这次变更。不要列表，不要文件名，不要项目符号。",
 };
 
 export const BAD_EXAMPLES =
@@ -167,10 +167,14 @@ export function buildSystemPrompt(typesStr, language, customPrompt = "") {
   const bodyPrompt = BODY_LANGUAGE_PROMPTS[language] || BODY_LANGUAGE_PROMPTS.ru;
   const langName = LANGUAGE_NAMES[language] || "Russian";
   return (
-    "Format:\ntype(scope): lowercase description\n\none short WHY sentence\n" +
+    "Generate a Conventional Commit message.\n\n" +
+    "Format (MUST follow exactly):\n" +
+    "type(scope): short description in lowercase\n\n" +
+    "one short WHY sentence explaining this change\n\n" +
     `Valid types: ${typesStr}.\n` +
     `- ${bodyPrompt}\n` +
-    `- IMPORTANT: The body (WHY sentence) MUST be written in ${langName}. The type and scope stay in English.\n` +
+    `- IMPORTANT: The body MUST be written in ${langName}. The type and scope stay in English.\n` +
+    `- The description after colon MUST be present and meaningful.\n` +
     `${BAD_EXAMPLES}`
   );
 }

@@ -824,8 +824,7 @@ async function configInteractive() {
     const providerLabel = PROVIDERS[provider]?.label || `custom (${config.apiUrl || "no url"})`;
     const langLabel = LANGUAGES[config.language] || "Русский";
 
-    console.clear();
-    console.log("⚙️  Configuration\n");
+    console.log("\n⚙️  Configuration\n");
 
     const mainAction = await promptSelect(
       [
