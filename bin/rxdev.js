@@ -300,9 +300,8 @@ async function askYesNo(question) {
 
 async function promptSelect(options, message) {
   const inquirer = await import("inquirer");
-  const Separator = inquirer.Separator;
   const choices = options.map((o) =>
-    o.value === "__sep__" ? new Separator() : o,
+    o.value === "__sep__" ? new inquirer.default.Separator() : o,
   );
   const { choice } = await inquirer.default.prompt([
     { type: "list", name: "choice", message, choices, pageSize: 20, loop: false },
