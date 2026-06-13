@@ -1985,6 +1985,23 @@ async function splitCommand() {
   console.log(`\n✅ Created ${groups.length} commit(s).\n`);
 }
 
+async function reviewCommand() {
+  console.log("\n🔍 Reviewing staged changes...\n");
+  const aic = await hook();
+  const data = await aic.buildReview(
+    (await aic.getStagedDiff()).diff,
+    hookConfig(aic),
+  );
+  if (!data || data.error) {
+    console.error(`\n❌ ${data?.error || "Review failed."}`);
+    process.exit(1);
+  }
+  console.log(data.review);
+  if (data.issueCount > 0) {
+    console.log(`\n📋 Found ${data.issueCount} issue(s)\n`);
+  }
+}
+
 function showHelp() {
   console.log(`${boldCyan}RXDev${resetColor} is an AI-powered developer workflow tool ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
@@ -1997,6 +2014,7 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
   ${boldCyan}split${resetColor}         Split staged changes into multiple logical commits
   ${boldCyan}scan${resetColor}          Scan staged changes for secrets/credentials
+  ${boldCyan}review${resetColor}        AI code review of staged changes
   ${boldCyan}pr${resetColor}            Generate a pull request title + description
   ${boldCyan}release${resetColor}       Generate CHANGELOG entry, bump version & tag
   ${boldCyan}uninstall${resetColor}     Remove hook
@@ -2064,6 +2082,9 @@ async function mainCmd() {
       break;
     case "split":
       await splitCommand();
+      break;
+    case "review":
+      await reviewCommand();
       break;
     case "scan":
       await scanCommand();

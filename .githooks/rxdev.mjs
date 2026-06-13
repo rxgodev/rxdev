@@ -1621,6 +1621,62 @@ export async function buildSplitPlan(cfg) {
   return { groups: clean, staged, unassigned };
 }
 
+const REVIEW_SYSTEM_PROMPT =
+  "You are a senior code reviewer. Review the following code changes and provide feedback. " +
+  "Focus on: bugs, security issues, performance problems, code quality, and potential improvements. " +
+  "For each issue found, provide: file path (if applicable), severity (critical/warning/suggestion), " +
+  "and a clear explanation. Be concise but thorough. Output as a structured list.";
+
+export async function buildReview(diff, cfg) {
+  const userPrompt = `Review the following code changes:\n\n---\n${diff}\n---`;
+
+  let reviewText;
+  try {
+    reviewText = await callLlm(
+      [
+        { role: "system", content: REVIEW_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      cfg,
+      { echo: false, temperature: 0.3, maxTokens: 1500 },
+    );
+  } catch (e) {
+    return { error: e.message, issues: [] };
+  }
+
+  const issues = [];
+  const lines = reviewText.split("\n");
+  let currentIssue = null;
+
+  for (const line of lines) {
+    const severityMatch = line.match(/\b(critical|warning|suggestion)\b/i);
+    if (severityMatch) {
+      if (currentIssue) issues.push(currentIssue);
+      currentIssue = {
+        severity: severityMatch[1].toLowerCase(),
+        message: line.replace(/^[\s\-\*]+/, "").trim(),
+        file: null,
+        line: null,
+      };
+    } else if (currentIssue && line.trim()) {
+      currentIssue.message += " " + line.trim();
+    }
+  }
+  if (currentIssue) issues.push(currentIssue);
+
+  return { review: reviewText, issues, issueCount: issues.length };
+}
+
+export async function buildPrReview(prNumber, cfg) {
+  const prDiff = git(["diff", `origin/main...HEAD`, "--no-color"]);
+  if (!prDiff) {
+    return { error: "Could not fetch PR diff", issues: [] };
+  }
+
+  const truncated = prDiff.slice(0, MAX_DIFF_LENGTH);
+  return buildReview(truncated, cfg);
+}
+
 export async function runSubcommand(argv, cfg) {
   const mode = argv[0];
   const opt = (name) => {
@@ -1643,6 +1699,15 @@ export async function runSubcommand(argv, cfg) {
     }
     if (mode === "--split") {
       process.stdout.write(JSON.stringify(await buildSplitPlan(cfg)));
+      return 0;
+    }
+    if (mode === "--review") {
+      const { diff } = getStagedDiff();
+      if (!diff) {
+        process.stdout.write(JSON.stringify({ error: "No staged changes to review" }));
+        return 1;
+      }
+      process.stdout.write(JSON.stringify(await buildReview(diff, cfg)));
       return 0;
     }
     process.stdout.write(JSON.stringify({ error: `unknown mode: ${mode}` }));
