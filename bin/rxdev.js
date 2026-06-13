@@ -546,32 +546,29 @@ function listProjects() {
 
   if (allProjects.length === 0) {
     console.log("📭 No integrated projects found.");
+    console.log('   Run "rxdev init" in a project to add it.\n');
     return;
   }
 
   console.log(
-    `\n📦 Integrated projects (${valid.length} active${invalid.length ? `, ${invalid.length} missing` : ""}):\n`,
+    `\n📦 Projects (${valid.length} active${invalid.length ? `, ${invalid.length} missing` : ""}):\n`,
   );
 
-  const rows = [];
-
-  valid.forEach((p) => {
+  for (const p of valid) {
     const name = p.split(/[\\/]/).pop();
-    const template = getTemplateForProject(p) || "—";
-    rows.push({ Status: "✅", Name: name, Template: template, Path: p });
-  });
-
-  invalid.forEach((p) => {
-    const name = p.split(/[\\/]/).pop();
-    const template = getTemplateForProject(p) || "—";
-    rows.push({ Status: "❌", Name: name, Template: template, Path: p });
-  });
-
-  console.table(rows);
-
-  if (invalid.length > 0) {
-    console.log('\n⚠️  Missing projects: run "rxdev uninstall" in them to clean up.\n');
+    const template = getTemplateForProject(p);
+    console.log(`  ✅ ${name}`);
+    console.log(`     Path: ${p}`);
+    if (template) console.log(`     Template: ${template}`);
   }
+
+  for (const p of invalid) {
+    const name = p.split(/[\\/]/).pop();
+    console.log(`  ❌ ${name} (missing)`);
+    console.log(`     Path: ${p}`);
+  }
+
+  console.log("");
 }
 
 // === FILE TREE HELPERS ===
@@ -1058,40 +1055,74 @@ async function configInteractive() {
   }
 
   if (mainAction === "projects-templates") {
-    const ptAction = await promptSelect(
-      [
-        { name: "📋 List all projects", value: "list-projects" },
-        { name: "🎨 Templates", value: "templates" },
-        { name: "🔌 Disable hook in project", value: "disable-hook" },
-        { name: "⬅️ Back", value: "back" },
-      ],
-      "Projects & Templates",
-    );
+    while (true) {
+      const ptAction = await promptSelect(
+        [
+          { name: "✅ Back to main menu", value: "back" },
+          { name: "─".repeat(30), value: "__sep__" },
+          { name: "📋 List all projects", value: "list-projects" },
+          { name: "🎨 Templates", value: "templates" },
+          { name: "🔌 Disable hook in project", value: "disable-hook" },
+          { name: "🗑️  Remove project from list", value: "remove-project" },
+        ],
+        "Projects & Templates",
+      );
 
-    if (ptAction === "list-projects") {
-      listProjects();
-    } else if (ptAction === "templates") {
-      await manageTemplates();
-    } else if (ptAction === "disable-hook") {
-      const allProjects = getManagedProjects().filter((p) => existsSync(p));
-      if (allProjects.length === 0) {
-        console.log("📭 No managed projects found.");
-      } else {
-        const target = await promptSelect(
-          allProjects.map((p) => ({ name: `${p.split(/[\\/]/).pop()} → ${p}`, value: p })),
-          "Select project to disable hook:",
-        );
-        const githooks = join(target, ".githooks");
-        if (existsSync(githooks)) {
-          rmSync(githooks, { recursive: true, force: true });
+      if (ptAction === "back" || ptAction === "__sep__") break;
+
+      if (ptAction === "list-projects") {
+        listProjects();
+        await new Promise((r) => setTimeout(r, 2000));
+      } else if (ptAction === "templates") {
+        await manageTemplates();
+      } else if (ptAction === "disable-hook") {
+        const allProjects = getManagedProjects().filter((p) => existsSync(p));
+        if (allProjects.length === 0) {
+          console.log("📭 No managed projects found.\n");
+        } else {
+          const target = await promptSelect(
+            allProjects.map((p) => ({
+              name: `${p.split(/[\\/]/).pop()} → ${p}`,
+              value: p,
+            })),
+            "Select project to disable hook:",
+          );
+          const confirm = await askYesNo(`Disable hook in ${target.split(/[\\/]/).pop()}?`);
+          if (confirm) {
+            const githooks = join(target, ".githooks");
+            if (existsSync(githooks)) {
+              rmSync(githooks, { recursive: true, force: true });
+            }
+            spawnSync("git", ["config", "--unset", "core.hooksPath"], {
+              stdio: "ignore",
+              cwd: target,
+            });
+            unregisterProject(target);
+            console.log(`✅ Hook disabled for ${target.split(/[\\/]/).pop()}\n`);
+          }
         }
-        spawnSync("git", ["config", "--unset", "core.hooksPath"], { stdio: "ignore", cwd: target });
-        unregisterProject(target);
-        console.log(`\n✅ Hook disabled for ${target.split(/[\\/]/).pop()}\n`);
+      } else if (ptAction === "remove-project") {
+        const allProjects = getManagedProjects();
+        if (allProjects.length === 0) {
+          console.log("📭 No projects in list.\n");
+        } else {
+          const target = await promptSelect(
+            allProjects.map((p) => ({
+              name: `${p.split(/[\\/]/).pop()} → ${p}`,
+              value: p,
+            })),
+            "Select project to remove:",
+          );
+          const confirm = await askYesNo(`Remove ${target.split(/[\\/]/).pop()} from list?`);
+          if (confirm) {
+            unregisterProject(target);
+            console.log(`✅ Removed from list\n`);
+          }
+        }
       }
-    }
 
-    await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 1000));
+    }
   }
   }
 }
