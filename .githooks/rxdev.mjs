@@ -947,6 +947,20 @@ export function gatherContext(repoRoot) {
   const issueMatch = branch?.match(/(?:fix|feat|feature|issue|ticket|task|bug)\/?[-_]?(\d+)/i);
   if (issueMatch) context.issueNumber = issueMatch[1];
 
+  if (context.issueNumber) {
+    try {
+      const result = spawnSync("gh", ["issue", "view", context.issueNumber, "--json", "title,body"], {
+        encoding: "utf8",
+        timeout: 5000,
+      });
+      if (result.status === 0) {
+        const issue = JSON.parse(result.stdout);
+        if (issue.title) context.issueTitle = issue.title;
+        if (issue.body) context.issueBody = issue.body.slice(0, 500);
+      }
+    } catch {}
+  }
+
   return context;
 }
 
@@ -1142,6 +1156,9 @@ export async function generateCommitMessage(diff, cfg, opts = {}) {
   let contextStr = "";
   if (context.branch) contextStr += `Branch: ${context.branch}\n`;
   if (context.recentCommits) contextStr += `Recent commits: ${context.recentCommits}\n`;
+  if (context.issueNumber) contextStr += `Related issue: #${context.issueNumber}\n`;
+  if (context.issueTitle) contextStr += `Issue title: ${context.issueTitle}\n`;
+  if (context.issueBody) contextStr += `Issue description: ${context.issueBody}\n`;
   if (context.truncated) contextStr += `Note: diff was truncated, showing partial changes\n`;
   if (contextStr) contextStr = `\nContext:\n${contextStr}\n`;
 
