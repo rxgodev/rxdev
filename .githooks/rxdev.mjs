@@ -552,7 +552,7 @@ export const SECRET_PATTERNS = [
   ["JSON Web Token", /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
   [
     "Hardcoded secret assignment",
-    /(api[_-]?key|secret|token|passwd|password)\s*[=:]\s*['"][^'"]{8,}['"]/i,
+    /(api[_-]?key|secret|token|passwd|password)\s*[=:]\s*['"]?[^'"\s]{8,}['"]?/i,
   ],
 ];
 
@@ -1799,8 +1799,11 @@ export async function buildPrReview(_prNumber, cfg) {
   return buildReview(truncated, cfg);
 }
 
-export function analyzeCommits(revRange = "HEAD~50..HEAD", repoRoot) {
-  const logOutput = git(["log", "--pretty=format:%H|%s|%b", revRange], repoRoot);
+export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
+  let logOutput = git(["log", "--pretty=format:%H|%s|%b", revRange], repoRoot);
+  if (!logOutput) {
+    logOutput = git(["log", "--pretty=format:%H|%s|%b", "HEAD"], repoRoot);
+  }
   if (!logOutput) return { total: 0, byType: {}, avgMessageLength: 0, breakingChanges: 0 };
 
   const commits = logOutput
@@ -1832,8 +1835,9 @@ export function analyzeCommits(revRange = "HEAD~50..HEAD", repoRoot) {
   };
 }
 
-export function detectBadPractices(revRange = "HEAD~50..HEAD", repoRoot) {
-  const logOutput = git(["log", "--pretty=format:%H|%s", revRange], repoRoot);
+export function detectBadPractices(revRange = "HEAD~20..HEAD", repoRoot) {
+  let logOutput = git(["log", "--pretty=format:%H|%s", revRange], repoRoot);
+  if (!logOutput) logOutput = git(["log", "--pretty=format:%H|%s", "HEAD"], repoRoot);
   if (!logOutput) return [];
 
   const commits = logOutput

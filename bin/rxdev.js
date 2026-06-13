@@ -812,65 +812,70 @@ async function showFileTreePicker(
 // === CONFIG INTERACTION ===
 
 async function configInteractive() {
-  const config = loadConfig();
+  let config = loadConfig();
 
-  const provider = config.provider || "groq";
-  const modelLabel =
-    config.model ||
-    (PROVIDERS[provider]?.defaultModel
-      ? `${PROVIDERS[provider].defaultModel} (default)`
-      : "default");
-  const providerLabel = PROVIDERS[provider]?.label || `custom (${config.apiUrl || "no url"})`;
-  const langLabel = LANGUAGES[config.language] || "Русский";
-  const mainAction = await promptSelect(
-    [
-      { name: "✅ Save & exit", value: "exit" },
-      { name: "─".repeat(30), value: "__sep__" },
-      {
-        name: `🔌 Provider: ${providerLabel}`,
-        value: "provider",
-      },
-      {
-        name: `🧠 Model: ${modelLabel}`,
-        value: "model",
-      },
-      {
-        name: `🌐 Language: ${langLabel}`,
-        value: "language",
-      },
-      {
-        name: `✏️  Custom prompt: ${config.prompt ? "set" : "not set"}`,
-        value: "prompt",
-      },
-      {
-        name: `📝 Custom types: ${config.customTypes?.length ? config.customTypes.join(", ") : "not set"}`,
-        value: "types",
-      },
-      {
-        name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
-        value: "apikey",
-      },
-      {
-        name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
-        value: "coauthor",
-      },
-      {
-        name: `📈 Auto-bump: ${config.bumpVersion ? "enabled" : "disabled"}`,
-        value: "bump",
-      },
-      { name: "📂 Projects & Templates", value: "projects-templates" },
-    ],
-    "Configuration",
-  );
+  while (true) {
+    const provider = config.provider || "groq";
+    const modelLabel =
+      config.model ||
+      (PROVIDERS[provider]?.defaultModel
+        ? `${PROVIDERS[provider].defaultModel} (default)`
+        : "default");
+    const providerLabel = PROVIDERS[provider]?.label || `custom (${config.apiUrl || "no url"})`;
+    const langLabel = LANGUAGES[config.language] || "Русский";
 
-  if (mainAction === "exit") return;
-  if (mainAction === "__sep__") return;
+    console.clear();
+    console.log("⚙️  Configuration\n");
 
-  if (mainAction === "coauthor") {
-    config.coauthor = !config.coauthor;
-    saveConfig(config);
-    console.log(config.coauthor ? "✅ Co-author enabled.\n" : "✅ Co-author disabled.\n");
-  }
+    const mainAction = await promptSelect(
+      [
+        { name: "✅ Save & exit", value: "exit" },
+        { name: "─".repeat(30), value: "__sep__" },
+        {
+          name: `🔌 Provider: ${providerLabel}`,
+          value: "provider",
+        },
+        {
+          name: `🧠 Model: ${modelLabel}`,
+          value: "model",
+        },
+        {
+          name: `🌐 Language: ${langLabel}`,
+          value: "language",
+        },
+        {
+          name: `✏️  Custom prompt: ${config.prompt ? "set" : "not set"}`,
+          value: "prompt",
+        },
+        {
+          name: `📝 Custom types: ${config.customTypes?.length ? config.customTypes.join(", ") : "not set"}`,
+          value: "types",
+        },
+        {
+          name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
+          value: "apikey",
+        },
+        {
+          name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
+          value: "coauthor",
+        },
+        {
+          name: `📈 Auto-bump: ${config.bumpVersion ? "enabled" : "disabled"}`,
+          value: "bump",
+        },
+        { name: "📂 Projects & Templates", value: "projects-templates" },
+      ],
+      "Select setting",
+    );
+
+    if (mainAction === "exit" || mainAction === "__sep__") return;
+
+    if (mainAction === "coauthor") {
+      config.coauthor = !config.coauthor;
+      saveConfig(config);
+      console.log(config.coauthor ? "✅ Co-author enabled.\n" : "✅ Co-author disabled.\n");
+      await new Promise((r) => setTimeout(r, 1000));
+    }
 
   if (mainAction === "bump") {
     config.bumpVersion = !config.bumpVersion;
@@ -1086,6 +1091,8 @@ async function configInteractive() {
         console.log(`\n✅ Hook disabled for ${target.split(/[\\/]/).pop()}\n`);
       }
     }
+
+    await new Promise((r) => setTimeout(r, 1000));
   }
 }
 
@@ -1137,7 +1144,7 @@ async function install() {
     }
   }
 
-  for (const oldFile of ["ai_commit.mjs", "ai_commit.py", "ai_commit.mjs.sha256"]) {
+  for (const oldFile of ["ai_commit.mjs", "ai_commit.py", "ai_commit.mjs.sha256", "ai_commit.py.sha256"]) {
     const oldPath = join(githooksDir, oldFile);
     if (existsSync(oldPath)) {
       try { unlinkSync(oldPath); } catch {}
@@ -1549,9 +1556,9 @@ async function quickFlow() {
   }
 
   if (filesToStage.length > 0) {
-    const addResult = spawnSync("git", ["add", ...filesToStage], { stdio: "pipe" });
+    const addResult = spawnSync("git", ["add", "--", ...filesToStage], { stdio: "pipe" });
     if (addResult.status !== 0) {
-      console.error("❌ Failed to stage changes.");
+      console.error(`❌ Failed to stage changes: ${addResult.stderr || "unknown error"}`);
       process.exit(1);
     }
     console.log(`${green}✅ ${filesToStage.length} file(s) staged${reset}\n`);
@@ -2018,7 +2025,12 @@ async function splitCommand() {
 async function reviewCommand() {
   console.log("\n🔍 Reviewing staged changes...\n");
   const aic = await hook();
-  const data = await aic.buildReview((await aic.getStagedDiff()).diff, hookConfig(aic));
+  const { diff } = await aic.getStagedDiff();
+  if (!diff) {
+    console.log("ℹ️  No staged changes to review. Stage files first with 'git add'.\n");
+    return;
+  }
+  const data = await aic.buildReview(diff, hookConfig(aic));
   if (!data || data.error) {
     console.error(`\n❌ ${data?.error || "Review failed."}`);
     process.exit(1);
