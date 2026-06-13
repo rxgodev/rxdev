@@ -1525,7 +1525,13 @@ async function quickFlow() {
     .stdout.trim()
     .split("\n")
     .filter(Boolean)
-    .filter((f) => existsSync(f));
+    .filter((f) => {
+      try {
+        return existsSync(join(process.cwd(), f));
+      } catch {
+        return false;
+      }
+    });
   const alreadyStaged = spawnSync("git", ["diff", "--cached", "--name-only"], { encoding: "utf8" })
     .stdout.trim()
     .split("\n")

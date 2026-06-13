@@ -1760,6 +1760,10 @@ const REVIEW_SYSTEM_PROMPT =
   "and a clear explanation. Be concise but thorough. Output as a structured list.";
 
 export async function buildReview(diff, cfg) {
+  if (!diff || diff.trim().length === 0) {
+    return { error: "No changes to review", issues: [], review: "" };
+  }
+
   const userPrompt = `Review the following code changes:\n\n---\n${diff}\n---`;
 
   let reviewText;
@@ -1773,7 +1777,11 @@ export async function buildReview(diff, cfg) {
       { echo: false, temperature: 0.3, maxTokens: 1500 },
     );
   } catch (e) {
-    return { error: e.message, issues: [] };
+    return { error: `LLM error: ${e.message}`, issues: [], review: "" };
+  }
+
+  if (!reviewText || reviewText.trim().length === 0) {
+    return { error: "LLM returned empty response", issues: [], review: "" };
   }
 
   const issues = [];
@@ -1821,7 +1829,7 @@ export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
     .filter(Boolean)
     .map((line) => {
       const [hash, subject, ...bodyParts] = line.split("|");
-      return { hash, subject, body: bodyParts.join("|") };
+      return { hash, subject: subject || "", body: bodyParts.join("|") };
     });
 
   const byType = {};
@@ -1829,6 +1837,7 @@ export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
   let breakingChanges = 0;
 
   for (const c of commits) {
+    if (!c.subject) continue;
     const parsed = parseCommit(c.subject);
     if (parsed.type) {
       byType[parsed.type] = (byType[parsed.type] || 0) + 1;
@@ -1855,12 +1864,13 @@ export function detectBadPractices(revRange = "HEAD~20..HEAD", repoRoot) {
     .filter(Boolean)
     .map((line) => {
       const [hash, subject] = line.split("|");
-      return { hash, subject };
+      return { hash, subject: subject || "" };
     });
 
   const issues = [];
 
   for (const c of commits) {
+    if (!c.subject) continue;
     if (c.subject.length > 100) {
       issues.push({
         severity: "warning",
