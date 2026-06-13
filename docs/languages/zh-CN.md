@@ -1,18 +1,18 @@
 <div align="center">
 
-# RXCommit
+# RXDev
 
 **AI 驱动的 Git 提交生成器** — 暂存、生成、审查、推送，一条命令搞定。
 
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-3.0.0-8250df)](https://github.com/rxgodev/rxcommit/releases)
-[![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
+[![Version](https://img.shields.io/badge/version-4.0.0-8250df)](https://github.com/rxgodev/rxdev/releases)
+[![CLI](https://img.shields.io/badge/cli-rxdev-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
 [![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
-[文档](https://github.com/rxgodev/rxcommit#readme) · [报告错误](https://github.com/rxgodev/rxcommit/issues) ·
-[English](https://github.com/rxgodev/rxcommit/blob/main/README.md)
+[文档](https://github.com/rxgodev/rxdev#readme) · [报告错误](https://github.com/rxgodev/rxdev/issues) ·
+[English](https://github.com/rxgodev/rxdev/blob/main/README.md)
 
 </div>
 
@@ -32,12 +32,12 @@
 
 ## 功能特性
 
-### 🚀 QuickFlow (`qq go`)
+### 🚀 QuickFlow (`rxdev go`)
 
 旗舰工作流程。一条命令从脏工作目录到已推送的提交：
 
 ```
-$ qq go
+$ rxdev go
 ```
 
 1. **暂存** — 交互式选择要提交的文件
@@ -88,23 +88,23 @@ pnpm login --scope=@rxgodev --registry=https://npm.pkg.github.com/
 
 **npm:**
 ```bash
-npm install -g @rxgodev/rxcommit@latest
+npm install -g @rxgodev/rxdev@latest
 ```
 
 **pnpm:**
 ```bash
-pnpm add -g @rxgodev/rxcommit@latest
+pnpm add -g @rxgodev/rxdev@latest
 ```
 
 **yarn:**
 ```bash
-yarn global add @rxgodev/rxcommit@latest
+yarn global add @rxgodev/rxdev@latest
 ```
 
 ### 3. 配置 API 密钥
 
 ```bash
-qq config
+rxdev config
 ```
 
 在菜单中选择 **API key** 并粘贴您的 Groq 密钥。
@@ -115,13 +115,13 @@ qq config
 
 ```bash
 # 安装钩子（每个仓库只需一次）
-qq init
+rxdev init
 
 # QuickFlow — 暂存、生成、审查、推送
-qq go
+rxdev go
 ```
 
-就这么简单。`qq go` 引导您完成每一步：
+就这么简单。`rxdev go` 引导您完成每一步：
 
 1. **选择要暂存的文件** — 或按 Enter 暂存所有
 2. **AI 生成消息** — 实时流式输出到终端
@@ -132,7 +132,7 @@ qq go
    - **Cancel** — 软重置并取消
 4. **推送** — 指定远程/分支或接受默认值
 
-> QuickFlow 是推荐的工作流程。如需 Git 钩子集成（通过 `git commit` 自动生成），请使用 `qq init`。
+> QuickFlow 是推荐的工作流程。如需 Git 钩子集成（通过 `git commit` 自动生成），请使用 `rxdev init`。
 
 ---
 
@@ -140,21 +140,21 @@ qq go
 
 | 命令            | 说明 |
 |-----------------|------|
-| `qq go`         | **QuickFlow** — 暂存 → 生成 → 审查 → 推送（推荐） |
-| `qq init`       | 在当前仓库安装 AI 提交钩子 |
-| `qq config`     | 配置 API 密钥、模型、语言、co-author、自动递增、项目和模板 |
-| `qq status`     | 显示当前仓库的集成状态 |
-| `qq filter`     | 重写 git 历史 — 通过 git-filter-repo 删除文件、密钥或路径 |
-| `qq uninstall`  | 从仓库移除钩子 |
-| `qq version`  | 显示版本号 |
-| `qq update`   | 显示更新说明 |
+| `rxdev go`         | **QuickFlow** — 暂存 → 生成 → 审查 → 推送（推荐） |
+| `rxdev init`       | 在当前仓库安装 AI 提交钩子 |
+| `rxdev config`     | 配置 API 密钥、模型、语言、co-author、自动递增、项目和模板 |
+| `rxdev status`     | 显示当前仓库的集成状态 |
+| `rxdev filter`     | 重写 git 历史 — 通过 git-filter-repo 删除文件、密钥或路径 |
+| `rxdev uninstall`  | 从仓库移除钩子 |
+| `rxdev version`  | 显示版本号 |
+| `rxdev update`   | 显示更新说明 |
 
 ---
 
 ## 配置
 
 ```bash
-qq config
+rxdev config
 ```
 
 ### 设置

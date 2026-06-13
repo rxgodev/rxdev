@@ -1,4 +1,4 @@
-# Contributing to RXCommit
+# Contributing to RXDev
 
 Thank you for considering contributing! Here's how to get started.
 
@@ -6,8 +6,8 @@ Thank you for considering contributing! Here's how to get started.
 
 ```bash
 # Clone the repo
-git clone https://github.com/rxgodev/rxcommit.git
-cd rxcommit
+git clone https://github.com/rxgodev/rxdev.git
+cd rxdev
 
 # Install dependencies
 npm install
@@ -41,7 +41,7 @@ node bin/ac.js --help
 
 ## Reporting Issues
 
-Open an issue at https://github.com/rxgodev/rxcommit/issues with:
+Open an issue at https://github.com/rxgodev/rxdev/issues with:
 - A clear description of the problem
 - Steps to reproduce
 - Expected vs actual behavior

@@ -1,8 +1,8 @@
 # Automatic Version Bumping
 
-When enabled, RXCommit automatically detects version manifests in your repository and bumps them according to the generated commit message.
+When enabled, RXDev automatically detects version manifests in your repository and bumps them according to the generated commit message.
 
-> **Opt-in**: disabled by default. Enable via `qq config` → **Auto-bump**.
+> **Opt-in**: disabled by default. Enable via `rxdev config` → **Auto-bump**.
 
 ## How It Works
 
@@ -32,7 +32,7 @@ When enabled, RXCommit automatically detects version manifests in your repositor
 
 ## Monorepo Support
 
-RXCommit discovers manifests recursively across the entire repository. If you have:
+RXDev discovers manifests recursively across the entire repository. If you have:
 
 ```
 my-monorepo/
@@ -66,11 +66,11 @@ Pre-release suffixes are preserved during bumps:
 
 ## Merge Safety
 
-If a manifest is already staged (e.g., an earlier manual version bump), RXCommit reads it from the Git index and applies the bump on top, avoiding conflicts.
+If a manifest is already staged (e.g., an earlier manual version bump), RXDev reads it from the Git index and applies the bump on top, avoiding conflicts.
 
 ## Git Tag Awareness
 
-If a manifest file has no `version` field, RXCommit falls back to the latest semver-compatible Git tag (prefix `v` optional):
+If a manifest file has no `version` field, RXDev falls back to the latest semver-compatible Git tag (prefix `v` optional):
 
 ```
 v1.2.3  →  parsed as 1.2.3

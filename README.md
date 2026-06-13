@@ -5,12 +5,12 @@
 **AI-powered developer workflow tool** — commit messages, code review, PR automation, analytics, and more.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-4.0.0-8250df)](https://github.com/rxgodev/rxcommit/releases)
+[![Version](https://img.shields.io/badge/version-4.0.0-8250df)](https://github.com/rxgodev/rxdev/releases)
 [![CLI](https://img.shields.io/badge/cli-rxdev-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![CI](https://img.shields.io/badge/CI-Windows%20%7C%20macOS%20%7C%20Ubuntu-4FC08D)](.github/workflows/ci.yml)
 
-[Documentation](https://github.com/rxgodev/rxcommit#readme) · [Report Bug](https://github.com/rxgodev/rxcommit/issues) ·
+[Documentation](https://github.com/rxgodev/rxdev#readme) · [Report Bug](https://github.com/rxgodev/rxdev/issues) ·
 [Русский](./docs/languages/ru-RU.md) · [中文](./docs/languages/zh-CN.md) · [Deutsch](./docs/languages/de-DE.md) · [Français](./docs/languages/fr-FR.md)
 
 </div>

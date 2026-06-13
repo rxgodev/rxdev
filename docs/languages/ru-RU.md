@@ -1,18 +1,18 @@
 <div align="center">
 
-# RXCommit
+# RXDev
 
 **AI-генератор коммитов** — стейдж, генерация, ревью, пуш в одной команде.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-3.0.0-8250df)](https://github.com/rxgodev/rxcommit/releases)
-[![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
+[![Version](https://img.shields.io/badge/version-4.0.0-8250df)](https://github.com/rxgodev/rxdev/releases)
+[![CLI](https://img.shields.io/badge/cli-rxdev-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
 [![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
-[Документация](https://github.com/rxgodev/rxcommit#readme) · [Сообщить об ошибке](https://github.com/rxgodev/rxcommit/issues) ·
-[English](https://github.com/rxgodev/rxcommit/blob/main/README.md)
+[Документация](https://github.com/rxgodev/rxdev#readme) · [Сообщить об ошибке](https://github.com/rxgodev/rxdev/issues) ·
+[English](https://github.com/rxgodev/rxdev/blob/main/README.md)
 
 </div>
 
@@ -32,12 +32,12 @@
 
 ## Возможности
 
-### 🚀 QuickFlow (`qq go`)
+### 🚀 QuickFlow (`rxdev go`)
 
 Флагманский режим работы. Одна команда — от грязной рабочей директории до отправленного коммита:
 
 ```
-$ qq go
+$ rxdev go
 ```
 
 1. **Стейдж** — интерактивный выбор файлов для коммита
@@ -88,23 +88,23 @@ pnpm login --scope=@rxgodev --registry=https://npm.pkg.github.com/
 
 **npm:**
 ```bash
-npm install -g @rxgodev/rxcommit@latest
+npm install -g @rxgodev/rxdev@latest
 ```
 
 **pnpm:**
 ```bash
-pnpm add -g @rxgodev/rxcommit@latest
+pnpm add -g @rxgodev/rxdev@latest
 ```
 
 **yarn:**
 ```bash
-yarn global add @rxgodev/rxcommit@latest
+yarn global add @rxgodev/rxdev@latest
 ```
 
 ### 3. Настройте API-ключ
 
 ```bash
-qq config
+rxdev config
 ```
 
 Перейдите в пункт **API key** в меню и вставьте ваш Groq-ключ.
@@ -115,13 +115,13 @@ qq config
 
 ```bash
 # Установка хука (один раз на репозиторий)
-qq init
+rxdev init
 
 # QuickFlow — стейдж, генерация, ревью, пуш
-qq go
+rxdev go
 ```
 
-Всё. `qq go` проведёт вас по каждому шагу:
+Всё. `rxdev go` проведёт вас по каждому шагу:
 
 1. **Выберите файлы для стейджа** — или нажмите Enter, чтобы застейджить всё
 2. **AI генерирует сообщение** — вывод в реальном времени
@@ -132,7 +132,7 @@ qq go
    - **Cancel** — soft-reset и отмена
 4. **Push** — укажите remote/branch или примите значения по умолчанию
 
-> QuickFlow — рекомендуемый режим работы. Для интеграции с Git-хуком (автоматическая генерация через `git commit`) используйте `qq init`.
+> QuickFlow — рекомендуемый режим работы. Для интеграции с Git-хуком (автоматическая генерация через `git commit`) используйте `rxdev init`.
 
 ---
 
@@ -140,21 +140,21 @@ qq go
 
 | Команда          | Что делает |
 |------------------|------------|
-| `qq go`          | **QuickFlow** — стейдж → генерация → ревью → пуш (рекомендуется) |
-| `qq init`        | Установить AI-хук в текущем репозитории |
-| `qq config`      | Настройка API-ключа, модели, языка, co-author, авто-бампа, проектов и шаблонов |
-| `qq status`      | Статус интеграции в текущем репозитории |
-| `qq filter`      | Переписать историю git — удалить файлы, секреты или пути через git-filter-repo |
-| `qq uninstall`   | Удалить хук из репозитория |
-| `qq version`  | Показать версию |
-| `qq update`   | Показать инструкцию по обновлению |
+| `rxdev go`          | **QuickFlow** — стейдж → генерация → ревью → пуш (рекомендуется) |
+| `rxdev init`        | Установить AI-хук в текущем репозитории |
+| `rxdev config`      | Настройка API-ключа, модели, языка, co-author, авто-бампа, проектов и шаблонов |
+| `rxdev status`      | Статус интеграции в текущем репозитории |
+| `rxdev filter`      | Переписать историю git — удалить файлы, секреты или пути через git-filter-repo |
+| `rxdev uninstall`   | Удалить хук из репозитория |
+| `rxdev version`  | Показать версию |
+| `rxdev update`   | Показать инструкцию по обновлению |
 
 ---
 
 ## Настройка
 
 ```bash
-qq config
+rxdev config
 ```
 
 ### Параметры

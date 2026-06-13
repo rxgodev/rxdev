@@ -16,4 +16,4 @@ Fixes #
 
 - [ ] Tested manually
 - [ ] README and translations updated if needed
-- [ ] `qq --help` reflects any command changes
+- [ ] `rxdev --help` reflects any command changes

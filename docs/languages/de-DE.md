@@ -1,18 +1,18 @@
 <div align="center">
 
-# RXCommit
+# RXDev
 
 **KI-gestützter Git-Commit-Generator** — stage, generieren, prüfen, pushen in einem Befehl.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-3.0.0-8250df)](https://github.com/rxgodev/rxcommit/releases)
-[![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
+[![Version](https://img.shields.io/badge/version-4.0.0-8250df)](https://github.com/rxgodev/rxdev/releases)
+[![CLI](https://img.shields.io/badge/cli-rxdev-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
 [![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
-[Dokumentation](https://github.com/rxgodev/rxcommit#readme) · [Fehler melden](https://github.com/rxgodev/rxcommit/issues) ·
-[English](https://github.com/rxgodev/rxcommit/blob/main/README.md)
+[Dokumentation](https://github.com/rxgodev/rxdev#readme) · [Fehler melden](https://github.com/rxgodev/rxdev/issues) ·
+[English](https://github.com/rxgodev/rxdev/blob/main/README.md)
 
 </div>
 
@@ -32,12 +32,12 @@
 
 ## Funktionen
 
-### 🚀 QuickFlow (`qq go`)
+### 🚀 QuickFlow (`rxdev go`)
 
 Der Flaggschiff-Workflow. Ein einziger Befehl vom schmutzigen Arbeitsverzeichnis zum gepushten Commit:
 
 ```
-$ qq go
+$ rxdev go
 ```
 
 1. **Stage** — wählen Sie interaktiv Dateien zum Commit aus
@@ -88,23 +88,23 @@ Geben Sie Ihren GitHub-Benutzernamen und ein [persönliches Zugriffstoken](https
 
 **npm:**
 ```bash
-npm install -g @rxgodev/rxcommit@latest
+npm install -g @rxgodev/rxdev@latest
 ```
 
 **pnpm:**
 ```bash
-pnpm add -g @rxgodev/rxcommit@latest
+pnpm add -g @rxgodev/rxdev@latest
 ```
 
 **yarn:**
 ```bash
-yarn global add @rxgodev/rxcommit@latest
+yarn global add @rxgodev/rxdev@latest
 ```
 
 ### 3. API-Schlüssel konfigurieren
 
 ```bash
-qq config
+rxdev config
 ```
 
 Navigieren Sie im Menü zu **API key** und fügen Sie Ihren Groq-Schlüssel ein.
@@ -115,13 +115,13 @@ Navigieren Sie im Menü zu **API key** und fügen Sie Ihren Groq-Schlüssel ein.
 
 ```bash
 # Hook installieren (einmal pro Repository)
-qq init
+rxdev init
 
 # QuickFlow — stage, generieren, prüfen, pushen
-qq go
+rxdev go
 ```
 
-Das ist alles. `qq go` führt Sie durch jeden Schritt:
+Das ist alles. `rxdev go` führt Sie durch jeden Schritt:
 
 1. **Dateien zum Stagen auswählen** — oder Enter drücken, um alle zu stagen
 2. **KI generiert die Nachricht** — live in Ihr Terminal gestreamt
@@ -132,7 +132,7 @@ Das ist alles. `qq go` führt Sie durch jeden Schritt:
    - **Cancel** — Soft-Reset und abbrechen
 4. **Pushen** — Remote/Branch angeben oder Standardwerte akzeptieren
 
-> QuickFlow ist der empfohlene Workflow. Für die Git-Hook-Integration (automatische Generierung via `git commit`) verwenden Sie `qq init`.
+> QuickFlow ist der empfohlene Workflow. Für die Git-Hook-Integration (automatische Generierung via `git commit`) verwenden Sie `rxdev init`.
 
 ---
 
@@ -140,21 +140,21 @@ Das ist alles. `qq go` führt Sie durch jeden Schritt:
 
 | Befehl           | Beschreibung |
 |------------------|--------------|
-| `qq go`          | **QuickFlow** — Stage → Generieren → Prüfen → Pushen (empfohlen) |
-| `qq init`        | Installiert den AI-Hook im aktuellen Repository |
-| `qq config`      | Konfiguriert API-Schlüssel, Modell, Sprache, Co-Author, Auto-Bump, Projekte und Vorlagen |
-| `qq status`      | Zeigt den Integrationsstatus des aktuellen Repositorys |
-| `qq filter`      | Git-Verlauf umschreiben — Dateien, Secrets oder Pfade mit git-filter-repo entfernen |
-| `qq uninstall`   | Entfernt den Hook aus dem Repository |
-| `qq version`     | Zeigt die Version an |
-| `qq update`      | Zeigt Update-Anleitung an |
+| `rxdev go`          | **QuickFlow** — Stage → Generieren → Prüfen → Pushen (empfohlen) |
+| `rxdev init`        | Installiert den AI-Hook im aktuellen Repository |
+| `rxdev config`      | Konfiguriert API-Schlüssel, Modell, Sprache, Co-Author, Auto-Bump, Projekte und Vorlagen |
+| `rxdev status`      | Zeigt den Integrationsstatus des aktuellen Repositorys |
+| `rxdev filter`      | Git-Verlauf umschreiben — Dateien, Secrets oder Pfade mit git-filter-repo entfernen |
+| `rxdev uninstall`   | Entfernt den Hook aus dem Repository |
+| `rxdev version`     | Zeigt die Version an |
+| `rxdev update`      | Zeigt Update-Anleitung an |
 
 ---
 
 ## Konfiguration
 
 ```bash
-qq config
+rxdev config
 ```
 
 ### Einstellungen

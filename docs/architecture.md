@@ -1,13 +1,13 @@
 # Architecture
 
-RXCommit consists of two runtime layers that work together to generate AI-powered commit messages.
+RXDev consists of two runtime layers that work together to generate AI-powered commit messages.
 
 ## Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      User (CLI)                             │
-│      qq go  ← flagship   │   qq init │ qq config │ ...     │
+│      rxdev go  ← flagship   │   rxdev init │ rxdev config │ ...     │
 └───────────────────┬─────────────────────────────────────────┘
                     │
           ┌─────────┴─────────┐
@@ -16,7 +16,7 @@ RXCommit consists of two runtime layers that work together to generate AI-powere
 │  QuickFlow       │  │  Hook Mode       │
 │  (interactive)   │  │  (automatic)     │
 │                  │  │                  │
-│  qq go           │  │  qq init         │
+│  rxdev go           │  │  rxdev init         │
 │  1. stage        │  │  → git commit    │
 │  2. generate     │  │  → hook fires    │
 │  3. review       │  │  → AI generates  │
@@ -58,15 +58,15 @@ The CLI is the user-facing entry point. It is a single-file ESM module (~1160 li
 
 | Command | Responsibility |
 |---------|---------------|
-| `qq init` | Copy hooks to `.githooks/`, set `core.hooksPath`, create `.commitignore`, register project |
-| `qq go` | **QuickFlow** — the flagship workflow. Interactive session: stage → generate → review → push. Eliminates context-switching between git commands |
-| `qq config` | Interactive menu for model, prompt, API key, co-author, auto-bump, custom types, projects & templates |
-| `qq status` | Check hook installation state, API key status, auto-bump config |
-| `qq uninstall` | Remove `.githooks/` directory, reset `core.hooksPath`, unregister project |
+| `rxdev init` | Copy hooks to `.githooks/`, set `core.hooksPath`, create `.commitignore`, register project |
+| `rxdev go` | **QuickFlow** — the flagship workflow. Interactive session: stage → generate → review → push. Eliminates context-switching between git commands |
+| `rxdev config` | Interactive menu for model, prompt, API key, co-author, auto-bump, custom types, projects & templates |
+| `rxdev status` | Check hook installation state, API key status, auto-bump config |
+| `rxdev uninstall` | Remove `.githooks/` directory, reset `core.hooksPath`, unregister project |
 
 ### Auto-update Mechanism
 
-On `qq update` (only — not on every command), the CLI:
+On `rxdev update` (only — not on every command), the CLI:
 
 1. Reads `~/.config/ai-commit/managed-projects.json` for registered projects
 2. For each project, compares the installed `ai_commit.mjs` hash/version with the bundled one
@@ -86,12 +86,12 @@ All configuration is stored in `~/.config/ai-commit/`:
 
 ## QuickFlow Deep Dive
 
-QuickFlow (`qq go`) is the flagship workflow, designed to minimise friction. Unlike hook mode (where `git commit` triggers AI generation), QuickFlow is an **interactive session** that controls the entire lifecycle:
+QuickFlow (`rxdev go`) is the flagship workflow, designed to minimise friction. Unlike hook mode (where `git commit` triggers AI generation), QuickFlow is an **interactive session** that controls the entire lifecycle:
 
 ### Session Flow
 
 ```
-qq go
+rxdev go
  │
  ├── Step 1: Stage ──────────────────────────────────
  │   Prompt: "git add <path>" (default: .)
@@ -128,11 +128,11 @@ qq go
 
 | Scenario | Recommended |
 |----------|-------------|
-| Daily development, want fast cycle | `qq go` |
-| IDE integration (commit via VSCode etc.) | Hook mode (`qq init`) |
+| Daily development, want fast cycle | `rxdev go` |
+| IDE integration (commit via VSCode etc.) | Hook mode (`rxdev init`) |
 | CI / automated commits | Hook mode |
-| Complex diffs needing review | `qq go` (review loop) |
-| New to the tool | `qq go` (guided experience) |
+| Complex diffs needing review | `rxdev go` (review loop) |
+| New to the tool | `rxdev go` (guided experience) |
 
 ---
 
@@ -189,7 +189,7 @@ Triggered when the API is unreachable, rate-limited, or all retries return inval
 
 The chain is:
 
-1. `qq init` sets `git config core.hooksPath .githooks`
+1. `rxdev init` sets `git config core.hooksPath .githooks`
 2. On `git commit`, Git executes `.githooks/prepare-commit-msg`
 3. The shell script runs `node .githooks/ai_commit.mjs "$1"`
 4. `ai_commit.mjs` writes the generated message to the commit file

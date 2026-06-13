@@ -1,18 +1,18 @@
 <div align="center">
 
-# RXCommit
+# RXDev
 
 **Générateur de commits Git par IA** — stage, génération, review, push en une commande.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-3.0.0-8250df)](https://github.com/rxgodev/rxcommit/releases)
-[![CLI](https://img.shields.io/badge/cli-qq-4FC08D?logo=gnubash&logoColor=white)](.#readme)
+[![Version](https://img.shields.io/badge/version-4.0.0-8250df)](https://github.com/rxgodev/rxdev/releases)
+[![CLI](https://img.shields.io/badge/cli-rxdev-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](../../LICENSE)
 [![Groq](https://img.shields.io/badge/provider-Groq-FF6C2C?logo=groq&logoColor=white)](https://console.groq.com)
 [![Model](https://img.shields.io/badge/model-Llama%203.1%2F3.3-8250df)](.#readme)
 
-[Documentation](https://github.com/rxgodev/rxcommit#readme) · [Signaler un bug](https://github.com/rxgodev/rxcommit/issues) ·
-[English](https://github.com/rxgodev/rxcommit/blob/main/README.md)
+[Documentation](https://github.com/rxgodev/rxdev#readme) · [Signaler un bug](https://github.com/rxgodev/rxdev/issues) ·
+[English](https://github.com/rxgodev/rxdev/blob/main/README.md)
 
 </div>
 
@@ -32,12 +32,12 @@
 
 ## Fonctionnalités
 
-### 🚀 QuickFlow (`qq go`)
+### 🚀 QuickFlow (`rxdev go`)
 
 Le workflow phare. Une seule commande du répertoire de travail sale au commit poussé :
 
 ```
-$ qq go
+$ rxdev go
 ```
 
 1. **Stage** — choisissez interactivement les fichiers à inclure
@@ -88,23 +88,23 @@ Saisissez votre nom d'utilisateur GitHub et un [jeton d'accès personnel](https:
 
 **npm:**
 ```bash
-npm install -g @rxgodev/rxcommit@latest
+npm install -g @rxgodev/rxdev@latest
 ```
 
 **pnpm:**
 ```bash
-pnpm add -g @rxgodev/rxcommit@latest
+pnpm add -g @rxgodev/rxdev@latest
 ```
 
 **yarn:**
 ```bash
-yarn global add @rxgodev/rxcommit@latest
+yarn global add @rxgodev/rxdev@latest
 ```
 
 ### 3. Configurer votre clé API
 
 ```bash
-qq config
+rxdev config
 ```
 
 Naviguez jusqu'à **API key** dans le menu et collez votre clé Groq.
@@ -115,13 +115,13 @@ Naviguez jusqu'à **API key** dans le menu et collez votre clé Groq.
 
 ```bash
 # Installez le hook (une fois par dépôt)
-qq init
+rxdev init
 
 # QuickFlow — stage, génération, review, push
-qq go
+rxdev go
 ```
 
-C'est tout. `qq go` vous guide à chaque étape :
+C'est tout. `rxdev go` vous guide à chaque étape :
 
 1. **Choisissez les fichiers à staguer** — ou appuyez sur Entrée pour tous les stagner
 2. **L'IA génère le message** — diffusé en direct dans votre terminal
@@ -132,7 +132,7 @@ C'est tout. `qq go` vous guide à chaque étape :
    - **Cancel** — reset logiciel et annulez
 4. **Push** — spécifiez remote/branch ou acceptez les valeurs par défaut
 
-> QuickFlow est le workflow recommandé. Pour l'intégration via hook Git (génération automatique via `git commit`), utilisez `qq init`.
+> QuickFlow est le workflow recommandé. Pour l'intégration via hook Git (génération automatique via `git commit`), utilisez `rxdev init`.
 
 ---
 
@@ -140,21 +140,21 @@ C'est tout. `qq go` vous guide à chaque étape :
 
 | Commande          | Description |
 |-------------------|-------------|
-| `qq go`           | **QuickFlow** — stage → génération → review → push (recommandé) |
-| `qq init`         | Installer le hook AI dans le dépôt courant |
-| `qq config`       | Configurer clé API, modèle, langue, co-auteur, auto-incrémentation, projets et modèles |
-| `qq status`       | Afficher l'état d'intégration du dépôt courant |
-| `qq filter`       | Réécrire l'historique git — supprimer fichiers, secrets ou chemins via git-filter-repo |
-| `qq uninstall`    | Supprimer le hook du dépôt |
-| `qq version`      | Afficher la version |
-| `qq update`       | Afficher les instructions de mise à jour |
+| `rxdev go`           | **QuickFlow** — stage → génération → review → push (recommandé) |
+| `rxdev init`         | Installer le hook AI dans le dépôt courant |
+| `rxdev config`       | Configurer clé API, modèle, langue, co-auteur, auto-incrémentation, projets et modèles |
+| `rxdev status`       | Afficher l'état d'intégration du dépôt courant |
+| `rxdev filter`       | Réécrire l'historique git — supprimer fichiers, secrets ou chemins via git-filter-repo |
+| `rxdev uninstall`    | Supprimer le hook du dépôt |
+| `rxdev version`      | Afficher la version |
+| `rxdev update`       | Afficher les instructions de mise à jour |
 
 ---
 
 ## Configuration
 
 ```bash
-qq config
+rxdev config
 ```
 
 ### Paramètres

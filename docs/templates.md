@@ -1,19 +1,19 @@
 # Templates & Multi-Project Management
 
-RXCommit supports managing several repositories from a single installation, with shared `prepare-commit-msg` hook templates.
+RXDev supports managing several repositories from a single installation, with shared `prepare-commit-msg` hook templates.
 
 ## Managed Projects
 
-When you run `qq init` in a repository, it is registered in `~/.config/ai-commit/managed-projects.json`. This enables:
+When you run `rxdev init` in a repository, it is registered in `~/.config/ai-commit/managed-projects.json`. This enables:
 
-- **Auto-update** — hooks are automatically updated across all registered projects when RXCommit is upgraded
-- **Status overview** — `qq status` shows integration state for the current repository
+- **Auto-update** — hooks are automatically updated across all registered projects when RXDev is upgraded
+- **Status overview** — `rxdev status` shows integration state for the current repository
 - **Template application** — templates can be applied to any subset of managed projects
 
 ### List Managed Projects
 
 ```bash
-qq config → Projects & Templates → List all projects
+rxdev config → Projects & Templates → List all projects
 ```
 
 Projects with missing directories are shown with a ❌ status.
@@ -31,7 +31,7 @@ node .githooks/ai_commit.mjs "$1"
 
 ### Managing Templates
 
-Access via `qq config → Projects & Templates → Templates`.
+Access via `rxdev config → Projects & Templates → Templates`.
 
 #### Create a New Template
 
@@ -99,7 +99,7 @@ All data lives under `~/.config/ai-commit/`:
 ## Uninstalling
 
 ```bash
-qq uninstall
+rxdev uninstall
 ```
 
 This:
