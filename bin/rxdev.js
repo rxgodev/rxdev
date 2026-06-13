@@ -939,21 +939,27 @@ async function configInteractive() {
       },
     ]);
     config.model = model.trim();
-    saveConfig(config);
     const keyHint =
       chosen === "ollama"
         ? " (no API key needed)"
         : config.apiKey
           ? ""
           : " — remember to set an API key";
-    console.log(
-      `✅ Provider: ${config.provider}${config.model ? `, model: ${config.model}` : ""}${keyHint}.\n`,
+    const confirm = await askYesNo(
+      `Apply: provider=${config.provider}, model=${config.model || "default"}${keyHint}?`,
     );
+    if (confirm) {
+      saveConfig(config);
+      console.log(`✅ Saved.\n`);
+    } else {
+      console.log("↩️  Cancelled.\n");
+    }
   }
 
   if (mainAction === "model") {
     const inquirer = await import("inquirer");
     const prov = config.provider || "groq";
+    let newModel;
     if (prov === "groq") {
       const { model } = await inquirer.default.prompt([
         {
@@ -967,9 +973,7 @@ async function configInteractive() {
           default: config.model || "llama-3.1-8b-instant",
         },
       ]);
-      config.model = model;
-      saveConfig(config);
-      console.log(`✅ Model set to ${model.includes("70b") ? "70B" : "8B"}.\n`);
+      newModel = model;
     } else {
       const { model } = await inquirer.default.prompt([
         {
@@ -979,11 +983,15 @@ async function configInteractive() {
           default: config.model || "",
         },
       ]);
-      config.model = model.trim();
+      newModel = model.trim();
+    }
+    const confirm = await askYesNo(`Set model to "${newModel || "default"}"?`);
+    if (confirm) {
+      config.model = newModel;
       saveConfig(config);
-      console.log(
-        config.model ? `✅ Model set to ${config.model}.\n` : "ℹ️  Using provider default model.\n",
-      );
+      console.log(`✅ Model: ${config.model || "default"}.\n`);
+    } else {
+      console.log("↩️  Cancelled.\n");
     }
   }
 
@@ -995,9 +1003,14 @@ async function configInteractive() {
       })),
       "Select commit message language:",
     );
-    config.language = lang;
-    saveConfig(config);
-    console.log(`✅ Language set to ${LANGUAGES[lang]}.\n`);
+    const confirm = await askYesNo(`Set language to "${LANGUAGES[lang]}"?`);
+    if (confirm) {
+      config.language = lang;
+      saveConfig(config);
+      console.log(`✅ Language: ${LANGUAGES[lang]}.\n`);
+    } else {
+      console.log("↩️  Cancelled.\n");
+    }
   }
 
   if (mainAction === "prompt") {
