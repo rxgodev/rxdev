@@ -2201,7 +2201,7 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}review${resetColor}        AI code review of staged changes
   ${boldCyan}stats${resetColor}         Show commit statistics and bad practices
   ${boldCyan}pr${resetColor}            Generate a pull request title + description
-  ${boldCyan}release${resetColor}       Generate CHANGELOG entry, bump version & tag
+  ${boldCyan}release${resetColor}       Create GitHub Release with tag
   ${boldCyan}uninstall${resetColor}     Remove hook
   ${boldCyan}status${resetColor}        Show integration status
   ${boldCyan}doctor${resetColor}        Diagnose setup (Node, hooks, provider, key)

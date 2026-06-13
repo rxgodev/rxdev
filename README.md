@@ -131,7 +131,7 @@ jobs:
 - **Auto-bump version** — discovers 15+ manifest formats (package.json, Cargo.toml, pyproject.toml, etc.)
 - **Secret scanning** — detects leaked credentials in staged changes
 - **PR generation** — creates PR titles and descriptions from commits
-- **Changelog generation** — builds CHANGELOG entries from conventional commits
+- **GitHub Releases** — creates releases with tags from conventional commits
 - **History rewriting** — interactive `git-filter-repo` wrapper
 - **Multi-project** — manage hooks across multiple repositories
 
@@ -214,7 +214,7 @@ That's it. `rxdev go` guides you through every step:
 | `rxdev scan` | Scan staged changes for leaked secrets |
 | `rxdev analytics` | Show commit statistics and bad practices |
 | `rxdev pr` | Generate a pull request title + description |
-| `rxdev release` | Build CHANGELOG entry, commit & tag |
+| `rxdev release` | Create GitHub Release with tag |
 | `rxdev init` | Install the AI commit hook |
 | `rxdev config` | Configure provider, model, language, and more |
 | `rxdev status` | Show integration status |
@@ -359,7 +359,6 @@ jobs:
 | [Architecture](./docs/architecture.md) | High-level overview of the CLI + git-hook architecture |
 | [Auto-bump](./docs/auto-bump.md) | Smart version bumping for 15+ manifest formats |
 | [Templates & Projects](./docs/templates.md) | Multi-repository management and shared templates |
-| [Changelog](./CHANGELOG.md) | Version history and changes |
 
 ---
 
