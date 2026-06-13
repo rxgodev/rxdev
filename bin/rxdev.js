@@ -1094,6 +1094,7 @@ async function configInteractive() {
 
     await new Promise((r) => setTimeout(r, 1000));
   }
+  }
 }
 
 // === COMMANDS ===
