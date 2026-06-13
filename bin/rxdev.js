@@ -239,7 +239,7 @@ function updateProjectHooks(projectPath) {
 // === UTILS ===
 
 // The commit hook is now pure Node (rxdev.mjs) — no Python/pathspec needed.
-// git-filter-repo is only required for `qq filter`, which checks for it lazily
+// git-filter-repo is only required for `rxdev filter`, which checks for it lazily
 // (see checkFilterRepo) and points the user at `pip install git-filter-repo`.
 
 function setGitHooksPath() {
@@ -570,7 +570,7 @@ function listProjects() {
   console.table(rows);
 
   if (invalid.length > 0) {
-    console.log('\n⚠️  Missing projects: run "qq uninstall" in them to clean up.\n');
+    console.log('\n⚠️  Missing projects: run "rxdev uninstall" in them to clean up.\n');
   }
 }
 
@@ -1238,7 +1238,7 @@ function showStatus() {
       ? "no key needed (local)"
       : hasKey
         ? "API key configured"
-        : "API key needed — run 'qq config'";
+        : "API key needed — run 'rxdev config'";
   console.log(`🌐 Provider:        ${prov}${cfg.model ? ` · ${cfg.model}` : ""} (${keyState})`);
   console.log(`📈 Auto-bump:       ${cfg.bumpVersion ? "✅ enabled" : "— disabled"}`);
   console.log(`🎨 Template:        ${templateName}`);
@@ -1262,12 +1262,12 @@ function doctor() {
       : bad(`Node ${process.version} is too old — need >= 18`),
   );
 
-  // git-filter-repo (optional, only for `qq filter`)
+  // git-filter-repo (optional, only for `rxdev filter`)
   const fr = spawnSync("git", ["filter-repo", "--version"], { stdio: "pipe" });
   console.log(
     fr.status === 0
       ? ok("Optional: git-filter-repo")
-      : warn("git-filter-repo not installed (only needed for 'qq filter')"),
+      : warn("git-filter-repo not installed (only needed for 'rxdev filter')"),
   );
 
   // git repo, hooks path, hook files
@@ -1283,14 +1283,14 @@ function doctor() {
   console.log(
     hooksPath === ".githooks"
       ? ok("Hooks path: .githooks")
-      : bad(`Hooks path not set — run 'qq init' (current: ${hooksPath || "unset"})`),
+      : bad(`Hooks path not set — run 'rxdev init' (current: ${hooksPath || "unset"})`),
   );
 
   const hookFile = join(gitRoot, ".githooks", "prepare-commit-msg");
   console.log(
     existsSync(hookFile)
       ? ok("Hook: prepare-commit-msg present")
-      : bad("Hook missing — run 'qq init'"),
+      : bad("Hook missing — run 'rxdev init'"),
   );
 
   const pyFile = join(gitRoot, ".githooks", "rxdev.mjs");
@@ -1308,7 +1308,7 @@ function doctor() {
       console.log(warn("rxdev.mjs present but no .sha256 sidecar"));
     }
   } else {
-    console.log(bad("rxdev.mjs missing — run 'qq init'"));
+    console.log(bad("rxdev.mjs missing — run 'rxdev init'"));
   }
 
   // provider / key
@@ -1336,7 +1336,7 @@ async function checkFilterRepo() {
   if (r.status !== 0) {
     console.error("❌ git-filter-repo not found. Install it:\n");
     console.error("  pip install git-filter-repo\n");
-    console.error("  Or run: qq init");
+    console.error("  Or run: rxdev init");
     process.exit(1);
   }
   return r.stdout.trim();
@@ -1521,7 +1521,7 @@ async function quickFlow() {
 
   console.log(`\n${sep(`${bold}📂  Stage Changes${reset}`)}\n`);
 
-  const unstaged = spawnSync("git", ["diff", "--name-only"], { encoding: "utf8" })
+  const unstaged = spawnSync("git", ["diff", "--name-only", "--diff-filter=ACMR"], { encoding: "utf8" })
     .stdout.trim()
     .split("\n")
     .filter(Boolean);
@@ -1847,7 +1847,7 @@ async function scanCommand() {
     console.log(`  • ${f.type} — ${f.file}  (${f.preview})`);
   }
   console.log("\n   Unstage or remove these before committing.");
-  console.log("   Already committed? Use 'qq filter' to purge from history.\n");
+  console.log("   Already committed? Use 'rxdev filter' to purge from history.\n");
 }
 
 async function releaseCommand() {
@@ -2031,7 +2031,12 @@ async function reviewCommand() {
     console.log("ℹ️  No staged changes to review. Stage files first with 'git add'.\n");
     return;
   }
-  const data = await aic.buildReview(diff, hookConfig(aic));
+  const cfg = hookConfig(aic);
+  if (!cfg.apiKey && cfg.needsKey) {
+    console.error("❌ No API key configured. Run 'rxdev config' to set it.\n");
+    process.exit(1);
+  }
+  const data = await aic.buildReview(diff, cfg);
   if (!data || data.error) {
     console.error(`\n❌ ${data?.error || "Review failed."}`);
     process.exit(1);
@@ -2046,7 +2051,7 @@ async function analyticsCommand() {
   console.log("\n📊 Analyzing commit history...\n");
   const aic = await hook();
   const rangeIdx = args.indexOf("--range");
-  const range = rangeIdx !== -1 ? args[rangeIdx + 1] : "HEAD~50..HEAD";
+  const range = rangeIdx !== -1 ? args[rangeIdx + 1] : "HEAD~20..HEAD";
   const data = aic.analyzeCommits(range);
   const badPractices = aic.detectBadPractices(range);
 
@@ -2069,7 +2074,7 @@ function showHelp() {
   console.log(`${boldCyan}RXDev${resetColor} is an AI-powered developer workflow tool ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
 ${"\x1b[1m\x1b[37m"}Usage:${resetColor}
-  ${boldCyan}qq${resetColor} <command> [options]
+  ${boldCyan}rxdev${resetColor} <command> [options]
 
 ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}init${resetColor}          Install AI commit hook
@@ -2106,8 +2111,8 @@ if (filteredArgs.includes("--help") || filteredArgs.includes("-h")) {
 }
 
 // === AUTO-UPDATE MANAGED PROJECTS' HOOKS ===
-// Only on an explicit `qq update`. Previously this ran on almost every command,
-// silently rewriting the hooks of OTHER managed repos whenever the user ran qq
+// Only on an explicit `rxdev update`. Previously this ran on almost every command,
+// silently rewriting the hooks of OTHER managed repos whenever the user ran rxdev
 // anywhere — surprising and, across a runtime switch, actively harmful.
 if (cmd === "update") {
   const projects = getManagedProjects().filter((p) => existsSync(p));
