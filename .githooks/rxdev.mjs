@@ -1773,6 +1773,9 @@ export async function buildReview(diff, cfg) {
 
   const userPrompt = `Review the following code changes:\n\n---\n${diff}\n---`;
 
+  logMessage(`REVIEW: Sending ${diff.length} chars to LLM`);
+  logMessage(`REVIEW: System prompt: ${REVIEW_SYSTEM_PROMPT.slice(0, 100)}...`);
+
   let reviewText;
   try {
     reviewText = await callLlm(
@@ -1784,8 +1787,11 @@ export async function buildReview(diff, cfg) {
       { echo: false, temperature: 0.3, maxTokens: 1500 },
     );
   } catch (e) {
+    logMessage(`REVIEW: LLM error: ${e.message}`);
     return { error: `LLM error: ${e.message}`, issues: [], review: "" };
   }
+
+  logMessage(`REVIEW: LLM returned ${reviewText?.length || 0} chars: ${reviewText?.slice(0, 100)}...`);
 
   if (!reviewText || reviewText.trim().length === 0) {
     return { error: "LLM returned empty response", issues: [], review: "" };

@@ -2113,12 +2113,16 @@ async function reviewCommand() {
     console.log("ℹ️  No staged changes to review. Stage files first with 'git add'.\n");
     return;
   }
+  console.log(`📝 Diff length: ${diff.length} chars`);
   const cfg = hookConfig(aic);
+  console.log(`🔑 API key: ${cfg.apiKey ? "configured" : "NOT SET"}`);
+  console.log(`🌐 Provider: ${cfg.provider}, Model: ${cfg.model}`);
   if (!cfg.apiKey && cfg.needsKey) {
     console.error("❌ No API key configured. Run 'rxdev config' to set it.\n");
     process.exit(1);
   }
   const data = await aic.buildReview(diff, cfg);
+  console.log(`\n📊 Review result:`, JSON.stringify({ hasReview: !!data.review, reviewLength: data.review?.length, error: data.error, issueCount: data.issueCount }));
   if (!data || data.error) {
     console.error(`\n❌ ${data?.error || "Review failed."}`);
     process.exit(1);
