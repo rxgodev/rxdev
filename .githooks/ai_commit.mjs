@@ -1606,6 +1606,52 @@ export async function runSubcommand(argv, cfg) {
 
 const COAUTHOR_TRAILER = "Co-authored-by: RXCommit <autocommitrxgo@gmail.com>";
 
+// Fit the staged diff into a token budget WITHOUT dropping whole files: every
+// changed file keeps its "# File:" header, and the remaining budget is split
+// evenly across files (truncated files get a "… (N more changed lines)" marker).
+// Beats a blind slice(0, maxLen), which would silently omit all later files.
+export function buildPromptDiff(diff, maxLen = MAX_DIFF_LENGTH) {
+  if (diff.length <= maxLen) return diff;
+
+  const blocks = [];
+  let cur = null;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("# File: ")) {
+      cur = { header: line, body: [] };
+      blocks.push(cur);
+    } else if (cur) {
+      cur.body.push(line);
+    }
+  }
+  // No per-file structure (e.g. the binary-files fallback) — fall back to a slice.
+  if (!blocks.length) return diff.slice(0, maxLen);
+
+  // Reserve space for every header and a possible truncation marker per file,
+  // so the body budget never pushes a later file's header past the limit.
+  const MARKER_RESERVE = 28; // ~ "… (NN more changed lines)"
+  const headerCost = blocks.reduce((n, b) => n + b.header.length + 1, 0);
+  const bodyBudget = Math.max(0, maxLen - headerCost - blocks.length * MARKER_RESERVE);
+  const perFile = Math.floor(bodyBudget / blocks.length);
+
+  const out = [];
+  for (const b of blocks) {
+    out.push(b.header);
+    let used = 0;
+    let kept = 0;
+    for (const line of b.body) {
+      if (used + line.length + 1 > perFile) break;
+      out.push(line);
+      used += line.length + 1;
+      kept++;
+    }
+    const dropped = b.body.length - kept;
+    if (dropped > 0) out.push(`… (${dropped} more changed line${dropped === 1 ? "" : "s"})`);
+  }
+
+  const result = out.join("\n");
+  return result.length > maxLen ? result.slice(0, maxLen) : result;
+}
+
 export function composeMessage(message, { bumps = [], kind = "patch", addCoauthor = false } = {}) {
   let out = message;
   if (bumps.length) {
@@ -1657,9 +1703,10 @@ export async function main(commitMsgFile, cfg, opts = {}) {
     return 0;
   }
 
-  let message = await generateCommitMessage(diff.slice(0, MAX_DIFF_LENGTH), cfg, { echo });
+  const promptDiff = buildPromptDiff(diff, MAX_DIFF_LENGTH);
+  let message = await generateCommitMessage(promptDiff, cfg, { echo });
   if (message === null) {
-    message = generateFallbackMessage(diff.slice(0, MAX_DIFF_LENGTH));
+    message = generateFallbackMessage(promptDiff);
     logMessage(`Fallback message generated (${message.length} chars)`);
   }
 
