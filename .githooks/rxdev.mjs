@@ -1790,7 +1790,7 @@ export async function buildReview(diff, cfg) {
         { role: "user", content: userPrompt },
       ],
       reviewCfg,
-      { echo: false, temperature: 0.3, maxTokens: 1500 },
+      { echo: false, clean: false, temperature: 0.3, maxTokens: 1500 },
     );
   } catch (e) {
     logMessage(`REVIEW: LLM error: ${e.message}`);
