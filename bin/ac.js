@@ -2081,14 +2081,15 @@ async function mainCmd() {
       console.log("Updating RXCommit...\n");
       const isPnpm = __dirname.includes("pnpm") || process.env.PNPM_HOME;
       const pm = isPnpm ? "pnpm" : "npm";
-      const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], { stdio: "inherit" });
+      // npm/pnpm are .cmd shims on Windows, which modern Node refuses to spawn
+      // without a shell (CVE-2024-27980). Keep POSIX shell-free; use shell on Win.
+      const pmOpts = { stdio: "inherit", shell: process.platform === "win32" };
+      const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], pmOpts);
       if (upd.status === 0) {
         console.log("\n✅ RXCommit updated successfully.");
       } else if (pm === "pnpm") {
         console.log("\n⚠️  pnpm update failed, trying npm...\n");
-        const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], {
-          stdio: "inherit",
-        });
+        const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], pmOpts);
         if (npmUpd.status === 0) {
           console.log("\n✅ RXCommit updated successfully.");
         } else {

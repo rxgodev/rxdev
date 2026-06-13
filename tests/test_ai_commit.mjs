@@ -538,6 +538,27 @@ test("bumpProjectVersion: bumps package.json + pyproject.toml", () => {
   }
 });
 
+test("getManifests: cache is keyed by repoRoot (no cross-repo bleed)", () => {
+  const a = mkdtempSync(join(tmpdir(), "nc-cache-a-"));
+  const b = mkdtempSync(join(tmpdir(), "nc-cache-b-"));
+  try {
+    writeFileSync(join(a, "package.json"), '{"version":"1.0.0"}');
+    writeFileSync(join(b, "Cargo.toml"), '[package]\nversion = "1.0.0"\n');
+    assert.deepEqual(
+      aic.getManifests(a).map((m) => m.def.name),
+      ["package.json"],
+    );
+    // With the old non-keyed global cache this returned a's manifests instead.
+    assert.deepEqual(
+      aic.getManifests(b).map((m) => m.def.name),
+      ["Cargo.toml"],
+    );
+  } finally {
+    rmSync(a, { recursive: true, force: true });
+    rmSync(b, { recursive: true, force: true });
+  }
+});
+
 // ── slice 5: main flow + subcommands ──
 
 test("composeMessage: bump footer + co-author", () => {
