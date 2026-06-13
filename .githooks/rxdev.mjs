@@ -1694,6 +1694,60 @@ export async function buildPrReview(prNumber, cfg) {
   return buildReview(truncated, cfg);
 }
 
+export function analyzeCommits(revRange = "HEAD~50..HEAD", repoRoot) {
+  const logOutput = git(["log", "--pretty=format:%H|%s|%b", revRange], repoRoot);
+  if (!logOutput) return { total: 0, byType: {}, avgMessageLength: 0, breakingChanges: 0 };
+
+  const commits = logOutput.split("\n").filter(Boolean).map((line) => {
+    const [hash, subject, ...bodyParts] = line.split("|");
+    return { hash, subject, body: bodyParts.join("|") };
+  });
+
+  const byType = {};
+  let totalLength = 0;
+  let breakingChanges = 0;
+
+  for (const c of commits) {
+    const parsed = parseCommit(c.subject);
+    if (parsed.type) {
+      byType[parsed.type] = (byType[parsed.type] || 0) + 1;
+    }
+    totalLength += c.subject.length;
+    if (parsed.breaking) breakingChanges++;
+  }
+
+  return {
+    total: commits.length,
+    byType,
+    avgMessageLength: commits.length ? Math.round(totalLength / commits.length) : 0,
+    breakingChanges,
+  };
+}
+
+export function detectBadPractices(revRange = "HEAD~50..HEAD", repoRoot) {
+  const logOutput = git(["log", "--pretty=format:%H|%s", revRange], repoRoot);
+  if (!logOutput) return [];
+
+  const commits = logOutput.split("\n").filter(Boolean).map((line) => {
+    const [hash, subject] = line.split("|");
+    return { hash, subject };
+  });
+
+  const issues = [];
+
+  for (const c of commits) {
+    if (c.subject.length > 100) {
+      issues.push({ severity: "warning", message: `Long commit message (${c.subject.length} chars): ${c.subject.slice(0, 50)}...`, hash: c.hash });
+    }
+    const parsed = parseCommit(c.subject);
+    if (!parsed.type) {
+      issues.push({ severity: "warning", message: `Non-conventional commit: ${c.subject}`, hash: c.hash });
+    }
+  }
+
+  return issues;
+}
+
 export async function runSubcommand(argv, cfg) {
   const mode = argv[0];
   const opt = (name) => {
@@ -1725,6 +1779,13 @@ export async function runSubcommand(argv, cfg) {
         return 1;
       }
       process.stdout.write(JSON.stringify(await buildReview(diff, cfg)));
+      return 0;
+    }
+    if (mode === "--analytics") {
+      const range = opt("--range") || "HEAD~50..HEAD";
+      const stats = analyzeCommits(range);
+      const badPractices = detectBadPractices(range);
+      process.stdout.write(JSON.stringify({ stats, badPractices }));
       return 0;
     }
     process.stdout.write(JSON.stringify({ error: `unknown mode: ${mode}` }));

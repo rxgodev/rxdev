@@ -2002,6 +2002,29 @@ async function reviewCommand() {
   }
 }
 
+async function analyticsCommand() {
+  console.log("\n📊 Analyzing commit history...\n");
+  const aic = await hook();
+  const rangeIdx = args.indexOf("--range");
+  const range = rangeIdx !== -1 ? args[rangeIdx + 1] : "HEAD~50..HEAD";
+  const data = aic.analyzeCommits(range);
+  const badPractices = aic.detectBadPractices(range);
+
+  console.log(`Total commits: ${data.total}`);
+  console.log(`Average message length: ${data.avgMessageLength} chars`);
+  console.log(`Breaking changes: ${data.breakingChanges}`);
+  console.log("\nBy type:");
+  for (const [type, count] of Object.entries(data.byType)) {
+    console.log(`  ${type}: ${count}`);
+  }
+  if (badPractices.length > 0) {
+    console.log(`\n⚠️  Bad practices found: ${badPractices.length}`);
+    for (const issue of badPractices.slice(0, 5)) {
+      console.log(`  - ${issue.message}`);
+    }
+  }
+}
+
 function showHelp() {
   console.log(`${boldCyan}RXDev${resetColor} is an AI-powered developer workflow tool ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
@@ -2015,6 +2038,7 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}split${resetColor}         Split staged changes into multiple logical commits
   ${boldCyan}scan${resetColor}          Scan staged changes for secrets/credentials
   ${boldCyan}review${resetColor}        AI code review of staged changes
+  ${boldCyan}analytics${resetColor}     Show commit statistics and bad practices
   ${boldCyan}pr${resetColor}            Generate a pull request title + description
   ${boldCyan}release${resetColor}       Generate CHANGELOG entry, bump version & tag
   ${boldCyan}uninstall${resetColor}     Remove hook
@@ -2085,6 +2109,9 @@ async function mainCmd() {
       break;
     case "review":
       await reviewCommand();
+      break;
+    case "analytics":
+      await analyticsCommand();
       break;
     case "scan":
       await scanCommand();
