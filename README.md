@@ -2,7 +2,7 @@
 
 # RXDev
 
-**AI-powered developer workflow tool** — commit messages, code review, PR automation, analytics, and more.
+**AI-powered developer workflow tool** — commit messages, PR automation, analytics, and more.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Version](https://img.shields.io/badge/version-4.0.0-8250df)](https://github.com/rxgodev/rxcommit/releases)
@@ -24,7 +24,6 @@
 - [Commands](#commands)
 - [Providers & Models](#providers--models)
 - [Configuration](#configuration)
-- [GitHub Action](#github-action)
 - [Documentation](#documentation)
 - [License](#license)
 
@@ -33,12 +32,10 @@
 ## What's New in v4.0
 
 - **Renamed** from `rxcommit` to `rxdev` — broader scope beyond just commits
-- **AI Code Review** (`rxdev review`) — review staged changes or PRs before committing
 - **Contextual Commits** — uses branch name, recent commits, and GitHub Issues for better messages
 - **Analytics** (`rxdev analytics`) — commit statistics and bad practice detection
 - **Smart Split** — auto-detects file types (tests, docs, config) for intelligent grouping
 - **Config as Code** — `rxdev.yml` in your project root for team-shared settings
-- **GitHub Action** — automatic AI review on every PR
 - **Improved Diff System** — smart truncation (16K chars), never cuts files mid-way
 - **Cross-platform CI** — tested on Windows, macOS, and Ubuntu
 
@@ -105,26 +102,7 @@ $ rxdev analytics
 - Breaking change detection
 - Bad practice warnings (too long, non-conventional, etc.)
 
-### GitHub Action
 
-Automatic AI review on every PR — uses your existing provider key:
-
-```yaml
-name: AI Review
-on:
-  pull_request:
-    types: [opened, synchronize]
-
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: rxgodev/rxdev-review@v1
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          # or OPENAI_API_KEY, OPENROUTER_API_KEY — whichever you use
-```
 
 ### Other Features
 
@@ -208,8 +186,7 @@ That's it. `rxdev go` guides you through every step:
 
 | Command | Description |
 |---------|-------------|
-| `rxdev go` | **QuickFlow** — stage → scan → generate → review → push |
-| `rxdev review` | AI code review of staged changes |
+| `rxdev go` | **QuickFlow** — stage → scan → generate → push |
 | `rxdev split` | Split staged changes into multiple logical commits |
 | `rxdev scan` | Scan staged changes for leaked secrets |
 | `rxdev analytics` | Show commit statistics and bad practices |
@@ -326,29 +303,6 @@ Priority: `rxdev.yml` → CLI flags → `~/.config/rxdev/config.json` → defaul
 ### .commitignore
 
 Edit `.commitignore` (follows `.gitignore` syntax) to exclude files from the diff sent to the model.
-
----
-
-## GitHub Action
-
-Automatic AI review on every PR — uses your existing provider key:
-
-```yaml
-name: AI Review
-on:
-  pull_request:
-    types: [opened, synchronize]
-
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: rxgodev/rxdev-review@v1
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          # or OPENAI_API_KEY, OPENROUTER_API_KEY — whichever you use
-```
 
 ---
 
