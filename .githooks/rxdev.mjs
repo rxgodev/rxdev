@@ -1200,7 +1200,92 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OLD_CONFIG_DIR = join(homedir(), ".config", "ai-commit");
 const CONFIG_DIR = join(homedir(), ".config", "rxdev");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+const TOKENS_FILE = join(CONFIG_DIR, "tokens.json");
 const LOG_FILE = join(CONFIG_DIR, "rxdev_debug.log");
+
+let _sessionTokens = 0;
+
+function loadTokenUsage() {
+  try {
+    if (existsSync(TOKENS_FILE)) {
+      return JSON.parse(readFileSync(TOKENS_FILE, "utf8"));
+    }
+  } catch {}
+  return { daily: {}, monthly: {}, lastRequest: 0 };
+}
+
+function saveTokenUsage(data) {
+  try {
+    mkdirSync(CONFIG_DIR, { recursive: true });
+    writeFileSync(TOKENS_FILE, JSON.stringify(data, null, 2));
+  } catch {}
+}
+
+function trackTokens(promptTokens, completionTokens) {
+  const total = promptTokens + completionTokens;
+  _sessionTokens += total;
+
+  const usage = loadTokenUsage();
+  const today = new Date().toISOString().slice(0, 10);
+  const month = new Date().toISOString().slice(0, 7);
+
+  usage.daily[today] = (usage.daily[today] || 0) + total;
+  usage.monthly[month] = (usage.monthly[month] || 0) + total;
+  usage.lastRequest = total;
+
+  // Clean old entries (keep last 30 days)
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  for (const key of Object.keys(usage.daily)) {
+    if (key < cutoff) delete usage.daily[key];
+  }
+
+  saveTokenUsage(usage);
+  return total;
+}
+
+function checkTokenLimits(cfg) {
+  const limits = cfg.tokenLimit || {};
+  if (!limits.daily && !limits.monthly) return null;
+
+  const usage = loadTokenUsage();
+  const today = new Date().toISOString().slice(0, 10);
+  const month = new Date().toISOString().slice(0, 7);
+
+  const dailyUsed = usage.daily[today] || 0;
+  const monthlyUsed = usage.monthly[month] || 0;
+
+  if (limits.daily && dailyUsed >= limits.daily) {
+    return { exceeded: true, type: "daily", used: dailyUsed, limit: limits.daily };
+  }
+  if (limits.monthly && monthlyUsed >= limits.monthly) {
+    return { exceeded: true, type: "monthly", used: monthlyUsed, limit: limits.monthly };
+  }
+
+  const dailyPercent = limits.daily ? (dailyUsed / limits.daily) * 100 : 0;
+  const monthlyPercent = limits.monthly ? (monthlyUsed / limits.monthly) * 100 : 0;
+
+  if (dailyPercent >= 90 || monthlyPercent >= 90) {
+    return { warning: "90", dailyUsed, dailyLimit: limits.daily, monthlyUsed, monthlyLimit: limits.monthly };
+  }
+  if (dailyPercent >= 80 || monthlyPercent >= 80) {
+    return { warning: "80", dailyUsed, dailyLimit: limits.daily, monthlyUsed, monthlyLimit: limits.monthly };
+  }
+
+  return null;
+}
+
+export function getTokenStats() {
+  const usage = loadTokenUsage();
+  const today = new Date().toISOString().slice(0, 10);
+  const month = new Date().toISOString().slice(0, 7);
+
+  return {
+    daily: usage.daily[today] || 0,
+    monthly: usage.monthly[month] || 0,
+    lastRequest: usage.lastRequest || 0,
+    sessionTokens: _sessionTokens,
+  };
+}
 
 function migrateOldConfig() {
   if (existsSync(CONFIG_DIR) || !existsSync(OLD_CONFIG_DIR)) return;
@@ -1454,6 +1539,7 @@ export function callLlm(messages, cfg, opts = {}) {
 
         let buffer = "";
         let text = "";
+        let usage = null;
         const handleLine = (line) => {
           const trimmed = line.trim();
           if (!trimmed?.startsWith("data: ")) return;
@@ -1466,6 +1552,7 @@ export function callLlm(messages, cfg, opts = {}) {
               text += content;
               if (echo) process.stdout.write(content);
             }
+            if (chunk.usage) usage = chunk.usage;
           } catch (e) {
             logMessage(`WARN: malformed SSE chunk: ${e.message}`);
           }
@@ -1484,6 +1571,17 @@ export function callLlm(messages, cfg, opts = {}) {
           if (buffer) handleLine(buffer);
           if (echo) process.stdout.write("\n");
           const t = text.trim();
+
+          // Track tokens
+          if (usage) {
+            const tracked = trackTokens(usage.prompt_tokens || 0, usage.completion_tokens || 0);
+            if (echo) process.stdout.write(`\x1b[38;5;244m⚡ ${tracked} tokens (${usage.prompt_tokens || "?"} prompt + ${usage.completion_tokens || "?"} completion)\x1b[0m\n`);
+          } else {
+            // Approximate tokens (roughly 1 token per 4 chars)
+            const approxTokens = Math.ceil(t.length / 4);
+            trackTokens(0, approxTokens);
+          }
+
           resolve(clean ? cleanLlmResponse(t, typeRegexStr) : t);
         });
       },

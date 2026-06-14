@@ -2229,6 +2229,7 @@ ${"\x1b[1m\x1b[37m"}Commands:${resetColor}
   ${boldCyan}scan${resetColor}          Scan staged changes for secrets/credentials
   ${boldCyan}review${resetColor}        AI code review of staged changes
   ${boldCyan}stats${resetColor}         Show commit statistics and bad practices
+  ${boldCyan}tokens${resetColor}        Show token usage statistics
   ${boldCyan}pr${resetColor}            Generate a pull request title + description
   ${boldCyan}release${resetColor}       Create GitHub Release with tag
   ${boldCyan}uninstall${resetColor}     Remove hook
@@ -2271,6 +2272,32 @@ if (cmd === "update") {
 }
 
 // === COMMANDS ===
+async function tokensCommand() {
+  const aic = await hook();
+  const stats = aic.getTokenStats();
+  const config = loadConfig();
+  const limits = config.tokenLimit || {};
+
+  console.log(`\n📊 ${aic.t("tokensTitle")}\n`);
+
+  if (limits.daily) {
+    const dailyPercent = Math.round((stats.daily / limits.daily) * 100);
+    console.log(`${aic.t("tokensToday")} ${stats.daily.toLocaleString()} / ${limits.daily.toLocaleString()} (${dailyPercent}%)`);
+  } else {
+    console.log(`${aic.t("tokensToday")} ${stats.daily.toLocaleString()} (no limit set)`);
+  }
+
+  if (limits.monthly) {
+    const monthlyPercent = Math.round((stats.monthly / limits.monthly) * 100);
+    console.log(`${aic.t("tokensMonth")} ${stats.monthly.toLocaleString()} / ${limits.monthly.toLocaleString()} (${monthlyPercent}%)`);
+  } else {
+    console.log(`${aic.t("tokensMonth")} ${stats.monthly.toLocaleString()} (no limit set)`);
+  }
+
+  console.log(`\n${aic.t("tokensLastReq")} ${stats.lastRequest} tokens`);
+  console.log(`Session: ${stats.sessionTokens} tokens\n`);
+}
+
 async function mainCmd() {
   const config = loadConfig();
   const aic = await hook();
@@ -2318,6 +2345,9 @@ async function mainCmd() {
     }
     case "release":
       await releaseCommand();
+      break;
+    case "tokens":
+      await tokensCommand();
       break;
     case "update": {
       console.log("Updating RXDev...\n");
