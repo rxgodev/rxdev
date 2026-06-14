@@ -726,7 +726,7 @@ async function showFileTreePicker(
         let label = item.label;
         if (!item.isDir && item.value !== "__all__" && item.value !== "__sep__") {
           try {
-            const stat = require("fs").statSync(item.value);
+            const stat = statSync(item.value);
             const size = stat.size < 1024 ? `${stat.size}B` :
                          stat.size < 1024 * 1024 ? `${(stat.size / 1024).toFixed(1)}KB` :
                          `${(stat.size / (1024 * 1024)).toFixed(1)}MB`;
@@ -2230,8 +2230,6 @@ async function statsCommand() {
     // Ignore bad practices errors
   }
 
-  const aic = await hook();
-
   if (data.total === 0) {
     console.log(`ℹ️  ${aic.t("statsNoCommits")}\n`);
     return;
@@ -2424,6 +2422,7 @@ async function mainCmd() {
         showHelp();
       }
     }
+  }
 }
 process.on("unhandledRejection", (e) => {
   console.error(`\n❌ Unhandled error: ${e.message || e}`);
