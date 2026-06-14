@@ -1003,6 +1003,7 @@ async function configInteractive() {
       if (confirm) {
         config.language = lang;
         saveConfig(config);
+        aic.setLanguage(lang);
         console.log(`✅ Language: ${LANGUAGES[lang]}.\n`);
       } else {
         console.log("↩️  Cancelled.\n");
@@ -1954,17 +1955,16 @@ async function scanSecrets() {
 }
 
 async function scanCommand() {
+  const aic = await hook();
   const findings = await scanSecrets();
   if (!findings.length) {
-    console.log("\n✅ No secrets detected in staged changes.\n");
+    console.log(`\n✅ ${aic.t("scanClean")}\n`);
     return;
   }
-  console.log(`\n🚨 ${findings.length} potential secret(s) in staged changes:\n`);
+  console.log(`\n🚨 ${findings.length} ${aic.t("scanFound")}\n`);
   for (const f of findings) {
     console.log(`  • ${f.type} — ${f.file}  (${f.preview})`);
   }
-  console.log("\n   Unstage or remove these before committing.");
-  console.log("   Already committed? Use 'rxdev filter' to purge from history.\n");
 }
 
 async function releaseCommand() {
@@ -2146,24 +2146,24 @@ async function reviewCommand() {
   const aic = await hook();
   const { diff } = await aic.getStagedDiff();
   if (!diff) {
-    console.log("ℹ️  No staged changes to review. Stage files first with 'git add'.\n");
+    console.log(`ℹ️  ${aic.t("reviewNoChanges")}\n`);
     return;
   }
   const cfg = hookConfig(aic);
   if (!cfg.apiKey && cfg.needsKey) {
-    console.error("❌ No API key configured. Run 'rxdev config' to set it.\n");
+    console.error(`❌ ${aic.t("reviewNoApiKey")}\n`);
     process.exit(1);
   }
   const data = await aic.buildReview(diff, cfg);
   if (!data || data.error) {
-    console.error(`\n❌ ${data?.error || "Review failed."}`);
+    console.error(`\n❌ ${data?.error || aic.t("reviewFailed")}`);
     process.exit(1);
   }
-  console.log(`\n🔍 Code Review\n`);
+  console.log(`\n🔍 ${aic.t("reviewTitle")}\n`);
   console.log(stripMarkdown(data.review));
   if (data.issueCount > 0) {
     console.log(`\n${"─".repeat(40)}`);
-    console.log(`📋 Found ${data.issueCount} issue(s)`);
+    console.log(`📋 ${data.issueCount} ${aic.t("reviewIssues")}`);
   }
   console.log("");
 }
@@ -2193,20 +2193,22 @@ async function statsCommand() {
     // Ignore bad practices errors
   }
 
+  const aic = await hook();
+
   if (data.total === 0) {
-    console.log("ℹ️  No commits found in the specified range.\n");
+    console.log(`ℹ️  ${aic.t("statsNoCommits")}\n`);
     return;
   }
 
-  console.log(`Total commits: ${data.total}`);
-  console.log(`Average message length: ${data.avgMessageLength} chars`);
-  console.log(`Breaking changes: ${data.breakingChanges}`);
-  console.log("\nBy type:");
+  console.log(`${aic.t("statsTotal")} ${data.total}`);
+  console.log(`${aic.t("statsAvgLen")} ${data.avgMessageLength} chars`);
+  console.log(`${aic.t("statsBreaking")} ${data.breakingChanges}`);
+  console.log(`\n${aic.t("statsByType")}`);
   for (const [type, count] of Object.entries(data.byType)) {
     console.log(`  ${type}: ${count}`);
   }
   if (badPractices.length > 0) {
-    console.log(`\n⚠️  Bad practices found: ${badPractices.length}`);
+    console.log(`\n⚠️  ${aic.t("statsBadPractices")} ${badPractices.length}`);
     for (const issue of badPractices.slice(0, 5)) {
       console.log(`  - ${issue.message}`);
     }
@@ -2270,6 +2272,10 @@ if (cmd === "update") {
 
 // === COMMANDS ===
 async function mainCmd() {
+  const config = loadConfig();
+  const aic = await hook();
+  aic.setLanguage(config.language || "ru");
+
   switch (cmd) {
     case "init":
       await install();
