@@ -723,7 +723,17 @@ async function showFileTreePicker(
         } else {
           mark = checked.has(item.value) ? "◼" : "◻";
         }
-        process.stdout.write(`${ptr} ${mark} ${item.label}\n`);
+        let label = item.label;
+        if (!item.isDir && item.value !== "__all__" && item.value !== "__sep__") {
+          try {
+            const stat = require("fs").statSync(item.value);
+            const size = stat.size < 1024 ? `${stat.size}B` :
+                         stat.size < 1024 * 1024 ? `${(stat.size / 1024).toFixed(1)}KB` :
+                         `${(stat.size / (1024 * 1024)).toFixed(1)}MB`;
+            label = `${item.label} ${"\x1b[2m"}(${size})${"\x1b[22m"}`;
+          } catch {}
+        }
+        process.stdout.write(`${ptr} ${mark} ${label}\n`);
       }
       if (items.length > end)
         process.stdout.write(`  \x1b[2m... ${items.length - end} more\x1b[22m\n`);
