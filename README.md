@@ -5,7 +5,7 @@
 **AI-powered developer workflow tool** — commit messages, code review, PR automation, analytics, and more.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-4.0.0-8250df)](https://github.com/rxgodev/rxdev/releases)
+[![Version](https://img.shields.io/badge/version-4.1.0-8250df)](https://github.com/rxgodev/rxdev/releases)
 [![CLI](https://img.shields.io/badge/cli-rxdev-4FC08D?logo=gnubash&logoColor=white)](.#readme)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![CI](https://img.shields.io/badge/CI-Windows%20%7C%20macOS%20%7C%20Ubuntu-4FC08D)](.github/workflows/ci.yml)
@@ -17,6 +17,7 @@
 
 ## Table of Contents
 
+- [What's New in v4.1](#whats-new-in-v41)
 - [What's New in v4.0](#whats-new-in-v40)
 - [Features](#features)
 - [Installation](#installation)
@@ -27,6 +28,16 @@
 - [GitHub Action](#github-action)
 - [Documentation](#documentation)
 - [License](#license)
+
+---
+
+## What's New in v4.1
+
+- **Full Interface Localization** — entire interface in your language (en/ru/de/fr/zh)
+- **Token Management** — track usage, set daily/monthly limits, get warnings
+- **Command Suggestions** — "Did you mean 'stats'?" for typos
+- **Improved File Picker** — shows file sizes, better navigation
+- **New Command** — `rxdev tokens` for token usage statistics
 
 ---
 
@@ -212,7 +223,8 @@ That's it. `rxdev go` guides you through every step:
 | `rxdev review` | AI code review of staged changes |
 | `rxdev split` | Split staged changes into multiple logical commits |
 | `rxdev scan` | Scan staged changes for leaked secrets |
-| `rxdev analytics` | Show commit statistics and bad practices |
+| `rxdev stats` | Show commit statistics and bad practices |
+| `rxdev tokens` | Show token usage statistics |
 | `rxdev pr` | Generate a pull request title + description |
 | `rxdev release` | Create GitHub Release with tag |
 | `rxdev init` | Install the AI commit hook |

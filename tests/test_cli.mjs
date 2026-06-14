@@ -25,8 +25,8 @@ test("--help", () => {
   assert.ok(r.stdout.includes("RXDev"));
 });
 
-test("unknown command shows help", () => {
+test("unknown command shows suggestion or help", () => {
   const r = run("nonexistent");
   assert.equal(r.status, 0);
-  assert.ok(r.stdout.includes("RXDev"));
+  assert.ok(r.stdout.includes("Did you mean") || r.stdout.includes("RXDev"));
 });

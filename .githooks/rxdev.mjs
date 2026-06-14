@@ -132,6 +132,847 @@ export const BODY_LANGUAGE_PROMPTS = {
   zh: "Body: 一个短句解释这次变更。不要列表，不要文件名，不要项目符号。",
 };
 
+export const UI_STRINGS = {
+  en: {
+    // Review
+    reviewTitle: "Code Review",
+    reviewNoChanges: "No staged changes to review. Stage files first with 'git add'.",
+    reviewNoApiKey: "No API key configured. Run 'rxdev config' to set it.",
+    reviewFailed: "Review failed.",
+    reviewIssues: "issue(s)",
+    reviewSummary: "Summary",
+    reviewIssuesFound: "Issues found",
+    reviewSuggestions: "Suggestions for improvement",
+    // Scan
+    scanTitle: "Scanning staged changes...",
+    scanClean: "No secrets detected in staged changes.",
+    scanFound: "potential secret(s) in staged changes:",
+    scanWhatToDo: "What to do with secrets?",
+    scanCommitAnyway: "Commit anyway (risky)",
+    scanUnstage: "Unstage secret files & commit",
+    scanCancel: "Cancel",
+    scanUnstaged: "Unstaged:",
+    // Stats
+    statsTitle: "commit statistics:",
+    statsTotal: "Total commits:",
+    statsAvgLen: "Average message length:",
+    statsChars: "chars",
+    statsBreaking: "Breaking changes:",
+    statsByType: "By type:",
+    statsBadPractices: "Bad practices found:",
+    statsNoCommits: "No commits found in the specified range.",
+    // Tokens
+    tokensTitle: "Token Usage",
+    tokensToday: "Today:",
+    tokensMonth: "This month:",
+    tokensLastReq: "Last request:",
+    tokensLimitExceeded: "Daily limit exceeded. Using fallback generator.",
+    tokensNoLimit: "no limit set",
+    tokensSession: "Session:",
+    tokensUnit: " tokens",
+    tokensOfDaily: "of daily limit",
+    tokensLeft: "left",
+    tokensWarning80: "80% daily limit used",
+    tokensWarning90: "90% daily limit used",
+    helpDescConfig: "Configure model, language, key, prompt, types, co-author & more",
+    helpDescFilter: "Rewrite git history (remove secrets, files, etc.)",
+    helpDescGo: "Start QuickFlow\u00AE — interactive commit flow",
+    helpDescInit: "Install AI commit hook",
+    helpDescPr: "Generate pull request title + description",
+    helpDescRelease: "Create GitHub Release with tag",
+    helpDescReview: "AI code review of staged changes",
+    helpDescScan: "Scan staged changes for secrets/credentials",
+    helpDescSplit: "Split staged changes into multiple logical commits",
+    helpDescStats: "Show commit statistics",
+    helpDescStatus: "Show integration status",
+    helpDescTokens: "Show token usage statistics",
+    helpDescUninstall: "Remove hook",
+    helpDescUpdate: "Show update instructions",
+    helpDescVersion: "Show version number",
+    helpTagline: "is an AI-powered developer workflow tool",
+    helpUsage: "Usage:",
+    helpCommands: "Commands:",
+    helpCmdPlaceholder: "<command>",
+    helpOptsPlaceholder: "[options]",
+    // Split
+    splitTitle: "Analyzing staged changes...",
+    splitNoChanges: "No staged changes to split.",
+    splitPrompt: "What to do with secrets?",
+    splitApply: "Apply this split?",
+    splitCancelled: "Cancelled.",
+    // Config menu labels
+    configTitle: "Configuration",
+    configSaved: "Saved.",
+    configCancelled: "Cancelled.",
+    configSaveExit: "✅ Save & exit",
+    configProvider: "🔌 Provider:",
+    configModelPre: "🧠 Model:",
+    configUiLanguagePre: "🌐 UI Language:",
+    configCommitLanguagePre: "📝 Commit Language:",
+    configCustomPromptPre: "✏️  Custom prompt:",
+    configCustomTypesPre: "📝 Custom types:",
+    configApiKeyPre: "🔑 API key:",
+    configCoauthorPre: "👥 Co-author:",
+    configAutoBumpPre: "📈 Auto-bump:",
+    configTokenLimitsPre: "🔋 Token limits:",
+    configTokenDaily: "Daily token limit",
+    configTokenMonthly: "Monthly token limit",
+    configTokenEmptyKeep: "empty to keep",
+    configCurrent: "current",
+    configProjectsTemplates: "📂 Projects & Templates",
+    configSelectSetting: "Select setting",
+    configSelectUiLang: "Select UI language:",
+    configSelectCommitLang: "Select commit message language:",
+    configSetUiLang: "Set UI language to",
+    configSetCommitLang: "Set commit language to",
+    configUiLangUpdated: "✅ UI Language:",
+    configCommitLangUpdated: "✅ Commit Language:",
+    configCancelledArrow: "↩️  Cancelled.",
+    configSetProvider: "Select LLM provider:",
+    configSetModel: "Enter model name (or empty for default):",
+    configSetApiKey: "Enter new key (or empty to clear):",
+    configEditPrompt: "Edit system prompt (use {types} placeholder for allowed types):",
+    configEnabled: "enabled",
+    configDisabled: "disabled",
+    configNotSet: "not set",
+    configSet: "set",
+    configConfigured: "configured",
+    configDefault: "default",
+    configNoUrl: "no url",
+    // Go
+    goStage: "Stage Changes",
+    goCommit: "Generating Commit Message",
+    goReview: "Commit Message",
+    goPush: "Push",
+    goEdit: "Edit message",
+    goRegenerate: "Regenerate",
+    goCancel: "Cancel",
+    goTitle: "🚀  RXDev QuickFlow®",
+    goStageTitle: "📂  Stage Changes",
+    goNoChangedFiles: "ℹ️  No changed files found.",
+    goStageFailed: "❌ Failed to stage changes:",
+    goStaged: "✅ file(s) staged",
+    goSecretsFound: "🚨 potential secret(s) in staged changes:",
+    goGeneratingCommit: "💬  Generating Commit Message",
+    goAiAnalyzing: "AI is analyzing your staged changes...",
+    goFailedCommit: "❌ Failed to generate commit message",
+    goCommitCancelled: "↩️  Commit cancelled",
+    goPushTitle: "⬆️  Push Changes",
+    goPushing: "⬆️  Pushing to",
+    goPushed: "✅ Pushed successfully",
+    releaseTitle: "🏷️  Release",
+    releaseSince: "Since:",
+    releaseCurrent: "Current:",
+    releaseBump: "Bump:",
+    releaseCommits: "Commits:",
+    releaseNotes: "Release notes",
+    releaseNothing: "Nothing to release since the last tag.",
+    releaseCreateTag: "Create tag and GitHub Release?",
+    releaseTagFailed: "❌ Failed to create tag (already exists?).",
+    releaseTagCreated: "✅ Created tag",
+    releaseCreated: "✅ GitHub Release created",
+    releaseInstallGh: "ℹ️  Install GitHub CLI to create releases automatically:",
+    prGenerating: "💬 Generating pull request description...",
+    prTitle: "📌 Title:",
+    prCreate: "Create the PR with gh (base:",
+    prInstallGh: "ℹ️  Install GitHub CLI (gh) to open the PR directly from here.",
+    splitProposed: "Proposed commit(s):",
+    splitLeftStaged: "⚠️  Left staged (unassigned):",
+    splitCreated: "✅ Created commit(s).",
+    projectsBackToMenu: "✅ Back to main menu",
+    projectsNoProjects: "📭 No projects (run 'rxdev init' to add)",
+    projectsMissing: "❌ missing",
+    projectsActive: "✅ active",
+    projectsHookOff: "⚠️  hook off",
+    projectsSelect: "Projects",
+    projectsNoProjectsHint: 'ℹ️  Run "rxdev init" in a project to add it.',
+    projectsBack: "⬅️  Back",
+    projectsDisableHook: "🔌 Disable hook",
+    projectsEnableHook: "⚡ Enable hook",
+    projectsRemove: "🗑️  Remove from list",
+    projectsDisableConfirm: "Disable hook in",
+    projectsEnableConfirm: "Enable hook in",
+    projectsRemoveConfirm: "Remove from list?",
+    projectsHookDisabled: "✅ Hook disabled",
+    projectsHookEnabled: "✅ Hook enabled",
+    projectsRemoved: "✅ Removed from list",
+    templatesCreateNew: "➕ Create new template",
+    templatesBack: "⬅️ Back",
+    templatesTitle: "Templates",
+    // General
+    yes: "Yes",
+    no: "No",
+    back: "Back",
+    exit: "Exit",
+    error: "Error:",
+    success: "Done!",
+  },
+  ru: {
+    reviewTitle: "Обзор кода",
+    reviewNoChanges: "Нет изменений для обзора. Сначала добавьте файлы: 'git add'.",
+    reviewNoApiKey: "API ключ не настроен. Запустите 'rxdev config'.",
+    reviewFailed: "Обзор не удался.",
+    reviewIssues: "проблем(ы)",
+    reviewSummary: "Краткое описание",
+    reviewIssuesFound: "Найденные проблемы",
+    reviewSuggestions: "Предложения по улучшению",
+    scanTitle: "Сканирование изменений...",
+    scanClean: "Секреты не обнаружены.",
+    scanFound: "потенциальных секрет(ов) в изменениях:",
+    scanWhatToDo: "Что делать с секретами?",
+    scanCommitAnyway: "Коммитить всё равно (рискованно)",
+    scanUnstage: "Убрать файлы с секретами и коммитить",
+    scanCancel: "Отмена",
+    scanUnstaged: "Убрано из стейджа:",
+    statsTitle: "статистика коммитов:",
+    statsTotal: "Всего коммитов:",
+    statsAvgLen: "Средняя длина сообщения:",
+    statsChars: "симв.",
+    statsBreaking: "Критические изменения:",
+    statsByType: "По типам:",
+    statsBadPractices: "Найдено проблем:",
+    tokensNoLimit: "лимит не установлен",
+    statsNoCommits: "Коммиты не найдены за указанный период.",
+    tokensTitle: "Использование токенов",
+    tokensToday: "Сегодня:",
+    tokensMonth: "В этом месяце:",
+    tokensLastReq: "Последний запрос:",
+    tokensSession: "Сессия:",
+    tokensUnit: " ток.",
+    tokensOfDaily: "от дневного лимита",
+    tokensLeft: "осталось",
+    tokensLimitExceeded: "Дневной лимит превышен. Используется fallback-генератор.",
+    tokensWarning80: "80% дневного лимита использовано",
+    tokensWarning90: "90% дневного лимита использовано",
+    helpDescConfig: "Настройка модели, языка, ключа, промпта, типов, соавтора и др.",
+    helpDescFilter: "Переписать историю git (удалить секреты, файлы и т.д.)",
+    helpDescGo: "Запустить QuickFlow® — интерактивный коммит",
+    helpDescInit: "Установить AI-хук коммита",
+    helpDescPr: "Создать заголовок и описание PR",
+    helpDescRelease: "Создать GitHub Release с тегом",
+    helpDescReview: "AI-ревью застейдженных изменений",
+    helpDescScan: "Сканировать изменения на секреты",
+    helpDescSplit: "Разделить изменения на несколько коммитов",
+    helpDescStats: "Показать статистику коммитов",
+    helpDescStatus: "Показать статус интеграции",
+    helpDescTokens: "Показать статистику использования токенов",
+    helpDescUninstall: "Удалить хук",
+    helpDescUpdate: "Показать инструкцию по обновлению",
+    helpDescVersion: "Показать версию",
+    helpTagline: "— AI-инструмент для разработчика",
+    helpUsage: "Использование:",
+    helpCommands: "Команды:",
+    helpCmdPlaceholder: "<команда>",
+    helpOptsPlaceholder: "[опции]",
+    splitTitle: "Анализ изменений...",
+    splitNoChanges: "Нет изменений для разделения.",
+    splitPrompt: "Что делать с секретами?",
+    splitApply: "Применить разделение?",
+    splitCancelled: "Отменено.",
+    configTitle: "Настройки",
+    configSaved: "Сохранено.",
+    configCancelled: "Отменено.",
+    configSaveExit: "✅ Сохранить и выйти",
+    configProvider: "🔌 Провайдер:",
+    configModelPre: "🧠 Модель:",
+    configUiLanguagePre: "🌐 Язык интерфейса:",
+    configCommitLanguagePre: "📝 Язык коммитов:",
+    configCustomPromptPre: "✏️  Свой промпт:",
+    configCustomTypesPre: "📝 Свои типы:",
+    configApiKeyPre: "🔑 API ключ:",
+    configCoauthorPre: "👥 Соавтор:",
+    configAutoBumpPre: "📈 Авто-бамп:",
+    configTokenLimitsPre: "🔋 Лимиты токенов:",
+    configTokenDaily: "Дневной лимит токенов",
+    configTokenMonthly: "Месячный лимит токенов",
+    configTokenEmptyKeep: "пусто — оставить",
+    configCurrent: "текущий",
+    configProjectsTemplates: "📂 Проекты и шаблоны",
+    configSelectSetting: "Выберите настройку",
+    configSelectUiLang: "Выберите язык интерфейса:",
+    configSelectCommitLang: "Выберите язык коммитов:",
+    configSetUiLang: "Установить язык интерфейса",
+    configSetCommitLang: "Установить язык коммитов",
+    configUiLangUpdated: "✅ Язык интерфейса:",
+    configCommitLangUpdated: "✅ Язык коммитов:",
+    configCancelledArrow: "↩️  Отменено.",
+    configSetProvider: "Выберите LLM провайдера:",
+    configSetModel: "Введите название модели (или оставьте пустым для значения по умолчанию):",
+    configSetApiKey: "Введите новый ключ (или оставьте пустым для очистки):",
+    configEditPrompt: "Редактировать системный промпт (используйте {types} для типов):",
+    configEnabled: "вкл",
+    configDisabled: "выкл",
+    configNotSet: "не задан",
+    configSet: "задан",
+    configConfigured: "настроен",
+    configDefault: "по умолчанию",
+    configNoUrl: "нет url",
+    goStage: "Выбор файлов",
+    goCommit: "Генерация сообщения",
+    goReview: "Сообщение коммита",
+    goPush: "Запушить",
+    goEdit: "Редактировать",
+    goRegenerate: "Перегенерировать",
+    goCancel: "Отмена",
+    goTitle: "🚀  RXDev QuickFlow®",
+    goStageTitle: "📂  Stage Changes",
+    goNoChangedFiles: "ℹ️  Нет изменённых файлов.",
+    goStageFailed: "❌ Не удалось застейджить:",
+    goStaged: "✅ файл(ов) застейджено",
+    goSecretsFound: "🚨 потенциальных секрет(ов) в изменениях:",
+    goGeneratingCommit: "💬  Генерация сообщения коммита",
+    goAiAnalyzing: "AI анализирует ваши изменения...",
+    goFailedCommit: "❌ Не удалось сгенерировать сообщение",
+    goCommitCancelled: "↩️  Коммит отменён",
+    goPushTitle: "⬆️  Push Changes",
+    goPushing: "⬆️  Пушим в",
+    goPushed: "✅ Успешно запушено",
+    releaseTitle: "🏷️  Релиз",
+    releaseSince: "С:",
+    releaseCurrent: "Текущая:",
+    releaseBump: "Бамп:",
+    releaseCommits: "Коммиты:",
+    releaseNotes: "Описание релиза",
+    releaseNothing: "Нечего релизить с последнего тега.",
+    releaseCreateTag: "Создать тег и GitHub Release?",
+    releaseTagFailed: "❌ Не удалось создать тег (возможно, уже существует).",
+    releaseTagCreated: "✅ Создан тег",
+    releaseCreated: "✅ GitHub Release создан",
+    releaseInstallGh: "ℹ️  Установите GitHub CLI для автоматического создания релизов:",
+    prGenerating: "💬 Генерация описания pull request...",
+    prTitle: "📌 Заголовок:",
+    prCreate: "Создать PR через gh (base:",
+    prInstallGh: "ℹ️  Установите GitHub CLI (gh) чтобы открыть PR отсюда.",
+    splitProposed: "Предлагаемые коммиты:",
+    splitLeftStaged: "⚠️  Осталось в стейдже (не назначено):",
+    splitCreated: "✅ Создано коммит(ов).",
+    projectsBackToMenu: "✅ Назад в меню",
+    projectsNoProjects: "📭 Нет проектов (запустите 'rxdev init' чтобы добавить)",
+    projectsMissing: "❌ отсутствует",
+    projectsActive: "✅ активен",
+    projectsHookOff: "⚠️  хук выключен",
+    projectsSelect: "Проекты",
+    projectsNoProjectsHint: 'ℹ️  Запустите "rxdev init" в проекте чтобы добавить его.',
+    projectsBack: "⬅️  Назад",
+    projectsDisableHook: "🔌 Отключить хук",
+    projectsEnableHook: "⚡ Включить хук",
+    projectsRemove: "🗑️  Удалить из списка",
+    projectsDisableConfirm: "Отключить хук в",
+    projectsEnableConfirm: "Включить хук в",
+    projectsRemoveConfirm: "Удалить из списка?",
+    projectsHookDisabled: "✅ Хук отключён",
+    projectsHookEnabled: "✅ Хук включён",
+    projectsRemoved: "✅ Удалён из списка",
+    templatesCreateNew: "➕ Создать шаблон",
+    templatesBack: "⬅️ Назад",
+    templatesTitle: "Шаблоны",
+    yes: "Да",
+    no: "Нет",
+    back: "Назад",
+    exit: "Выход",
+    error: "Ошибка:",
+    success: "Готово!",
+  },
+  de: {
+    reviewTitle: "Code-Review",
+    reviewNoChanges: "Keine Änderungen zum Review. Dateien zuerst mit 'git add' staged.",
+    reviewNoApiKey: "API-Schlüssel nicht konfiguriert. Starten Sie 'rxdev config'.",
+    reviewFailed: "Review fehlgeschlagen.",
+    reviewIssues: "Problem(e)",
+    reviewSummary: "Zusammenfassung",
+    reviewIssuesFound: "Gefundene Probleme",
+    reviewSuggestions: "Verbesserungsvorschläge",
+    scanTitle: "Scanne Änderungen...",
+    scanClean: "Keine Geheimnisse gefunden.",
+    scanFound: "potenzielle(s) Geheimnis(se) in Änderungen:",
+    scanWhatToDo: "Was mit Geheimnissen machen?",
+    scanCommitAnyway: "Trotzdem committen (riskant)",
+    scanUnstage: "Geheimnisse entfernen & committen",
+    scanCancel: "Abbrechen",
+    scanUnstaged: "Entfernt:",
+    statsTitle: "Commit-Statistiken:",
+    statsTotal: "Commits gesamt:",
+    statsAvgLen: "Durchschnittliche Nachrichtenlänge:",
+    statsChars: "Zeichen",
+    statsBreaking: "Breaking Changes:",
+    statsByType: "Nach Typ:",
+    statsBadPractices: "Probleme gefunden:",
+    statsNoCommits: "Keine Commits im angegebenen Bereich gefunden.",
+    tokensTitle: "Token-Verbrauch",
+    tokensToday: "Heute:",
+    tokensMonth: "Diesen Monat:",
+    tokensLastReq: "Letzte Anfrage:",
+    tokensLimitExceeded: "Tageslimit überschritten. Fallback-Generator wird verwendet.",
+    tokensNoLimit: "kein Limit gesetzt",
+    tokensSession: "Sitzung:",
+    tokensUnit: " Tokens",
+    tokensOfDaily: "des Tageslimits",
+    tokensLeft: "übrig",
+    tokensWarning80: "80% des Tageslimits verwendet",
+    tokensWarning90: "90% des Tageslimits verwendet",
+    helpDescConfig: "Modell, Sprache, Schlüssel, Prompt, Typen, Co-Autor konfigurieren",
+    helpDescFilter: "Git-Verlauf umschreiben (Geheimnisse, Dateien usw. entfernen)",
+    helpDescGo: "QuickFlow® starten — interaktiver Commit-Ablauf",
+    helpDescInit: "AI-Commit-Hook installieren",
+    helpDescPr: "PR-Titel und -Beschreibung generieren",
+    helpDescRelease: "GitHub Release mit Tag erstellen",
+    helpDescReview: "AI-Code-Review von gestagten Änderungen",
+    helpDescScan: "Gestagte Änderungen auf Geheimnisse prüfen",
+    helpDescSplit: "Gestagte Änderungen in mehrere Commits aufteilen",
+    helpDescStats: "Commit-Statistiken anzeigen",
+    helpDescStatus: "Integrationsstatus anzeigen",
+    helpDescTokens: "Token-Nutzungsstatistiken anzeigen",
+    helpDescUninstall: "Hook entfernen",
+    helpDescUpdate: "Update-Anleitung anzeigen",
+    helpDescVersion: "Versionsnummer anzeigen",
+    helpTagline: "ist ein AI-gestütztes Entwickler-Workflow-Tool",
+    helpUsage: "Verwendung:",
+    helpCommands: "Befehle:",
+    helpCmdPlaceholder: "<befehl>",
+    helpOptsPlaceholder: "[optionen]",
+    splitTitle: "Analysiere Änderungen...",
+    splitNoChanges: "Keine Änderungen zum Aufteilen.",
+    splitPrompt: "Was mit Geheimnissen machen?",
+    splitApply: "Aufteilung anwenden?",
+    splitCancelled: "Abgebrochen.",
+    configTitle: "Konfiguration",
+    configSaved: "Gespeichert.",
+    configCancelled: "Abgebrochen.",
+    configSaveExit: "✅ Speichern & beenden",
+    configProvider: "🔌 Anbieter:",
+    configModelPre: "🧠 Modell:",
+    configUiLanguagePre: "🌐 UI-Sprache:",
+    configCommitLanguagePre: "📝 Commit-Sprache:",
+    configCustomPromptPre: "✏️  Eigenes Prompt:",
+    configCustomTypesPre: "📝 Eigene Typen:",
+    configApiKeyPre: "🔑 API-Schlüssel:",
+    configCoauthorPre: "👥 Co-Autor:",
+    configAutoBumpPre: "📈 Auto-Bump:",
+    configTokenLimitsPre: "🔋 Token-Limits:",
+    configTokenDaily: "Tägliches Token-Limit",
+    configTokenMonthly: "Monatliches Token-Limit",
+    configTokenEmptyKeep: "leer lassen zum Behalten",
+    configCurrent: "aktuell",
+    configProjectsTemplates: "📂 Projekte & Vorlagen",
+    configSelectSetting: "Einstellung auswählen",
+    configSelectUiLang: "UI-Sprache auswählen:",
+    configSelectCommitLang: "Commit-Sprache auswählen:",
+    configSetUiLang: "UI-Sprache festlegen auf",
+    configSetCommitLang: "Commit-Sprache festlegen auf",
+    configUiLangUpdated: "✅ UI-Sprache:",
+    configCommitLangUpdated: "✅ Commit-Sprache:",
+    configCancelledArrow: "↩️  Abgebrochen.",
+    configSetProvider: "LLM-Anbieter auswählen:",
+    configSetModel: "Modellname eingeben (oder leer für Standard):",
+    configSetApiKey: "Neuen Schlüssel eingeben (oder leer zum Löschen):",
+    configEditPrompt: "System-Prompt bearbeiten ({types} als Platzhalter für Typen):",
+    configEnabled: "aktiviert",
+    configDisabled: "deaktiviert",
+    configNotSet: "nicht gesetzt",
+    configSet: "gesetzt",
+    configConfigured: "konfiguriert",
+    configDefault: "Standard",
+    configNoUrl: "keine URL",
+    goStage: "Dateien auswählen",
+    goCommit: "Nachricht generieren",
+    goReview: "Commit-Nachricht",
+    goPush: "Pushen",
+    goEdit: "Bearbeiten",
+    goRegenerate: "Neu generieren",
+    goCancel: "Abbrechen",
+    goTitle: "🚀  RXDev QuickFlow®",
+    goStageTitle: "📂  Stage Changes",
+    goNoChangedFiles: "ℹ️  Keine geänderten Dateien gefunden.",
+    goStageFailed: "❌ Fehler beim Stagen:",
+    goStaged: "✅ Datei(en) gestaged",
+    goSecretsFound: "🚨 potenzielle(s) Geheimnis(se) in Änderungen:",
+    goGeneratingCommit: "💬  Generiere Commit-Nachricht",
+    goAiAnalyzing: "AI analysiert Ihre Änderungen...",
+    goFailedCommit: "❌ Generierung der Nachricht fehlgeschlagen",
+    goCommitCancelled: "↩️  Commit abgebrochen",
+    goPushTitle: "⬆️  Push Changes",
+    goPushing: "⬆️  Push nach",
+    goPushed: "✅ Erfolgreich gepusht",
+    releaseTitle: "🏷️  Release",
+    releaseSince: "Seit:",
+    releaseCurrent: "Aktuell:",
+    releaseBump: "Bump:",
+    releaseCommits: "Commits:",
+    releaseNotes: "Release-Notizen",
+    releaseNothing: "Nichts zu releasen seit dem letzten Tag.",
+    releaseCreateTag: "Tag und GitHub Release erstellen?",
+    releaseTagFailed: "❌ Tag-Erstellung fehlgeschlagen (existiert bereits?).",
+    releaseTagCreated: "✅ Tag erstellt",
+    releaseCreated: "✅ GitHub Release erstellt",
+    releaseInstallGh: "ℹ️  Installieren Sie GitHub CLI für automatische Releases:",
+    prGenerating: "💬 Generiere Pull-Request-Beschreibung...",
+    prTitle: "📌 Titel:",
+    prCreate: "PR mit gh erstellen (base:",
+    prInstallGh: "ℹ️  Installieren Sie GitHub CLI (gh) um PR direkt zu öffnen.",
+    splitProposed: "Vorgeschlagene Commits:",
+    splitLeftStaged: "⚠️  Noch gestaged (nicht zugewiesen):",
+    splitCreated: "✅ Commit(s) erstellt.",
+    projectsBackToMenu: "✅ Zurück zum Hauptmenü",
+    projectsNoProjects: "📭 Keine Projekte (führen Sie 'rxdev init' aus)",
+    projectsMissing: "❌ fehlt",
+    projectsActive: "✅ aktiv",
+    projectsHookOff: "⚠️  Hook deaktiviert",
+    projectsSelect: "Projekte",
+    projectsNoProjectsHint: 'ℹ️  Führen Sie "rxdev init" in einem Projekt aus.',
+    projectsBack: "⬅️  Zurück",
+    projectsDisableHook: "🔌 Hook deaktivieren",
+    projectsEnableHook: "⚡ Hook aktivieren",
+    projectsRemove: "🗑️  Aus Liste entfernen",
+    projectsDisableConfirm: "Hook deaktivieren in",
+    projectsEnableConfirm: "Hook aktivieren in",
+    projectsRemoveConfirm: "Aus Liste entfernen?",
+    projectsHookDisabled: "✅ Hook deaktiviert",
+    projectsHookEnabled: "✅ Hook aktiviert",
+    projectsRemoved: "✅ Aus Liste entfernt",
+    templatesCreateNew: "➕ Neue Vorlage erstellen",
+    templatesBack: "⬅️ Zurück",
+    templatesTitle: "Vorlagen",
+    yes: "Ja",
+    no: "Nein",
+    back: "Zurück",
+    exit: "Beenden",
+    error: "Fehler:",
+    success: "Fertig!",
+  },
+  fr: {
+    reviewTitle: "Revue de code",
+    reviewNoChanges: "Aucun changement à réviser. Stagez d'abord avec 'git add'.",
+    reviewNoApiKey: "Clé API non configurée. Lancez 'rxdev config'.",
+    reviewFailed: "Revue échouée.",
+    reviewIssues: "problème(s)",
+    reviewSummary: "Résumé",
+    reviewIssuesFound: "Problèmes trouvés",
+    reviewSuggestions: "Suggestions d'amélioration",
+    scanTitle: "Analyse des changements...",
+    scanClean: "Aucun secret détecté.",
+    scanFound: "secret(s) potentiel(s) dans les changements:",
+    scanWhatToDo: "Que faire des secrets?",
+    scanCommitAnyway: "Commit quand même (risqué)",
+    scanUnstage: "Retirer les fichiers secrets et commit",
+    scanCancel: "Annuler",
+    scanUnstaged: "Retiré:",
+    statsTitle: "statistiques des commits:",
+    statsTotal: "Total des commits:",
+    statsAvgLen: "Longueur moyenne du message:",
+    statsChars: "car.",
+    statsBreaking: "Breaking Changes:",
+    statsByType: "Par type:",
+    statsBadPractices: "Problèmes trouvés:",
+    statsNoCommits: "Aucun commit trouvé pour la période spécifiée.",
+    tokensTitle: "Utilisation des tokens",
+    tokensToday: "Aujourd'hui:",
+    tokensMonth: "Ce mois-ci:",
+    tokensLastReq: "Dernière requête:",
+    tokensLimitExceeded: "Limite journalière dépassée. Générateur de repli utilisé.",
+    tokensNoLimit: "aucune limite définie",
+    tokensSession: "Session:",
+    tokensUnit: " tokens",
+    tokensOfDaily: "de la limite quotidienne",
+    tokensLeft: "restant",
+    tokensWarning80: "80% de la limite journalière utilisée",
+    tokensWarning90: "90% de la limite journalière utilisée",
+    helpDescConfig: "Configurer modèle, langue, clé, prompt, types, co-auteur",
+    helpDescFilter: "Réécrire l'historique git (supprimer secrets, fichiers, etc.)",
+    helpDescGo: "Lancer QuickFlow® — flux de commit interactif",
+    helpDescInit: "Installer le hook AI de commit",
+    helpDescPr: "Générer titre + description de PR",
+    helpDescRelease: "Créer une GitHub Release avec tag",
+    helpDescReview: "Révision AI des changements stagés",
+    helpDescScan: "Analyser les changements pour des secrets",
+    helpDescSplit: "Diviser les changements en plusieurs commits",
+    helpDescStats: "Afficher les statistiques de commits",
+    helpDescStatus: "Afficher le statut d'intégration",
+    helpDescTokens: "Afficher les statistiques d'utilisation des tokens",
+    helpDescUninstall: "Supprimer le hook",
+    helpDescUpdate: "Afficher les instructions de mise à jour",
+    helpDescVersion: "Afficher le numéro de version",
+    helpTagline: "est un outil de workflow alimenté par l'IA",
+    helpUsage: "Utilisation :",
+    helpCommands: "Commandes :",
+    helpCmdPlaceholder: "<commande>",
+    helpOptsPlaceholder: "[options]",
+    splitTitle: "Analyse des changements...",
+    splitNoChanges: "Aucun changement à diviser.",
+    splitPrompt: "Que faire des secrets?",
+    splitApply: "Appliquer la division?",
+    splitCancelled: "Annulé.",
+    configTitle: "Configuration",
+    configSaved: "Enregistré.",
+    configCancelled: "Annulé.",
+    configSaveExit: "✅ Enregistrer & quitter",
+    configProvider: "🔌 Fournisseur:",
+    configModelPre: "🧠 Modèle:",
+    configUiLanguagePre: "🌐 Langue de l'interface:",
+    configCommitLanguagePre: "📝 Langue des commits:",
+    configCustomPromptPre: "✏️  Prompt personnalisé:",
+    configCustomTypesPre: "📝 Types personnalisés:",
+    configApiKeyPre: "🔑 Clé API:",
+    configCoauthorPre: "👥 Co-auteur:",
+    configAutoBumpPre: "📈 Auto-bump:",
+    configTokenLimitsPre: "🔋 Limites de tokens:",
+    configTokenDaily: "Limite quotidienne de tokens",
+    configTokenMonthly: "Limite mensuelle de tokens",
+    configTokenEmptyKeep: "vide pour conserver",
+    configCurrent: "actuel",
+    configProjectsTemplates: "📂 Projets & modèles",
+    configSelectSetting: "Sélectionnez un réglage",
+    configSelectUiLang: "Choisir la langue de l'interface:",
+    configSelectCommitLang: "Choisir la langue des commits:",
+    configSetUiLang: "Définir la langue de l'interface sur",
+    configSetCommitLang: "Définir la langue des commits sur",
+    configUiLangUpdated: "✅ Langue de l'interface:",
+    configCommitLangUpdated: "✅ Langue des commits:",
+    configCancelledArrow: "↩️  Annulé.",
+    configSetProvider: "Sélectionnez le fournisseur LLM:",
+    configSetModel: "Entrez le nom du modèle (ou vide pour défaut):",
+    configSetApiKey: "Entrez une nouvelle clé (ou vide pour effacer):",
+    configEditPrompt: "Modifier le prompt système (utilisez {types} pour les types):",
+    configEnabled: "activé",
+    configDisabled: "désactivé",
+    configNotSet: "non défini",
+    configSet: "défini",
+    configConfigured: "configuré",
+    configDefault: "défaut",
+    configNoUrl: "pas d'url",
+    goStage: "Sélection des fichiers",
+    goCommit: "Génération du message",
+    goReview: "Message de commit",
+    goPush: "Pousser",
+    goEdit: "Modifier",
+    goRegenerate: "Régénérer",
+    goCancel: "Annuler",
+    goTitle: "🚀  RXDev QuickFlow®",
+    goStageTitle: "📂  Stage Changes",
+    goNoChangedFiles: "ℹ️  Aucun fichier modifié trouvé.",
+    goStageFailed: "❌ Échec du staging:",
+    goStaged: "✅ fichier(s) stagé(s)",
+    goSecretsFound: "🚨 secret(s) potentiel(s) dans les changements:",
+    goGeneratingCommit: "💬  Génération du message de commit",
+    goAiAnalyzing: "L'IA analyse vos modifications...",
+    goFailedCommit: "❌ Échec de la génération du message",
+    goCommitCancelled: "↩️  Commit annulé",
+    goPushTitle: "⬆️  Push Changes",
+    goPushing: "⬆️  Push vers",
+    goPushed: "✅ Push réussi",
+    releaseTitle: "🏷️  Release",
+    releaseSince: "Depuis:",
+    releaseCurrent: "Actuelle:",
+    releaseBump: "Bump:",
+    releaseCommits: "Commits:",
+    releaseNotes: "Notes de version",
+    releaseNothing: "Rien à publier depuis le dernier tag.",
+    releaseCreateTag: "Créer le tag et la GitHub Release?",
+    releaseTagFailed: "❌ Échec de création du tag (existe déjà?).",
+    releaseTagCreated: "✅ Tag créé",
+    releaseCreated: "✅ GitHub Release créée",
+    releaseInstallGh: "ℹ️  Installez GitHub CLI pour créer des releases automatiquement:",
+    prGenerating: "💬 Génération de la description de pull request...",
+    prTitle: "📌 Titre:",
+    prCreate: "Créer la PR avec gh (base:",
+    prInstallGh: "ℹ️  Installez GitHub CLI (gh) pour ouvrir la PR directement.",
+    splitProposed: "Commits proposés:",
+    splitLeftStaged: "⚠️  Resté stagé (non assigné):",
+    splitCreated: "✅ Commit(s) créé(s).",
+    projectsBackToMenu: "✅ Retour au menu principal",
+    projectsNoProjects: "📭 Aucun projet (exécutez 'rxdev init')",
+    projectsMissing: "❌ manquant",
+    projectsActive: "✅ actif",
+    projectsHookOff: "⚠️  Hook désactivé",
+    projectsSelect: "Projets",
+    projectsNoProjectsHint: 'ℹ️  Exécutez "rxdev init" dans un projet.',
+    projectsBack: "⬅️  Retour",
+    projectsDisableHook: "🔌 Désactiver le hook",
+    projectsEnableHook: "⚡ Activer le hook",
+    projectsRemove: "🗑️  Retirer de la liste",
+    projectsDisableConfirm: "Désactiver le hook dans",
+    projectsEnableConfirm: "Activer le hook dans",
+    projectsRemoveConfirm: "Retirer de la liste?",
+    projectsHookDisabled: "✅ Hook désactivé",
+    projectsHookEnabled: "✅ Hook activé",
+    projectsRemoved: "✅ Retiré de la liste",
+    templatesCreateNew: "➕ Créer un modèle",
+    templatesBack: "⬅️ Retour",
+    templatesTitle: "Modèles",
+    yes: "Oui",
+    no: "Non",
+    back: "Retour",
+    exit: "Quitter",
+    error: "Erreur:",
+    success: "Terminé!",
+  },
+  zh: {
+    reviewTitle: "代码审查",
+    reviewNoChanges: "没有暂存的更改。请先用 'git add' 添加文件。",
+    reviewNoApiKey: "未配置 API 密钥。请运行 'rxdev config'。",
+    reviewFailed: "审查失败。",
+    reviewIssues: "个问题",
+    reviewSummary: "摘要",
+    reviewIssuesFound: "发现的问题",
+    reviewSuggestions: "改进建议",
+    scanTitle: "扫描更改...",
+    scanClean: "未检测到密钥。",
+    scanFound: "更改中发现潜在密钥：",
+    scanWhatToDo: "如何处理密钥？",
+    scanCommitAnyway: "仍然提交（有风险）",
+    scanUnstage: "移除密钥文件并提交",
+    scanCancel: "取消",
+    scanUnstaged: "已移除：",
+    statsTitle: "提交统计：",
+    statsTotal: "总提交数：",
+    statsAvgLen: "平均消息长度：",
+    statsChars: "字符",
+    statsBreaking: "破坏性更改：",
+    statsByType: "按类型：",
+    statsBadPractices: "发现的问题：",
+    statsNoCommits: "在指定范围内未找到提交。",
+    tokensTitle: "Token 使用情况",
+    tokensToday: "今天：",
+    tokensMonth: "本月：",
+    tokensLastReq: "上次请求：",
+    tokensLimitExceeded: "已超过每日限额。使用备用生成器。",
+    tokensNoLimit: "未设置限额",
+    tokensSession: "会话：",
+    tokensUnit: " token",
+    tokensOfDaily: "每日限额",
+    tokensLeft: "剩余",
+    tokensWarning80: "已使用 80% 每日限额",
+    tokensWarning90: "已使用 90% 每日限额",
+    helpDescConfig: "配置模型、语言、密钥、提示词、类型、共同作者等",
+    helpDescFilter: "重写 Git 历史（删除密钥、文件等）",
+    helpDescGo: "启动 QuickFlow® — 交互式提交流程",
+    helpDescInit: "安装 AI 提交钩子",
+    helpDescPr: "生成 PR 标题和描述",
+    helpDescRelease: "创建带标签的 GitHub Release",
+    helpDescReview: "AI 代码审查暂存更改",
+    helpDescScan: "扫描暂存更改中的密钥",
+    helpDescSplit: "将暂存更改拆分为多个提交",
+    helpDescStats: "显示提交统计",
+    helpDescStatus: "显示集成状态",
+    helpDescTokens: "显示 Token 使用统计",
+    helpDescUninstall: "移除钩子",
+    helpDescUpdate: "显示更新说明",
+    helpDescVersion: "显示版本号",
+    helpTagline: "是一个 AI 驱动的开发工作流工具",
+    helpUsage: "用法：",
+    helpCommands: "命令：",
+    helpCmdPlaceholder: "<命令>",
+    helpOptsPlaceholder: "[选项]",
+    splitTitle: "分析更改...",
+    splitNoChanges: "没有可分割的更改。",
+    splitPrompt: "如何处理密钥？",
+    splitApply: "应用分割？",
+    splitCancelled: "已取消。",
+    configTitle: "配置",
+    configSaved: "已保存。",
+    configCancelled: "已取消。",
+    configSaveExit: "✅ 保存并退出",
+    configProvider: "🔌 提供商:",
+    configModelPre: "🧠 模型:",
+    configUiLanguagePre: "🌐 界面语言:",
+    configCommitLanguagePre: "📝 提交语言:",
+    configCustomPromptPre: "✏️  自定义提示:",
+    configCustomTypesPre: "📝 自定义类型:",
+    configApiKeyPre: "🔑 API 密钥:",
+    configCoauthorPre: "👥 合著者:",
+    configAutoBumpPre: "📈 自动版本:",
+    configTokenLimitsPre: "🔋 Token 限额:",
+    configTokenDaily: "每日 Token 限额",
+    configTokenMonthly: "每月 Token 限额",
+    configTokenEmptyKeep: "留空则保持不变",
+    configCurrent: "当前",
+    configProjectsTemplates: "📂 项目和模板",
+    configSelectSetting: "选择设置",
+    configSelectUiLang: "选择界面语言:",
+    configSelectCommitLang: "选择提交语言:",
+    configSetUiLang: "将界面语言设置为",
+    configSetCommitLang: "将提交语言设置为",
+    configUiLangUpdated: "✅ 界面语言:",
+    configCommitLangUpdated: "✅ 提交语言:",
+    configCancelledArrow: "↩️  已取消。",
+    configSetProvider: "选择 LLM 提供商:",
+    configSetModel: "输入模型名称（或留空使用默认）:",
+    configSetApiKey: "输入新密钥（或留空清除）:",
+    configEditPrompt: "编辑系统提示（使用 {types} 作为类型占位符）:",
+    configEnabled: "已启用",
+    configDisabled: "已禁用",
+    configNotSet: "未设置",
+    configSet: "已设置",
+    configConfigured: "已配置",
+    configDefault: "默认",
+    configNoUrl: "无 URL",
+    goStage: "选择文件",
+    goCommit: "生成提交消息",
+    goReview: "提交消息",
+    goPush: "推送",
+    goEdit: "编辑",
+    goRegenerate: "重新生成",
+    goCancel: "取消",
+    goTitle: "🚀  RXDev QuickFlow®",
+    goStageTitle: "📂  Stage Changes",
+    goNoChangedFiles: "ℹ️  未找到更改的文件。",
+    goStageFailed: "❌ 暂存失败:",
+    goStaged: "✅ 个文件已暂存",
+    goSecretsFound: "🚨 更改中发现潜在密钥:",
+    goGeneratingCommit: "💬  正在生成提交信息",
+    goAiAnalyzing: "AI 正在分析您的更改...",
+    goFailedCommit: "❌ 生成提交信息失败",
+    goCommitCancelled: "↩️  提交已取消",
+    goPushTitle: "⬆️  Push Changes",
+    goPushing: "⬆️  推送到",
+    goPushed: "✅ 推送成功",
+    releaseTitle: "🏷️  发布",
+    releaseSince: "自从:",
+    releaseCurrent: "当前:",
+    releaseBump: "版本:",
+    releaseCommits: "提交:",
+    releaseNotes: "发布说明",
+    releaseNothing: "自上一个标签以来没有可发布的内容。",
+    releaseCreateTag: "创建标签和 GitHub Release？",
+    releaseTagFailed: "❌ 创建标签失败（可能已存在）。",
+    releaseTagCreated: "✅ 已创建标签",
+    releaseCreated: "✅ GitHub Release 已创建",
+    releaseInstallGh: "ℹ️  安装 GitHub CLI 以自动创建发布:",
+    prGenerating: "💬 正在生成拉取请求描述...",
+    prTitle: "📌 标题:",
+    prCreate: "通过 gh 创建 PR（base:",
+    prInstallGh: "ℹ️  安装 GitHub CLI (gh) 以直接在此处打开 PR。",
+    splitProposed: "建议的提交:",
+    splitLeftStaged: "⚠️  仍在暂存（未分配）:",
+    splitCreated: "✅ 已创建提交。",
+    projectsBackToMenu: "✅ 返回主菜单",
+    projectsNoProjects: "📭 没有项目（请运行 'rxdev init'）",
+    projectsMissing: "❌ 缺失",
+    projectsActive: "✅ 活跃",
+    projectsHookOff: "⚠️  Hook 已关闭",
+    projectsSelect: "项目",
+    projectsNoProjectsHint: 'ℹ️  在项目中运行 "rxdev init" 以添加。',
+    projectsBack: "⬅️  返回",
+    projectsDisableHook: "🔌 禁用 Hook",
+    projectsEnableHook: "⚡ 启用 Hook",
+    projectsRemove: "🗑️  从列表中移除",
+    projectsDisableConfirm: "在项目中禁用 Hook",
+    projectsEnableConfirm: "在项目中启用 Hook",
+    projectsRemoveConfirm: "从列表中移除？",
+    projectsHookDisabled: "✅ Hook 已禁用",
+    projectsHookEnabled: "✅ Hook 已启用",
+    projectsRemoved: "✅ 已从列表中移除",
+    templatesCreateNew: "➕ 创建新模板",
+    templatesBack: "⬅️ 返回",
+    templatesTitle: "模板",
+    yes: "是",
+    no: "否",
+    back: "返回",
+    exit: "退出",
+    error: "错误：",
+    success: "完成！",
+  },
+};
+
 export const BAD_EXAMPLES =
   "CRITICAL rules:\n" +
   "- description starts with a lowercase letter (Add -> add, Fix -> fix)\n" +
@@ -161,6 +1002,21 @@ const LANGUAGE_NAMES = {
   fr: "French",
   zh: "Chinese",
 };
+
+let _currentLanguage = "ru";
+
+export function setLanguage(lang) {
+  _currentLanguage = lang;
+}
+
+export function t(key) {
+  return UI_STRINGS[_currentLanguage]?.[key] || UI_STRINGS.en[key] || key;
+}
+
+function _langPrompt(prompt, language) {
+  const langName = LANGUAGE_NAMES[language] || "Russian";
+  return prompt + `\n\n- IMPORTANT: The response MUST be written in ${langName}.`;
+}
 
 export function buildSystemPrompt(typesStr, language, customPrompt = "") {
   if (customPrompt) return customPrompt.replace("{types}", typesStr);
@@ -886,7 +1742,7 @@ export function resolveConfig(userConfig = {}, env = process.env) {
   const customTypes = Array.isArray(userConfig.customTypes) ? userConfig.customTypes : [];
   const allTypes = [...new Set([...DEFAULT_VALID_TYPES, ...customTypes])];
   const typesStr = [...allTypes].sort().join(", ");
-  const language = userConfig.language || "ru";
+  const language = userConfig.commitLanguage || userConfig.language || "ru";
   const customPrompt = userConfig.prompt || "";
 
   return {
@@ -901,6 +1757,7 @@ export function resolveConfig(userConfig = {}, env = process.env) {
     customTypes,
     validTypes: allTypes,
     language,
+    tokenLimit: userConfig.tokenLimit || {},
     systemPrompt: buildSystemPrompt(typesStr, language, customPrompt),
   };
 }
@@ -914,7 +1771,92 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OLD_CONFIG_DIR = join(homedir(), ".config", "ai-commit");
 const CONFIG_DIR = join(homedir(), ".config", "rxdev");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+const TOKENS_FILE = join(CONFIG_DIR, "tokens.json");
 const LOG_FILE = join(CONFIG_DIR, "rxdev_debug.log");
+
+let _sessionTokens = 0;
+
+function loadTokenUsage() {
+  try {
+    if (existsSync(TOKENS_FILE)) {
+      return JSON.parse(readFileSync(TOKENS_FILE, "utf8"));
+    }
+  } catch {}
+  return { daily: {}, monthly: {}, lastRequest: 0 };
+}
+
+function saveTokenUsage(data) {
+  try {
+    mkdirSync(CONFIG_DIR, { recursive: true });
+    writeFileSync(TOKENS_FILE, JSON.stringify(data, null, 2));
+  } catch {}
+}
+
+function trackTokens(promptTokens, completionTokens) {
+  const total = promptTokens + completionTokens;
+  _sessionTokens += total;
+
+  const usage = loadTokenUsage();
+  const today = new Date().toISOString().slice(0, 10);
+  const month = new Date().toISOString().slice(0, 7);
+
+  usage.daily[today] = (usage.daily[today] || 0) + total;
+  usage.monthly[month] = (usage.monthly[month] || 0) + total;
+  usage.lastRequest = total;
+
+  // Clean old entries (keep last 30 days)
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  for (const key of Object.keys(usage.daily)) {
+    if (key < cutoff) delete usage.daily[key];
+  }
+
+  saveTokenUsage(usage);
+  return total;
+}
+
+function checkTokenLimits(cfg) {
+  const limits = cfg.tokenLimit || {};
+  if (!limits.daily && !limits.monthly) return null;
+
+  const usage = loadTokenUsage();
+  const today = new Date().toISOString().slice(0, 10);
+  const month = new Date().toISOString().slice(0, 7);
+
+  const dailyUsed = usage.daily[today] || 0;
+  const monthlyUsed = usage.monthly[month] || 0;
+
+  if (limits.daily && dailyUsed >= limits.daily) {
+    return { exceeded: true, type: "daily", used: dailyUsed, limit: limits.daily };
+  }
+  if (limits.monthly && monthlyUsed >= limits.monthly) {
+    return { exceeded: true, type: "monthly", used: monthlyUsed, limit: limits.monthly };
+  }
+
+  const dailyPercent = limits.daily ? (dailyUsed / limits.daily) * 100 : 0;
+  const monthlyPercent = limits.monthly ? (monthlyUsed / limits.monthly) * 100 : 0;
+
+  if (dailyPercent >= 90 || monthlyPercent >= 90) {
+    return { warning: "90", dailyUsed, dailyLimit: limits.daily, monthlyUsed, monthlyLimit: limits.monthly };
+  }
+  if (dailyPercent >= 80 || monthlyPercent >= 80) {
+    return { warning: "80", dailyUsed, dailyLimit: limits.daily, monthlyUsed, monthlyLimit: limits.monthly };
+  }
+
+  return null;
+}
+
+export function getTokenStats() {
+  const usage = loadTokenUsage();
+  const today = new Date().toISOString().slice(0, 10);
+  const month = new Date().toISOString().slice(0, 7);
+
+  return {
+    daily: usage.daily[today] || 0,
+    monthly: usage.monthly[month] || 0,
+    lastRequest: usage.lastRequest || 0,
+    sessionTokens: _sessionTokens,
+  };
+}
 
 function migrateOldConfig() {
   if (existsSync(CONFIG_DIR) || !existsSync(OLD_CONFIG_DIR)) return;
@@ -1114,6 +2056,20 @@ export function callLlm(messages, cfg, opts = {}) {
   }
 
   const payload = { model: cfg.model, messages, stream: true, temperature };
+
+  // Check daily token limit
+  const limits = cfg.tokenLimit || {};
+  if (limits.daily) {
+    const usage = loadTokenUsage();
+    const today = new Date().toISOString().slice(0, 10);
+    const todayTotal = usage.daily[today] || 0;
+    if (todayTotal >= limits.daily) {
+      return Promise.reject(
+        Object.assign(new Error(t("tokensLimitExceeded")), { code: "LIMIT_EXCEEDED" }),
+      );
+    }
+  }
+
   if (maxTokens) payload.max_tokens = maxTokens;
   const body = JSON.stringify(payload);
 
@@ -1168,6 +2124,7 @@ export function callLlm(messages, cfg, opts = {}) {
 
         let buffer = "";
         let text = "";
+        let usage = null;
         const handleLine = (line) => {
           const trimmed = line.trim();
           if (!trimmed?.startsWith("data: ")) return;
@@ -1180,6 +2137,7 @@ export function callLlm(messages, cfg, opts = {}) {
               text += content;
               if (echo) process.stdout.write(content);
             }
+            if (chunk.usage) usage = chunk.usage;
           } catch (e) {
             logMessage(`WARN: malformed SSE chunk: ${e.message}`);
           }
@@ -1197,8 +2155,31 @@ export function callLlm(messages, cfg, opts = {}) {
         res.on("end", () => {
           if (buffer) handleLine(buffer);
           if (echo) process.stdout.write("\n");
-          const t = text.trim();
-          resolve(clean ? cleanLlmResponse(t, typeRegexStr) : t);
+          const cleanText = text.trim();
+
+          // Track tokens
+          if (usage) {
+            const tracked = trackTokens(usage.prompt_tokens || 0, usage.completion_tokens || 0);
+            if (echo) {
+              let pct = "";
+              const limits = cfg.tokenLimit || {};
+              if (limits.daily) {
+                const tokenStats = loadTokenUsage();
+                const today = new Date().toISOString().slice(0, 10);
+                const todayTotal = tokenStats.daily[today] || 0;
+                const reqPct = Math.round((tracked / limits.daily) * 10000) / 100;
+                const remainPct = Math.round((Math.max(0, limits.daily - todayTotal) / limits.daily) * 10000) / 100;
+                pct = ` (${reqPct}% ${t("tokensOfDaily")}, ${remainPct}% ${t("tokensLeft")})`;
+              }
+              process.stdout.write(`\n\x1b[38;5;244m⚡ ${tracked}${t("tokensUnit")} (${usage.prompt_tokens || "?"} prompt + ${usage.completion_tokens || "?"} completion)${pct}\x1b[0m\n\n`);
+            }
+          } else {
+            // Approximate tokens (roughly 1 token per 4 chars)
+            const approxTokens = Math.ceil(cleanText.length / 4);
+            trackTokens(0, approxTokens);
+          }
+
+          resolve(clean ? cleanLlmResponse(cleanText, typeRegexStr) : cleanText);
         });
       },
     );
@@ -1259,7 +2240,8 @@ export async function generateCommitMessage(diff, cfg, opts = {}) {
     } catch (e) {
       lastError = e.message;
       logMessage(`FAILURE on attempt ${attempt}: ${e.message}`);
-      if (attempt < MAX_ATTEMPTS && echo) process.stdout.write(`  Retry: ${e.message}\n`);
+      if (echo) process.stdout.write(`  ${e.message}\n`);
+      if (e.code === "LIMIT_EXCEEDED") break;
     }
   }
   logMessage(`All ${MAX_ATTEMPTS} attempts failed (${lastError}), caller should use fallback`);
@@ -1628,7 +2610,7 @@ export async function buildPrInfo(base, cfg) {
   try {
     const raw = await callLlm(
       [
-        { role: "system", content: PR_SYSTEM_PROMPT },
+        { role: "system", content: _langPrompt(PR_SYSTEM_PROMPT, cfg.language) },
         { role: "user", content: user },
       ],
       cfg,
@@ -1710,7 +2692,7 @@ export async function buildSplitPlan(cfg) {
     try {
       const raw = await callLlm(
         [
-          { role: "system", content: SPLIT_SYSTEM_PROMPT },
+          { role: "system", content: _langPrompt(SPLIT_SYSTEM_PROMPT, cfg.language) },
           { role: "user", content: user },
         ],
         cfg,
@@ -1788,7 +2770,7 @@ export async function buildReview(diff, cfg) {
   try {
     reviewText = await callLlm(
       [
-        { role: "system", content: REVIEW_SYSTEM_PROMPT },
+        { role: "system", content: _langPrompt(REVIEW_SYSTEM_PROMPT, cfg.language) },
         { role: "user", content: userPrompt },
       ],
       reviewCfg,
@@ -2072,6 +3054,8 @@ export async function main(commitMsgFile, cfg, opts = {}) {
   let message = await generateCommitMessage(promptDiff, cfg, { echo, context });
   if (message === null) {
     message = generateFallbackMessage(promptDiff);
+    const limitMsg = t("tokensLimitExceeded");
+    message += `\n\n${limitMsg}`;
     logMessage(`Fallback message generated (${message.length} chars)`);
   }
 
