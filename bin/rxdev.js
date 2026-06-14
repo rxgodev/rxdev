@@ -66,6 +66,8 @@ const DEFAULT_CONFIG = {
   coauthor: true,
   bumpVersion: false,
   language: "ru",
+  uiLanguage: "ru",
+  commitLanguage: "ru",
   provider: "groq",
 };
 
@@ -101,9 +103,15 @@ function ensureConfigDir() {
 function loadConfig() {
   try {
     if (existsSync(CONFIG_FILE)) {
+      const saved = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
+      // migrate old single language field to new separate fields
+      if (saved.language && !saved.uiLanguage && !saved.commitLanguage) {
+        saved.uiLanguage = saved.language;
+        saved.commitLanguage = saved.language;
+      }
       return {
         ...DEFAULT_CONFIG,
-        ...JSON.parse(readFileSync(CONFIG_FILE, "utf8")),
+        ...saved,
       };
     }
   } catch (_e) {
@@ -539,16 +547,17 @@ async function createTemplate() {
 }
 
 async function manageTemplates() {
+  const aic = await hook();
   while (true) {
     const templates = loadTemplates();
     const templateNames = Object.keys(templates);
     const choices = [
       ...templateNames.map((name) => ({ name, value: name })),
-      { name: "➕ Create new template", value: "__new__" },
-      { name: "⬅️ Back", value: "__back__" },
+      { name: aic.t("templatesCreateNew"), value: "__new__" },
+      { name: aic.t("templatesBack"), value: "__back__" },
     ];
 
-    const selected = await promptSelect(choices, "Templates");
+    const selected = await promptSelect(choices, aic.t("templatesTitle"));
 
     if (selected === "__back__") return;
     if (selected === "__new__") {
@@ -814,6 +823,7 @@ async function showFileTreePicker(
 // === CONFIG INTERACTION ===
 
 async function configInteractive() {
+  const aic = await hook();
   const config = loadConfig();
 
   while (true) {
@@ -821,52 +831,61 @@ async function configInteractive() {
     const modelLabel =
       config.model ||
       (PROVIDERS[provider]?.defaultModel
-        ? `${PROVIDERS[provider].defaultModel} (default)`
-        : "default");
-    const providerLabel = PROVIDERS[provider]?.label || `custom (${config.apiUrl || "no url"})`;
-    const langLabel = LANGUAGES[config.language] || "Русский";
+        ? `${PROVIDERS[provider].defaultModel} (${aic.t("configDefault")})`
+        : aic.t("configDefault"));
+    const providerLabel = PROVIDERS[provider]?.label || `custom (${config.apiUrl || aic.t("configNoUrl")})`;
+    const uiLangLabel = LANGUAGES[config.uiLanguage || config.language] || "Русский";
+    const commitLangLabel = LANGUAGES[config.commitLanguage || config.language] || "Русский";
 
-    console.log("\n⚙️  Configuration\n");
+    console.log(`\n⚙️  ${aic.t("configTitle")}\n`);
 
     const mainAction = await promptSelect(
       [
-        { name: "✅ Save & exit", value: "exit" },
+        { name: aic.t("configSaveExit"), value: "exit" },
         { name: "─".repeat(30), value: "__sep__" },
         {
-          name: `🔌 Provider: ${providerLabel}`,
+          name: `${aic.t("configProvider")} ${providerLabel}`,
           value: "provider",
         },
         {
-          name: `🧠 Model: ${modelLabel}`,
+          name: `${aic.t("configModelPre")} ${modelLabel}`,
           value: "model",
         },
         {
-          name: `🌐 Language: ${langLabel}`,
-          value: "language",
+          name: `${aic.t("configUiLanguagePre")} ${uiLangLabel}`,
+          value: "uiLanguage",
         },
         {
-          name: `✏️  Custom prompt: ${config.prompt ? "set" : "not set"}`,
+          name: `${aic.t("configCommitLanguagePre")} ${commitLangLabel}`,
+          value: "commitLanguage",
+        },
+        {
+          name: `${aic.t("configCustomPromptPre")} ${config.prompt ? aic.t("configSet") : aic.t("configNotSet")}`,
           value: "prompt",
         },
         {
-          name: `📝 Custom types: ${config.customTypes?.length ? config.customTypes.join(", ") : "not set"}`,
+          name: `${aic.t("configCustomTypesPre")} ${config.customTypes?.length ? config.customTypes.join(", ") : aic.t("configNotSet")}`,
           value: "types",
         },
         {
-          name: `🔑 API key: ${config.apiKey ? "configured" : "not set"}`,
+          name: `${aic.t("configApiKeyPre")} ${config.apiKey ? aic.t("configConfigured") : aic.t("configNotSet")}`,
           value: "apikey",
         },
         {
-          name: `👥 Co-author: ${config.coauthor ? "enabled" : "disabled"}`,
+          name: `${aic.t("configCoauthorPre")} ${config.coauthor ? aic.t("configEnabled") : aic.t("configDisabled")}`,
           value: "coauthor",
         },
         {
-          name: `📈 Auto-bump: ${config.bumpVersion ? "enabled" : "disabled"}`,
+          name: `${aic.t("configAutoBumpPre")} ${config.bumpVersion ? aic.t("configEnabled") : aic.t("configDisabled")}`,
           value: "bump",
         },
-        { name: "📂 Projects & Templates", value: "projects-templates" },
+        {
+          name: `${aic.t("configTokenLimitsPre")} ${config.tokenLimit ? `${config.tokenLimit.daily || "∞"}/d, ${config.tokenLimit.monthly || "∞"}/m` : aic.t("configNotSet")}`,
+          value: "tokenLimits",
+        },
+        { name: aic.t("configProjectsTemplates"), value: "projects-templates" },
       ],
-      "Select setting",
+      aic.t("configSelectSetting"),
     );
 
     if (mainAction === "exit" || mainAction === "__sep__") return;
@@ -874,7 +893,7 @@ async function configInteractive() {
     if (mainAction === "coauthor") {
       config.coauthor = !config.coauthor;
       saveConfig(config);
-      console.log(config.coauthor ? "✅ Co-author enabled.\n" : "✅ Co-author disabled.\n");
+      console.log(config.coauthor ? `✅ ${aic.t("configCoauthorPre")} ${aic.t("configEnabled")}.\n` : `✅ ${aic.t("configCoauthorPre")} ${aic.t("configDisabled")}.\n`);
       await new Promise((r) => setTimeout(r, 1000));
     }
 
@@ -888,10 +907,10 @@ async function configInteractive() {
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       const masked = config.apiKey
         ? `${config.apiKey.slice(0, 8)}...${config.apiKey.slice(-4)}`
-        : "not set";
+        : aic.t("configNotSet");
       const key = await new Promise((resolve) => {
         rl.question(
-          `🔑 API key (current: ${masked})\n   Enter new key (or empty to clear): `,
+          `${aic.t("configApiKeyPre")} (current: ${masked})\n   ${aic.t("configSetApiKey")} `,
           resolve,
         );
       });
@@ -911,7 +930,7 @@ async function configInteractive() {
         {
           type: "list",
           name: "provider",
-          message: "Select LLM provider:",
+          message: aic.t("configSetProvider"),
           choices: [
             ...Object.entries(PROVIDERS).map(([value, p]) => ({ name: p.label, value })),
             { name: "Custom (any OpenAI-compatible endpoint)", value: "custom" },
@@ -940,7 +959,7 @@ async function configInteractive() {
         {
           type: "input",
           name: "model",
-          message: `Model name (empty = provider default${PROVIDERS[chosen]?.defaultModel ? `: ${PROVIDERS[chosen].defaultModel}` : ""}):`,
+          message: `${aic.t("configSetModel")}${PROVIDERS[chosen]?.defaultModel ? ` (${PROVIDERS[chosen].defaultModel})` : ""}:`,
           default: config.model || "",
         },
       ]);
@@ -1001,22 +1020,40 @@ async function configInteractive() {
       }
     }
 
-    if (mainAction === "language") {
+    if (mainAction === "uiLanguage") {
       const lang = await promptSelect(
         Object.entries(LANGUAGES).map(([code, name]) => ({
           name: `${name} (${code})`,
           value: code,
         })),
-        "Select commit message language:",
+        aic.t("configSelectUiLang"),
       );
-      const confirm = await askYesNo(`Set language to "${LANGUAGES[lang]}"?`);
+      const confirm = await askYesNo(`${aic.t("configSetUiLang")} "${LANGUAGES[lang]}"?`);
       if (confirm) {
-        config.language = lang;
+        config.uiLanguage = lang;
         saveConfig(config);
         aic.setLanguage(lang);
-        console.log(`✅ Language: ${LANGUAGES[lang]}.\n`);
+        console.log(`${aic.t("configUiLangUpdated")} ${LANGUAGES[lang]}.\n`);
       } else {
-        console.log("↩️  Cancelled.\n");
+        console.log(`${aic.t("configCancelledArrow")}\n`);
+      }
+    }
+
+    if (mainAction === "commitLanguage") {
+      const lang = await promptSelect(
+        Object.entries(LANGUAGES).map(([code, name]) => ({
+          name: `${name} (${code})`,
+          value: code,
+        })),
+        aic.t("configSelectCommitLang"),
+      );
+      const confirm = await askYesNo(`${aic.t("configSetCommitLang")} "${LANGUAGES[lang]}"?`);
+      if (confirm) {
+        config.commitLanguage = lang;
+        saveConfig(config);
+        console.log(`${aic.t("configCommitLangUpdated")} ${LANGUAGES[lang]}.\n`);
+      } else {
+        console.log(`${aic.t("configCancelledArrow")}\n`);
       }
     }
 
@@ -1026,7 +1063,7 @@ async function configInteractive() {
         {
           type: "editor",
           name: "prompt",
-          message: "Edit system prompt (use {types} placeholder for allowed types):",
+          message: aic.t("configEditPrompt"),
           default: config.prompt || "",
         },
       ]);
@@ -1060,35 +1097,57 @@ async function configInteractive() {
       );
     }
 
+    if (mainAction === "tokenLimits") {
+      const limits = config.tokenLimit || {};
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const dailyStr = await new Promise((resolve) => {
+        rl.question(`🔋 ${aic.t("configTokenDaily")} (${aic.t("configCurrent")}: ${limits.daily || aic.t("configNotSet")}, ${aic.t("configTokenEmptyKeep")}): `, resolve);
+      });
+      const monthlyStr = await new Promise((resolve) => {
+        rl.question(`🔋 ${aic.t("configTokenMonthly")} (${aic.t("configCurrent")}: ${limits.monthly || aic.t("configNotSet")}, ${aic.t("configTokenEmptyKeep")}): `, resolve);
+      });
+      rl.close();
+      const newLimits = {};
+      if (dailyStr.trim()) newLimits.daily = parseInt(dailyStr.trim(), 10);
+      if (monthlyStr.trim()) newLimits.monthly = parseInt(monthlyStr.trim(), 10);
+      if (Object.keys(newLimits).length) {
+        config.tokenLimit = { ...limits, ...newLimits };
+        saveConfig(config);
+        console.log(`✅ ${aic.t("configTokenLimitsPre")} ${aic.t("configSaved")}\n`);
+      } else {
+        console.log(`${aic.t("configCancelledArrow")}\n`);
+      }
+    }
+
     if (mainAction === "projects-templates") {
       while (true) {
         const allProjects = getManagedProjects();
 
         const choices = [
-          { name: "✅ Back to main menu", value: "back" },
+          { name: aic.t("projectsBackToMenu"), value: "back" },
           { name: "─".repeat(30), value: "__sep__" },
         ];
 
         if (allProjects.length === 0) {
-          choices.push({ name: "📭 No projects (run 'rxdev init' to add)", value: "__none__" });
+          choices.push({ name: aic.t("projectsNoProjects"), value: "__none__" });
         } else {
           for (const p of allProjects) {
             const name = p.split(/[\\/]/).pop();
             const exists = existsSync(p);
             const hasHook = exists && existsSync(join(p, ".githooks"));
-            const status = !exists ? "❌ missing" : hasHook ? "✅ active" : "⚠️  hook off";
+            const status = !exists ? aic.t("projectsMissing") : hasHook ? aic.t("projectsActive") : aic.t("projectsHookOff");
             choices.push({ name: `${name} — ${status}`, value: p });
           }
           choices.push({ name: "─".repeat(30), value: "__sep__" });
         }
 
-        choices.push({ name: "🎨 Templates", value: "templates" });
+        choices.push({ name: `🎨 ${aic.t("templatesTitle")}`, value: "templates" });
 
-        const selected = await promptSelect(choices, "Projects");
+        const selected = await promptSelect(choices, aic.t("projectsSelect"));
 
         if (selected === "back" || selected === "__sep__" || selected === "__none__") {
           if (selected === "__none__") {
-            console.log('ℹ️  Run "rxdev init" in a project to add it.\n');
+            console.log(`${aic.t("projectsNoProjectsHint")}\n`);
             await new Promise((r) => setTimeout(r, 1500));
           }
           break;
@@ -1105,42 +1164,42 @@ async function configInteractive() {
         const hasHook = exists && existsSync(join(projectPath, ".githooks"));
 
         const actions = [
-          { name: "⬅️  Back", value: "back" },
+          { name: aic.t("projectsBack"), value: "back" },
           { name: "─".repeat(30), value: "__sep__" },
         ];
 
         if (exists && hasHook) {
-          actions.push({ name: "🔌 Disable hook", value: "disable" });
+          actions.push({ name: aic.t("projectsDisableHook"), value: "disable" });
         } else if (exists && !hasHook) {
-          actions.push({ name: "⚡ Enable hook", value: "enable" });
+          actions.push({ name: aic.t("projectsEnableHook"), value: "enable" });
         }
-        actions.push({ name: "🗑️  Remove from list", value: "remove" });
+        actions.push({ name: aic.t("projectsRemove"), value: "remove" });
 
         const action = await promptSelect(actions, `${projectName}`);
 
         if (action === "back" || action === "__sep__") continue;
 
         if (action === "disable") {
-          const confirm = await askYesNo(`Disable hook in ${projectName}?`);
+          const confirm = await askYesNo(`${aic.t("projectsDisableConfirm")} ${projectName}?`);
           if (confirm) {
             rmSync(join(projectPath, ".githooks"), { recursive: true, force: true });
             spawnSync("git", ["config", "--unset", "core.hooksPath"], {
               stdio: "ignore",
               cwd: projectPath,
             });
-            console.log(`✅ Hook disabled\n`);
+            console.log(`${aic.t("projectsHookDisabled")}\n`);
           }
         } else if (action === "enable") {
-          const confirm = await askYesNo(`Enable hook in ${projectName}?`);
+          const confirm = await askYesNo(`${aic.t("projectsEnableConfirm")} ${projectName}?`);
           if (confirm) {
             await installHookForProject(projectPath);
-            console.log(`✅ Hook enabled\n`);
+            console.log(`${aic.t("projectsHookEnabled")}\n`);
           }
         } else if (action === "remove") {
-          const confirm = await askYesNo(`Remove ${projectName} from list?`);
+          const confirm = await askYesNo(`${aic.t("projectsRemoveConfirm")}`);
           if (confirm) {
             unregisterProject(projectPath);
-            console.log(`✅ Removed from list\n`);
+            console.log(`${aic.t("projectsRemoved")}\n`);
           }
         }
 
@@ -1256,65 +1315,9 @@ function uninstall() {
 }
 
 function showStatus() {
-  const _cwd = process.cwd();
-  const gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-    stdio: "pipe",
-    encoding: "utf8",
-  });
-
-  if (gitRoot.status !== 0) {
-    console.log("❌ Not inside a Git repository.");
-    return;
-  }
-
-  const root = gitRoot.stdout.trim();
-  const githooksDir = join(root, ".githooks");
-  const hookPath = join(githooksDir, "prepare-commit-msg");
-  const commitignorePath = join(root, ".commitignore");
-
-  const hooksPathResult = spawnSync("git", ["config", "core.hooksPath"], {
-    stdio: "pipe",
-    encoding: "utf8",
-  });
-  const configuredHooksPath = hooksPathResult.status === 0 ? hooksPathResult.stdout.trim() : null;
-  const hooksConfigured = configuredHooksPath === ".githooks";
-
-  const hookExists = existsSync(hookPath);
-
-  const commitignoreExists = existsSync(commitignorePath);
-
-  const templateName = getTemplateForProject(root) || "—";
-  const cfg = loadConfig();
-
-  console.log("\n🔍 RXDev Status\n");
-  console.log(`📁 Git root:       ${root}`);
-  console.log(`⚙️  Hooks path:     ${hooksConfigured ? "✅ .githooks" : "❌ not set"}`);
-  console.log(`📜 Hook file:       ${hookExists ? "✅ present" : "❌ missing"}`);
-  console.log(`📄 .commitignore:   ${commitignoreExists ? "✅ exists" : "⚠️ missing"}`);
-  const prov = cfg.provider || "groq";
-  const envName = PROVIDERS[prov]?.env;
-  const hasKey =
-    !!cfg.apiKey || (envName && !!process.env[envName]) || !!process.env.NEURO_COMMIT_API_KEY;
-  const keyState =
-    prov === "ollama"
-      ? "no key needed (local)"
-      : hasKey
-        ? "API key configured"
-        : "API key needed — run 'rxdev config'";
-  console.log(`🌐 Provider:        ${prov}${cfg.model ? ` · ${cfg.model}` : ""} (${keyState})`);
-  console.log(`📈 Auto-bump:       ${cfg.bumpVersion ? "✅ enabled" : "— disabled"}`);
-  console.log(`🎨 Template:        ${templateName}`);
-  console.log("");
-}
-
-// === DOCTOR ===
-
-function doctor() {
   const ok = (s) => `✅ ${s}`;
   const bad = (s) => `❌ ${s}`;
   const warn = (s) => `⚠️  ${s}`;
-
-  console.log("\n🩺 RXDev Doctor\n");
 
   // Node version (the hook runtime; >= 18 required)
   const nodeMajor = parseInt(process.versions.node.split(".")[0], 10);
@@ -1335,11 +1338,11 @@ function doctor() {
   // git repo, hooks path, hook files
   const rootRes = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" });
   if (rootRes.status !== 0) {
-    console.log(bad("Not inside a git repository"));
-    console.log("");
+    console.log(bad("Not inside a Git repository.\n"));
     return;
   }
   const gitRoot = rootRes.stdout.trim();
+
   const hp = spawnSync("git", ["config", "core.hooksPath"], { encoding: "utf8" });
   const hooksPath = hp.status === 0 ? hp.stdout.trim() : "";
   console.log(
@@ -1355,12 +1358,12 @@ function doctor() {
       : bad("Hook missing — run 'rxdev init'"),
   );
 
-  const pyFile = join(gitRoot, ".githooks", "rxdev.mjs");
-  if (existsSync(pyFile)) {
-    const hashPath = hashFilePath(pyFile);
+  const mjsFile = join(gitRoot, ".githooks", "rxdev.mjs");
+  if (existsSync(mjsFile)) {
+    const hashPath = hashFilePath(mjsFile);
     if (existsSync(hashPath)) {
       const stored = readFileSync(hashPath, "utf8").trim();
-      const cur = fileHash(readFileSync(pyFile, "utf8"));
+      const cur = fileHash(readFileSync(mjsFile, "utf8"));
       console.log(
         stored === cur
           ? ok("Hook: rxdev.mjs integrity OK")
@@ -1373,12 +1376,17 @@ function doctor() {
     console.log(bad("rxdev.mjs missing — run 'rxdev init'"));
   }
 
-  // provider / key
+  const commitignorePath = join(gitRoot, ".commitignore");
+  const commitignoreExists = existsSync(commitignorePath);
+  console.log(commitignoreExists ? ok(".commitignore: present") : warn(".commitignore: missing"));
+
+  const templateName = getTemplateForProject(gitRoot) || "—";
   const cfg = loadConfig();
   const prov = cfg.provider || "groq";
   const envName = PROVIDERS[prov]?.env;
   const hasKey =
     !!cfg.apiKey || (envName && !!process.env[envName]) || !!process.env.NEURO_COMMIT_API_KEY;
+
   console.log(`\n🌐 Provider: ${prov}${cfg.model ? ` · ${cfg.model}` : ""}`);
   if (prov === "ollama") {
     console.log(ok("API key: not required (local)"));
@@ -1388,6 +1396,7 @@ function doctor() {
     );
   }
   console.log(`📈 Auto-bump: ${cfg.bumpVersion ? "enabled" : "disabled"}`);
+  console.log(`🎨 Template:  ${templateName}`);
   console.log("");
 }
 
@@ -1569,6 +1578,7 @@ const boldCyan = "\x1b[1m\x1b[38;2;57;186;229m";
 const resetColor = "\x1b[0m";
 
 async function quickFlow() {
+  const aic = await hook();
   const bold = "\x1b[1m";
   const dim = "\x1b[38;5;244m";
   const reset = "\x1b[0m";
@@ -1584,7 +1594,7 @@ async function quickFlow() {
   // ── Header box (only boxed element) ──
   const showHeader = () => {
     clearScreen();
-    const lines = [`${bold}🚀  RXDev QuickFlow®${reset}`];
+    const lines = [`${bold}${aic.t("goTitle")}${reset}`];
     const w = Math.max(...lines.map((l) => sa(l).length)) + 4;
     const o =
       "╭" +
@@ -1620,7 +1630,7 @@ async function quickFlow() {
   // ================================================================
   showHeader();
 
-  console.log(`\n${sep(`${bold}📂  Stage Changes${reset}`)}\n`);
+  console.log(`\n${sep(`${bold}${aic.t("goStageTitle")}${reset}`)}\n`);
 
   const unstaged = spawnSync("git", ["diff", "--name-only"], { encoding: "utf8" })
     .stdout.trim()
@@ -1647,7 +1657,7 @@ async function quickFlow() {
   const allChanged = [...new Set([...unstaged, ...alreadyStaged])];
 
   if (allChanged.length === 0) {
-    console.log("ℹ️  No changed files found.\n");
+    console.log(`${aic.t("goNoChangedFiles")}\n`);
   }
 
   let filesToStage = [];
@@ -1656,9 +1666,9 @@ async function quickFlow() {
     const selected = await showFileTreePicker(
       allChanged,
       alreadyStaged,
-      "Select files to stage:",
+      aic.t("goStageTitle"),
       false,
-      "📦 Stage all files",
+      `${aic.t("goStageTitle")}`,
     );
 
     if (selected.length === 0) return;
@@ -1674,34 +1684,34 @@ async function quickFlow() {
   if (filesToStage.length > 0) {
     const addResult = spawnSync("git", ["add", "--", ...filesToStage], { stdio: "pipe" });
     if (addResult.status !== 0) {
-      console.error(`❌ Failed to stage changes: ${addResult.stderr || "unknown error"}`);
+      console.error(`${aic.t("goStageFailed")} ${addResult.stderr || "unknown error"}`);
       process.exit(1);
     }
-    console.log(`${green}✅ ${filesToStage.length} file(s) staged${reset}\n`);
+    console.log(`${green}${aic.t("goStaged")}${reset}\n`);
   }
 
   // ── Secret scan before committing ──
   const secrets = await scanSecrets();
   if (secrets.length > 0) {
-    console.log(`${yellow}🚨 ${secrets.length} potential secret(s) in staged changes:${reset}`);
+    console.log(`${yellow}${aic.t("goSecretsFound")} ${secrets.length}:${reset}`);
     for (const f of secrets) console.log(`   • ${f.type} — ${f.file} (${f.preview})`);
     console.log("");
     const action = await promptSelect(
       [
-        { name: "⚠️   Commit anyway (risky)", value: "commit" },
-        { name: "🗑️   Unstage secret files & commit", value: "unstage" },
-        { name: "❌   Cancel", value: "cancel" },
+        { name: `⚠️   ${aic.t("scanCommitAnyway")}`, value: "commit" },
+        { name: `🗑️   ${aic.t("scanUnstage")}`, value: "unstage" },
+        { name: `❌   ${aic.t("scanCancel")}`, value: "cancel" },
       ],
-      "What to do with secrets?",
+      aic.t("scanWhatToDo"),
     );
     if (action === "cancel") {
-      console.log(`\n${bold}↩️  Aborted.${reset}`);
+      console.log(`\n${bold}${aic.t("scanCancel")}${reset}`);
       return;
     }
     if (action === "unstage") {
       const secretFiles = [...new Set(secrets.map((s) => s.file))];
       spawnSync("git", ["reset", "HEAD", "--", ...secretFiles], { stdio: "pipe" });
-      console.log(`${yellow}🗑️  Unstaged: ${secretFiles.join(", ")}${reset}\n`);
+      console.log(`${yellow}${aic.t("scanUnstaged")} ${secretFiles.join(", ")}${reset}\n`);
     }
   }
 
@@ -1710,8 +1720,8 @@ async function quickFlow() {
   // ================================================================
   showHeader();
 
-  console.log(`\n${sep(`${bold}💬  Generating Commit Message${reset}`)}\n`);
-  console.log(`${dim}AI is analyzing your staged changes...${reset}\n`);
+  console.log(`\n${sep(`${bold}${aic.t("goGeneratingCommit")}${reset}`)}\n`);
+  console.log(`${dim}${aic.t("goAiAnalyzing")}${reset}\n`);
 
   const makeCommit = (skipBump) =>
     new Promise((resolve) => {
@@ -1778,7 +1788,7 @@ async function quickFlow() {
         console.log(`\n${userLines.join("\n")}\n`);
       }
     } catch {}
-    console.error("❌ Failed to generate commit message");
+    console.error(aic.t("goFailedCommit"));
     process.exit(1);
   }
 
@@ -1791,7 +1801,7 @@ async function quickFlow() {
     .trim();
 
   if (!currentMessage) {
-    console.error("❌ Empty commit message");
+    console.error(aic.t("goFailedCommit"));
     process.exit(1);
   }
 
@@ -1802,7 +1812,7 @@ async function quickFlow() {
   const showReview = () => {
     clearScreen();
     showHeader();
-    console.log(`\n${sep(`${bold}📄  Commit Message${reset}`)}\n`);
+    console.log(`\n${sep(`${bold}${aic.t("goReview")}${reset}`)}\n`);
 
     const raw = currentMessage.trimEnd().split("\n");
     const innerW = Math.min(process.stdout.columns || 80, 72) - 4;
@@ -1817,22 +1827,36 @@ async function quickFlow() {
   };
 
   showReview();
+  const commitTokStats = aic.getTokenStats();
+  const wasFallback = currentMessage.includes(aic.t("tokensLimitExceeded"));
+  if (wasFallback) {
+    console.log(`\n\x1b[33m⚠️  ${aic.t("tokensLimitExceeded")}\x1b[0m\n`);
+  } else if (commitTokStats.lastRequest) {
+    const limits = loadConfig().tokenLimit || {};
+    let pct = "";
+    if (limits.daily && commitTokStats.lastRequest) {
+      const reqPct = Math.round((commitTokStats.lastRequest / limits.daily) * 10000) / 100;
+      const remainPct = Math.round((Math.max(0, limits.daily - commitTokStats.daily) / limits.daily) * 10000) / 100;
+      pct = ` (${reqPct}% ${aic.t("tokensOfDaily")}, ${remainPct}% ${aic.t("tokensLeft")})`;
+    }
+    console.log(`\n\x1b[38;5;244m⚡ ${commitTokStats.lastRequest}${aic.t("tokensUnit")}${pct}\x1b[0m\n`);
+  }
 
   while (true) {
     const action = await promptSelect(
       [
-        { name: `${green}✅  Push${reset}`, value: "push" },
-        { name: `${cyan}✏️   Edit message${reset}`, value: "edit" },
-        { name: `${yellow}🔄  Regenerate${reset}`, value: "regenerate" },
-        { name: `${bold}❌  Cancel${reset}`, value: "cancel" },
+        { name: `${green}✅  ${aic.t("goPush")}${reset}`, value: "push" },
+        { name: `${cyan}✏️   ${aic.t("goEdit")}${reset}`, value: "edit" },
+        { name: `${yellow}🔄  ${aic.t("goRegenerate")}${reset}`, value: "regenerate" },
+        { name: `${bold}❌  ${aic.t("goCancel")}${reset}`, value: "cancel" },
       ],
-      "What next?",
+      `❓ ${aic.t("goTitle")}`,
     );
 
     if (action === "push") break;
     if (action === "cancel") {
       spawnSync("git", ["reset", "--soft", "HEAD~1"], { stdio: "pipe" });
-      console.log(`\n${bold}↩️  Commit cancelled${reset}`);
+      console.log(`\n${bold}${aic.t("goCommitCancelled")}${reset}`);
       return;
     }
 
@@ -1872,15 +1896,15 @@ async function quickFlow() {
     if (action === "regenerate") {
       spawnSync("git", ["reset", "--soft", "HEAD~1"], { stdio: "pipe" });
       showHeader();
-      console.log(`\n${sep(`${bold}💬  Regenerating Commit Message${reset}`)}\n`);
-      console.log(`${dim}AI is re-analyzing your changes...${reset}\n`);
+      console.log(`\n${sep(`${bold}${aic.t("goGeneratingCommit")}${reset}`)}\n`);
+      console.log(`${dim}${aic.t("goAiAnalyzing")}${reset}\n`);
       const c = await makeCommit(true);
       console.log("");
       if (c === null) {
         process.exit(130);
       }
       if (c !== 0) {
-        console.error("❌ Failed to regenerate");
+        console.error(aic.t("goFailedCommit"));
         process.exit(1);
       }
       currentMessage = readFileSync(commitMsgFile, "utf8")
@@ -1890,7 +1914,7 @@ async function quickFlow() {
         .join("\n")
         .trim();
       if (!currentMessage) {
-        console.error("❌ Empty message");
+        console.error(aic.t("goFailedCommit"));
         process.exit(1);
       }
       showReview();
@@ -1902,7 +1926,7 @@ async function quickFlow() {
   // ================================================================
   showHeader();
 
-  console.log(`\n${sep(`${bold}⬆️  Push Changes${reset}`)}\n`);
+  console.log(`\n${sep(`${bold}${aic.t("goPushTitle")}${reset}`)}\n`);
 
   const remotes = spawnSync("git", ["remote"], { encoding: "utf8" })
     .stdout.trim()
@@ -1934,13 +1958,13 @@ async function quickFlow() {
   const branch = await promptSelect(branchChoices, "Select branch:");
   if (branch === "__back__") return;
 
-  console.log(`\n⬆️  Pushing to ${remote}/${branch}...`);
+  console.log(`\n${aic.t("goPushing")} ${remote}/${branch}...`);
   const push = spawnSync("git", ["push", remote, branch], { stdio: "inherit" });
   if (push.status !== 0) {
-    console.error("\n❌ Push failed");
+    console.error(`\n❌ ${aic.t("goFailedCommit")}`);
     process.exit(1);
   }
-  console.log(`${green}✅ Pushed successfully${reset}\n`);
+  console.log(`${green}${aic.t("goPushed")}${reset}\n`);
 }
 
 // === SCAN / RELEASE / PR / SPLIT (in-process via the Node hook module) ===
@@ -1981,44 +2005,44 @@ async function releaseCommand() {
   const aic = await hook();
   const data = aic.buildReleaseInfo();
   if (!data || data.error) {
-    console.error(`\n❌ ${data?.error || "Could not compute release."}`);
+    console.error(`\n❌ ${data?.error || aic.t("error")}`);
     process.exit(1);
   }
 
-  console.log(`\n🏷️  Release\n`);
-  console.log(`   Since:   ${data.from || "(no tags — summarizing all history)"}`);
-  console.log(`   Current: ${data.current}`);
-  console.log(`   Bump:    ${data.bump}  →  ${data.next}`);
-  console.log(`   Commits: ${data.count}\n`);
-  console.log("──────── Release notes ────────\n");
+  console.log(`\n${aic.t("releaseTitle")}\n`);
+  console.log(`   ${aic.t("releaseSince")}  ${data.from || "(no tags — summarizing all history)"}`);
+  console.log(`   ${aic.t("releaseCurrent")} ${data.current}`);
+  console.log(`   ${aic.t("releaseBump")}    ${data.bump}  →  ${data.next}`);
+  console.log(`   ${aic.t("releaseCommits")} ${data.count}\n`);
+  console.log(`──────── ${aic.t("releaseNotes")} ────────\n`);
   console.log(data.changelog);
   console.log("─────────────────────────────────\n");
 
   if (data.count === 0) {
-    console.log("Nothing to release since the last tag.\n");
+    console.log(`${aic.t("releaseNothing")}\n`);
     return;
   }
 
   const tag = `v${data.next}`;
-  const proceed = await askYesNo(`Create tag ${tag} and GitHub Release?`);
+  const proceed = await askYesNo(`${aic.t("releaseCreateTag")}`);
   if (!proceed) {
-    console.log("↩️  Cancelled.\n");
+    console.log(`${aic.t("configCancelledArrow")}\n`);
     return;
   }
 
   const tagRes = spawnSync("git", ["tag", "-a", tag, "-m", tag], { stdio: "inherit" });
   if (tagRes.status !== 0) {
-    console.error(`❌ Failed to create tag ${tag} (already exists?).`);
+    console.error(`${aic.t("releaseTagFailed")} ${tag}`);
     process.exit(1);
   }
-  console.log(`✅ Created tag ${tag}`);
+  console.log(`${aic.t("releaseTagCreated")} ${tag}`);
 
   const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
     encoding: "utf8",
   }).stdout.trim();
   spawnSync("git", ["push", "origin", branch], { stdio: "inherit" });
   spawnSync("git", ["push", "origin", tag], { stdio: "inherit" });
-  console.log("✅ Pushed tag");
+  console.log(`${aic.t("goPushed")}`);
 
   const hasGh = spawnSync("gh", ["--version"], { stdio: "pipe" }).status === 0;
   if (hasGh) {
@@ -2035,7 +2059,7 @@ async function releaseCommand() {
       unlinkSync(notesFile);
     } catch {}
     if (ghRes.status === 0) {
-      console.log("✅ GitHub Release created\n");
+      console.log(`${aic.t("releaseCreated")}\n`);
     } else {
       console.log(
         `⚠️  Failed to create GitHub Release. Create manually:\n   gh release create ${tag}\n`,
@@ -2043,27 +2067,27 @@ async function releaseCommand() {
     }
   } else {
     console.log(
-      `ℹ️  Install GitHub CLI to create releases automatically:\n   gh release create ${tag}\n`,
+      `${aic.t("releaseInstallGh")}\n   gh release create ${tag}\n`,
     );
   }
 }
 
 async function prCommand(baseArg) {
   const base = baseArg || null;
-  console.log("\n💬 Generating pull request description...\n");
   const aic = await hook();
+  console.log(`\n${aic.t("prGenerating")}\n`);
   const data = await aic.buildPrInfo(base, hookConfig(aic));
   if (!data || data.error) {
-    console.error(`\n❌ ${data?.error || "PR generation failed."}`);
+    console.error(`\n❌ ${data?.error || aic.t("error")}`);
     process.exit(1);
   }
-  console.log(`📌 Title: ${data.title}\n`);
+  console.log(`${aic.t("prTitle")} ${data.title}\n`);
   console.log(data.body);
   console.log("");
 
   const hasGh = spawnSync("gh", ["--version"], { stdio: "pipe" }).status === 0;
   if (hasGh) {
-    const create = await askYesNo(`Create the PR with gh (base: ${data.base})?`);
+    const create = await askYesNo(`${aic.t("prCreate")} ${data.base})?`);
     if (create) {
       const tmp = join(tmpdir(), `rxcommit-pr-${randomBytes(8).toString("hex")}.md`);
       writeFileSync(tmp, data.body);
@@ -2075,28 +2099,28 @@ async function prCommand(baseArg) {
       try {
         unlinkSync(tmp);
       } catch {}
-      if (r.status !== 0) console.error("❌ gh pr create failed.");
+      if (r.status !== 0) console.error(`❌ ${aic.t("prTitle")} gh pr create failed.`);
     }
   } else {
-    console.log("ℹ️  Install GitHub CLI (gh) to open the PR directly from here.\n");
+    console.log(`${aic.t("prInstallGh")}\n`);
   }
 }
 
 async function splitCommand() {
-  console.log("\n✂️  Analyzing staged changes...\n");
   const aic = await hook();
+  console.log(`\n${aic.t("splitTitle")}\n`);
   const data = await aic.buildSplitPlan(hookConfig(aic));
   if (!data || data.error) {
-    console.error(`\n❌ ${data?.error || "Split failed."}`);
+    console.error(`\n❌ ${data?.error || aic.t("error")}`);
     process.exit(1);
   }
   const groups = data.groups || [];
   if (!groups.length) {
-    console.log("ℹ️  No split plan was produced.\n");
+    console.log(`${aic.t("splitNoPlan")}\n`);
     return;
   }
 
-  console.log(`Proposed ${groups.length} commit(s):\n`);
+  console.log(`${aic.t("splitProposed")} ${groups.length}:\n`);
   groups.forEach((g, i) => {
     console.log(`  ${i + 1}. ${g.message}`);
     if (g.reason) console.log(`      ↳ ${g.reason}`);
@@ -2106,12 +2130,12 @@ async function splitCommand() {
     console.log("");
   });
   if (data.unassigned?.length) {
-    console.log(`⚠️  Left staged (unassigned): ${data.unassigned.join(", ")}\n`);
+    console.log(`${aic.t("splitLeftStaged")} ${data.unassigned.join(", ")}\n`);
   }
 
-  const apply = await askYesNo("Apply this split? (creates the commits above)");
+  const apply = await askYesNo(aic.t("splitApply"));
   if (!apply) {
-    console.log("↩️  Staging left unchanged.\n");
+    console.log(`${aic.t("splitCancelled")}\n`);
     return;
   }
 
@@ -2121,7 +2145,7 @@ async function splitCommand() {
     spawnSync("git", ["reset", "-q", "--", ...staged], { stdio: "pipe" });
     const addRes = spawnSync("git", ["add", "--", ...g.files], { stdio: "pipe" });
     if (addRes.status !== 0) {
-      console.error("❌ Failed to stage a group — aborting and restoring staging.");
+      console.error(`❌ ${aic.t("error")} Failed to stage a group — aborting and restoring staging.`);
       reStageAll();
       process.exit(1);
     }
@@ -2130,7 +2154,7 @@ async function splitCommand() {
       env: { ...process.env, NEURO_COMMIT_SKIP_BUMP: "1", GIT_EDITOR: "true" },
     });
     if (c.status !== 0) {
-      console.error("❌ A commit failed — aborting and restoring staging.");
+      console.error(`❌ ${aic.t("error")} A commit failed — aborting and restoring staging.`);
       reStageAll();
       process.exit(1);
     }
@@ -2139,24 +2163,25 @@ async function splitCommand() {
   if (data.unassigned?.length) {
     spawnSync("git", ["add", "--", ...data.unassigned], { stdio: "pipe" });
   }
-  console.log(`\n✅ Created ${groups.length} commit(s).\n`);
+  console.log(`\n${aic.t("splitCreated")}\n`);
 }
 
 function levenshteinDistance(a, b) {
-  const matrix = Array.from({ length: b.length + 1 }, (_, i) => i);
+  const dp = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
-    let prev = i;
+    let prev = dp[0];
+    dp[0] = i;
     for (let j = 1; j <= b.length; j++) {
-      const curr = matrix[j];
-      matrix[j] = a[i - 1] === b[j - 1] ? prev : Math.min(prev, matrix[j], matrix[j - 1]) + 1;
-      prev = curr;
+      const tmp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : Math.min(prev, dp[j], dp[j - 1]) + 1;
+      prev = tmp;
     }
   }
-  return matrix[b.length];
+  return dp[b.length];
 }
 
 function suggestCommand(input) {
-  const commands = ["init", "config", "uninstall", "status", "doctor", "filter", "go", "split", "review", "stats", "scan", "pr", "release", "tokens", "update", "version"];
+  const commands = ["config", "filter", "go", "init", "pr", "release", "review", "scan", "split", "stats", "status", "tokens", "uninstall", "update", "version"];
   let bestMatch = null;
   let bestDistance = Infinity;
   for (const cmd of commands) {
@@ -2202,16 +2227,27 @@ async function reviewCommand() {
     console.log(`\n${"─".repeat(40)}`);
     console.log(`📋 ${data.issueCount} ${aic.t("reviewIssues")}`);
   }
+  const tokStats = aic.getTokenStats();
+  if (tokStats.lastRequest) {
+    const limits = cfg.tokenLimit || {};
+    let pct = "";
+    if (limits.daily && tokStats.lastRequest) {
+      const reqPct = Math.round((tokStats.lastRequest / limits.daily) * 10000) / 100;
+      const remainPct = Math.round((Math.max(0, limits.daily - tokStats.daily) / limits.daily) * 10000) / 100;
+      pct = ` (${reqPct}% ${aic.t("tokensOfDaily")}, ${remainPct}% ${aic.t("tokensLeft")})`;
+    }
+    console.log(`\n\x1b[38;5;244m⚡ ${tokStats.lastRequest}${aic.t("tokensUnit")}${pct}\x1b[0m`);
+  }
   console.log("");
 }
 
 async function statsCommand() {
+  const aic = await hook();
   const repoName = process.cwd().split(/[\\/]/).pop();
   const branch = spawnSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
     encoding: "utf8",
   }).stdout.trim();
-  console.log(`\n📊 ${repoName}:${branch} — commit statistics:\n`);
-  const aic = await hook();
+  console.log(`\n📊 ${repoName}:${branch} — ${aic.t("statsTitle")}\n`);
   const rangeIdx = args.indexOf("--range");
   const range = rangeIdx !== -1 ? args[rangeIdx + 1] : "HEAD~20..HEAD";
 
@@ -2236,7 +2272,7 @@ async function statsCommand() {
   }
 
   console.log(`${aic.t("statsTotal")} ${data.total}`);
-  console.log(`${aic.t("statsAvgLen")} ${data.avgMessageLength} chars`);
+  console.log(`${aic.t("statsAvgLen")} ${data.avgMessageLength} ${aic.t("statsChars")}`);
   console.log(`${aic.t("statsBreaking")} ${data.breakingChanges}`);
   console.log(`\n${aic.t("statsByType")}`);
   for (const [type, count] of Object.entries(data.byType)) {
@@ -2250,29 +2286,29 @@ async function statsCommand() {
   }
 }
 
-function showHelp() {
-  console.log(`${boldCyan}RXDev${resetColor} is an AI-powered developer workflow tool ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
+function showHelp(tr) {
+  const _ = tr || ((s) => s);
+  console.log(`${boldCyan}RXDev${resetColor} ${_("helpTagline")} ${"\x1b[38;5;244m"}(v${pkg.version})${resetColor}
 
-${"\x1b[1m\x1b[37m"}Usage:${resetColor}
-  ${boldCyan}rxdev${resetColor} <command> [options]
+${"\x1b[1m\x1b[37m"}${_("helpUsage")}${resetColor}
+  ${boldCyan}rxdev${resetColor} ${_("helpCmdPlaceholder")} ${_("helpOptsPlaceholder")}
 
-${"\x1b[1m\x1b[37m"}Commands:${resetColor}
-  ${boldCyan}init${resetColor}          Install AI commit hook
-  ${boldCyan}config${resetColor}        Configure model, language, key, prompt, types, co-author & more
-  ${boldCyan}go${resetColor}            Start QuickFlow® — interactive commit flow
-  ${boldCyan}split${resetColor}         Split staged changes into multiple logical commits
-  ${boldCyan}scan${resetColor}          Scan staged changes for secrets/credentials
-  ${boldCyan}review${resetColor}        AI code review of staged changes
-  ${boldCyan}stats${resetColor}         Show commit statistics and bad practices
-  ${boldCyan}tokens${resetColor}        Show token usage statistics
-  ${boldCyan}pr${resetColor}            Generate a pull request title + description
-  ${boldCyan}release${resetColor}       Create GitHub Release with tag
-  ${boldCyan}uninstall${resetColor}     Remove hook
-  ${boldCyan}status${resetColor}        Show integration status
-  ${boldCyan}doctor${resetColor}        Diagnose setup (Node, hooks, provider, key)
-  ${boldCyan}filter${resetColor}        Rewrite git history (remove secrets, files, etc.)
-  ${boldCyan}version${resetColor}       Show version number
-  ${boldCyan}update${resetColor}        Show update instructions`);
+${"\x1b[1m\x1b[37m"}${_("helpCommands")}${resetColor}
+  ${boldCyan}config${resetColor}        ${_("helpDescConfig")}
+  ${boldCyan}filter${resetColor}        ${_("helpDescFilter")}
+  ${boldCyan}go${resetColor}            ${_("helpDescGo")}
+  ${boldCyan}init${resetColor}          ${_("helpDescInit")}
+  ${boldCyan}pr${resetColor}            ${_("helpDescPr")}
+  ${boldCyan}release${resetColor}       ${_("helpDescRelease")}
+  ${boldCyan}review${resetColor}        ${_("helpDescReview")}
+  ${boldCyan}scan${resetColor}          ${_("helpDescScan")}
+  ${boldCyan}split${resetColor}         ${_("helpDescSplit")}
+  ${boldCyan}stats${resetColor}         ${_("helpDescStats")}
+  ${boldCyan}status${resetColor}        ${_("helpDescStatus")}
+  ${boldCyan}tokens${resetColor}        ${_("helpDescTokens")}
+  ${boldCyan}uninstall${resetColor}     ${_("helpDescUninstall")}
+  ${boldCyan}update${resetColor}        ${_("helpDescUpdate")}
+  ${boldCyan}version${resetColor}       ${_("helpDescVersion")}`);
 }
 
 const args = process.argv.slice(2);
@@ -2287,8 +2323,7 @@ if (filteredArgs.includes("--version") || filteredArgs.includes("-v") || cmd ===
 }
 
 if (filteredArgs.includes("--help") || filteredArgs.includes("-h")) {
-  showHelp();
-  process.exit(0);
+  // help goes through mainCmd's default case
 }
 
 // === AUTO-UPDATE MANAGED PROJECTS' HOOKS ===
@@ -2319,24 +2354,24 @@ async function tokensCommand() {
     const dailyPercent = Math.round((stats.daily / limits.daily) * 100);
     console.log(`${aic.t("tokensToday")} ${stats.daily.toLocaleString()} / ${limits.daily.toLocaleString()} (${dailyPercent}%)`);
   } else {
-    console.log(`${aic.t("tokensToday")} ${stats.daily.toLocaleString()} (no limit set)`);
+    console.log(`${aic.t("tokensToday")} ${stats.daily.toLocaleString()} (${aic.t("tokensNoLimit")})`);
   }
 
   if (limits.monthly) {
     const monthlyPercent = Math.round((stats.monthly / limits.monthly) * 100);
     console.log(`${aic.t("tokensMonth")} ${stats.monthly.toLocaleString()} / ${limits.monthly.toLocaleString()} (${monthlyPercent}%)`);
   } else {
-    console.log(`${aic.t("tokensMonth")} ${stats.monthly.toLocaleString()} (no limit set)`);
+    console.log(`${aic.t("tokensMonth")} ${stats.monthly.toLocaleString()} (${aic.t("tokensNoLimit")})`);
   }
 
   console.log(`\n${aic.t("tokensLastReq")} ${stats.lastRequest} tokens`);
-  console.log(`Session: ${stats.sessionTokens} tokens\n`);
+  console.log(`${aic.t("tokensSession")} ${stats.sessionTokens} tokens\n`);
 }
 
 async function mainCmd() {
   const config = loadConfig();
   const aic = await hook();
-  aic.setLanguage(config.language || "ru");
+  aic.setLanguage(config.uiLanguage || config.language || "ru");
 
   switch (cmd) {
     case "init":
@@ -2350,9 +2385,6 @@ async function mainCmd() {
       break;
     case "status":
       showStatus();
-      break;
-    case "doctor":
-      doctor();
       break;
     case "filter":
       await filterHistory();
@@ -2413,13 +2445,17 @@ async function mainCmd() {
       console.log(`v${pkg.version}`);
       break;
     default: {
-      const aic = await hook();
+      if (!cmd || cmd.startsWith("-")) {
+        showHelp(aic.t);
+        break;
+      }
+      const aic2 = await hook();
       const suggestion = suggestCommand(cmd);
       if (suggestion) {
         console.log(`\n❌ Unknown command '${cmd}'`);
         console.log(`💡 Did you mean '${suggestion}'?\n`);
       } else {
-        showHelp();
+        showHelp(aic2.t);
       }
     }
   }
