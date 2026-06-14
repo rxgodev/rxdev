@@ -17,6 +17,7 @@
 
 ## Table of Contents
 
+- [What's New in v4.1](#whats-new-in-v41)
 - [What's New in v4.0](#whats-new-in-v40)
 - [Features](#features)
 - [Installation](#installation)
@@ -27,6 +28,16 @@
 - [GitHub Action](#github-action)
 - [Documentation](#documentation)
 - [License](#license)
+
+---
+
+## What's New in v4.1
+
+- **Full Interface Localization** — entire interface in your language (en/ru/de/fr/zh)
+- **Token Management** — track usage, set daily/monthly limits, get warnings
+- **Command Suggestions** — "Did you mean 'stats'?" for typos
+- **Improved File Picker** — shows file sizes, better navigation
+- **New Command** — `rxdev tokens` for token usage statistics
 
 ---
 
@@ -212,7 +223,8 @@ That's it. `rxdev go` guides you through every step:
 | `rxdev review` | AI code review of staged changes |
 | `rxdev split` | Split staged changes into multiple logical commits |
 | `rxdev scan` | Scan staged changes for leaked secrets |
-| `rxdev analytics` | Show commit statistics and bad practices |
+| `rxdev stats` | Show commit statistics and bad practices |
+| `rxdev tokens` | Show token usage statistics |
 | `rxdev pr` | Generate a pull request title + description |
 | `rxdev release` | Create GitHub Release with tag |
 | `rxdev init` | Install the AI commit hook |
