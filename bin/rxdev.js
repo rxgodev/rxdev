@@ -2132,6 +2132,33 @@ async function splitCommand() {
   console.log(`\n✅ Created ${groups.length} commit(s).\n`);
 }
 
+function levenshteinDistance(a, b) {
+  const matrix = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = i;
+    for (let j = 1; j <= b.length; j++) {
+      const curr = matrix[j];
+      matrix[j] = a[i - 1] === b[j - 1] ? prev : Math.min(prev, matrix[j], matrix[j - 1]) + 1;
+      prev = curr;
+    }
+  }
+  return matrix[b.length];
+}
+
+function suggestCommand(input) {
+  const commands = ["init", "config", "uninstall", "status", "doctor", "filter", "go", "split", "review", "stats", "scan", "pr", "release", "tokens", "update", "version"];
+  let bestMatch = null;
+  let bestDistance = Infinity;
+  for (const cmd of commands) {
+    const dist = levenshteinDistance(input.toLowerCase(), cmd);
+    if (dist < bestDistance && dist <= 2) {
+      bestDistance = dist;
+      bestMatch = cmd;
+    }
+  }
+  return bestMatch;
+}
+
 function stripMarkdown(text) {
   return text
     .replace(/^#{1,6}\s*/gm, "")
@@ -2377,9 +2404,16 @@ async function mainCmd() {
     case "version":
       console.log(`v${pkg.version}`);
       break;
-    default:
-      showHelp();
-  }
+    default: {
+      const aic = await hook();
+      const suggestion = suggestCommand(cmd);
+      if (suggestion) {
+        console.log(`\n❌ Unknown command '${cmd}'`);
+        console.log(`💡 Did you mean '${suggestion}'?\n`);
+      } else {
+        showHelp();
+      }
+    }
 }
 process.on("unhandledRejection", (e) => {
   console.error(`\n❌ Unhandled error: ${e.message || e}`);
