@@ -736,9 +736,12 @@ async function showFileTreePicker(
         if (!item.isDir && item.value !== "__all__" && item.value !== "__sep__") {
           try {
             const stat = statSync(item.value);
-            const size = stat.size < 1024 ? `${stat.size}B` :
-                         stat.size < 1024 * 1024 ? `${(stat.size / 1024).toFixed(1)}KB` :
-                         `${(stat.size / (1024 * 1024)).toFixed(1)}MB`;
+            const size =
+              stat.size < 1024
+                ? `${stat.size}B`
+                : stat.size < 1024 * 1024
+                  ? `${(stat.size / 1024).toFixed(1)}KB`
+                  : `${(stat.size / (1024 * 1024)).toFixed(1)}MB`;
             label = `${item.label} ${"\x1b[2m"}(${size})${"\x1b[22m"}`;
           } catch {}
         }
@@ -833,7 +836,8 @@ async function configInteractive() {
       (PROVIDERS[provider]?.defaultModel
         ? `${PROVIDERS[provider].defaultModel} (${aic.t("configDefault")})`
         : aic.t("configDefault"));
-    const providerLabel = PROVIDERS[provider]?.label || `custom (${config.apiUrl || aic.t("configNoUrl")})`;
+    const providerLabel =
+      PROVIDERS[provider]?.label || `custom (${config.apiUrl || aic.t("configNoUrl")})`;
     const uiLangLabel = LANGUAGES[config.uiLanguage || config.language] || "Русский";
     const commitLangLabel = LANGUAGES[config.commitLanguage || config.language] || "Русский";
 
@@ -893,7 +897,11 @@ async function configInteractive() {
     if (mainAction === "coauthor") {
       config.coauthor = !config.coauthor;
       saveConfig(config);
-      console.log(config.coauthor ? `✅ ${aic.t("configCoauthorPre")} ${aic.t("configEnabled")}.\n` : `✅ ${aic.t("configCoauthorPre")} ${aic.t("configDisabled")}.\n`);
+      console.log(
+        config.coauthor
+          ? `✅ ${aic.t("configCoauthorPre")} ${aic.t("configEnabled")}.\n`
+          : `✅ ${aic.t("configCoauthorPre")} ${aic.t("configDisabled")}.\n`,
+      );
       await new Promise((r) => setTimeout(r, 1000));
     }
 
@@ -1101,10 +1109,16 @@ async function configInteractive() {
       const limits = config.tokenLimit || {};
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       const dailyStr = await new Promise((resolve) => {
-        rl.question(`🔋 ${aic.t("configTokenDaily")} (${aic.t("configCurrent")}: ${limits.daily || aic.t("configNotSet")}, ${aic.t("configTokenEmptyKeep")}): `, resolve);
+        rl.question(
+          `🔋 ${aic.t("configTokenDaily")} (${aic.t("configCurrent")}: ${limits.daily || aic.t("configNotSet")}, ${aic.t("configTokenEmptyKeep")}): `,
+          resolve,
+        );
       });
       const monthlyStr = await new Promise((resolve) => {
-        rl.question(`🔋 ${aic.t("configTokenMonthly")} (${aic.t("configCurrent")}: ${limits.monthly || aic.t("configNotSet")}, ${aic.t("configTokenEmptyKeep")}): `, resolve);
+        rl.question(
+          `🔋 ${aic.t("configTokenMonthly")} (${aic.t("configCurrent")}: ${limits.monthly || aic.t("configNotSet")}, ${aic.t("configTokenEmptyKeep")}): `,
+          resolve,
+        );
       });
       rl.close();
       const newLimits = {};
@@ -1135,7 +1149,11 @@ async function configInteractive() {
             const name = p.split(/[\\/]/).pop();
             const exists = existsSync(p);
             const hasHook = exists && existsSync(join(p, ".githooks"));
-            const status = !exists ? aic.t("projectsMissing") : hasHook ? aic.t("projectsActive") : aic.t("projectsHookOff");
+            const status = !exists
+              ? aic.t("projectsMissing")
+              : hasHook
+                ? aic.t("projectsActive")
+                : aic.t("projectsHookOff");
             choices.push({ name: `${name} — ${status}`, value: p });
           }
           choices.push({ name: "─".repeat(30), value: "__sep__" });
@@ -1836,10 +1854,13 @@ async function quickFlow() {
     let pct = "";
     if (limits.daily && commitTokStats.lastRequest) {
       const reqPct = Math.round((commitTokStats.lastRequest / limits.daily) * 10000) / 100;
-      const remainPct = Math.round((Math.max(0, limits.daily - commitTokStats.daily) / limits.daily) * 10000) / 100;
+      const remainPct =
+        Math.round((Math.max(0, limits.daily - commitTokStats.daily) / limits.daily) * 10000) / 100;
       pct = ` (${reqPct}% ${aic.t("tokensOfDaily")}, ${remainPct}% ${aic.t("tokensLeft")})`;
     }
-    console.log(`\n\x1b[38;5;244m⚡ ${commitTokStats.lastRequest}${aic.t("tokensUnit")}${pct}\x1b[0m\n`);
+    console.log(
+      `\n\x1b[38;5;244m⚡ ${commitTokStats.lastRequest}${aic.t("tokensUnit")}${pct}\x1b[0m\n`,
+    );
   }
 
   while (true) {
@@ -2066,9 +2087,7 @@ async function releaseCommand() {
       );
     }
   } else {
-    console.log(
-      `${aic.t("releaseInstallGh")}\n   gh release create ${tag}\n`,
-    );
+    console.log(`${aic.t("releaseInstallGh")}\n   gh release create ${tag}\n`);
   }
 }
 
@@ -2145,7 +2164,9 @@ async function splitCommand() {
     spawnSync("git", ["reset", "-q", "--", ...staged], { stdio: "pipe" });
     const addRes = spawnSync("git", ["add", "--", ...g.files], { stdio: "pipe" });
     if (addRes.status !== 0) {
-      console.error(`❌ ${aic.t("error")} Failed to stage a group — aborting and restoring staging.`);
+      console.error(
+        `❌ ${aic.t("error")} Failed to stage a group — aborting and restoring staging.`,
+      );
       reStageAll();
       process.exit(1);
     }
@@ -2181,7 +2202,23 @@ function levenshteinDistance(a, b) {
 }
 
 function suggestCommand(input) {
-  const commands = ["config", "filter", "go", "init", "pr", "release", "review", "scan", "split", "stats", "status", "tokens", "uninstall", "update", "version"];
+  const commands = [
+    "config",
+    "filter",
+    "go",
+    "init",
+    "pr",
+    "release",
+    "review",
+    "scan",
+    "split",
+    "stats",
+    "status",
+    "tokens",
+    "uninstall",
+    "update",
+    "version",
+  ];
   let bestMatch = null;
   let bestDistance = Infinity;
   for (const cmd of commands) {
@@ -2233,7 +2270,8 @@ async function reviewCommand() {
     let pct = "";
     if (limits.daily && tokStats.lastRequest) {
       const reqPct = Math.round((tokStats.lastRequest / limits.daily) * 10000) / 100;
-      const remainPct = Math.round((Math.max(0, limits.daily - tokStats.daily) / limits.daily) * 10000) / 100;
+      const remainPct =
+        Math.round((Math.max(0, limits.daily - tokStats.daily) / limits.daily) * 10000) / 100;
       pct = ` (${reqPct}% ${aic.t("tokensOfDaily")}, ${remainPct}% ${aic.t("tokensLeft")})`;
     }
     console.log(`\n\x1b[38;5;244m⚡ ${tokStats.lastRequest}${aic.t("tokensUnit")}${pct}\x1b[0m`);
@@ -2352,16 +2390,24 @@ async function tokensCommand() {
 
   if (limits.daily) {
     const dailyPercent = Math.round((stats.daily / limits.daily) * 100);
-    console.log(`${aic.t("tokensToday")} ${stats.daily.toLocaleString()} / ${limits.daily.toLocaleString()} (${dailyPercent}%)`);
+    console.log(
+      `${aic.t("tokensToday")} ${stats.daily.toLocaleString()} / ${limits.daily.toLocaleString()} (${dailyPercent}%)`,
+    );
   } else {
-    console.log(`${aic.t("tokensToday")} ${stats.daily.toLocaleString()} (${aic.t("tokensNoLimit")})`);
+    console.log(
+      `${aic.t("tokensToday")} ${stats.daily.toLocaleString()} (${aic.t("tokensNoLimit")})`,
+    );
   }
 
   if (limits.monthly) {
     const monthlyPercent = Math.round((stats.monthly / limits.monthly) * 100);
-    console.log(`${aic.t("tokensMonth")} ${stats.monthly.toLocaleString()} / ${limits.monthly.toLocaleString()} (${monthlyPercent}%)`);
+    console.log(
+      `${aic.t("tokensMonth")} ${stats.monthly.toLocaleString()} / ${limits.monthly.toLocaleString()} (${monthlyPercent}%)`,
+    );
   } else {
-    console.log(`${aic.t("tokensMonth")} ${stats.monthly.toLocaleString()} (${aic.t("tokensNoLimit")})`);
+    console.log(
+      `${aic.t("tokensMonth")} ${stats.monthly.toLocaleString()} (${aic.t("tokensNoLimit")})`,
+    );
   }
 
   console.log(`\n${aic.t("tokensLastReq")} ${stats.lastRequest} tokens`);

@@ -1836,10 +1836,22 @@ function checkTokenLimits(cfg) {
   const monthlyPercent = limits.monthly ? (monthlyUsed / limits.monthly) * 100 : 0;
 
   if (dailyPercent >= 90 || monthlyPercent >= 90) {
-    return { warning: "90", dailyUsed, dailyLimit: limits.daily, monthlyUsed, monthlyLimit: limits.monthly };
+    return {
+      warning: "90",
+      dailyUsed,
+      dailyLimit: limits.daily,
+      monthlyUsed,
+      monthlyLimit: limits.monthly,
+    };
   }
   if (dailyPercent >= 80 || monthlyPercent >= 80) {
-    return { warning: "80", dailyUsed, dailyLimit: limits.daily, monthlyUsed, monthlyLimit: limits.monthly };
+    return {
+      warning: "80",
+      dailyUsed,
+      dailyLimit: limits.daily,
+      monthlyUsed,
+      monthlyLimit: limits.monthly,
+    };
   }
 
   return null;
@@ -2168,10 +2180,13 @@ export function callLlm(messages, cfg, opts = {}) {
                 const today = new Date().toISOString().slice(0, 10);
                 const todayTotal = tokenStats.daily[today] || 0;
                 const reqPct = Math.round((tracked / limits.daily) * 10000) / 100;
-                const remainPct = Math.round((Math.max(0, limits.daily - todayTotal) / limits.daily) * 10000) / 100;
+                const remainPct =
+                  Math.round((Math.max(0, limits.daily - todayTotal) / limits.daily) * 10000) / 100;
                 pct = ` (${reqPct}% ${t("tokensOfDaily")}, ${remainPct}% ${t("tokensLeft")})`;
               }
-              process.stdout.write(`\n\x1b[38;5;244m⚡ ${tracked}${t("tokensUnit")} (${usage.prompt_tokens || "?"} prompt + ${usage.completion_tokens || "?"} completion)${pct}\x1b[0m\n\n`);
+              process.stdout.write(
+                `\n\x1b[38;5;244m⚡ ${tracked}${t("tokensUnit")} (${usage.prompt_tokens || "?"} prompt + ${usage.completion_tokens || "?"} completion)${pct}\x1b[0m\n\n`,
+              );
             }
           } else {
             // Approximate tokens (roughly 1 token per 4 chars)
@@ -2756,7 +2771,11 @@ export async function buildReview(diff, cfg) {
   }
 
   if (diff.trim().length < 50) {
-    return { review: "Changes too small for meaningful review. Consider making larger changes.", issues: [], issueCount: 0 };
+    return {
+      review: "Changes too small for meaningful review. Consider making larger changes.",
+      issues: [],
+      issueCount: 0,
+    };
   }
 
   const userPrompt = `Review the following code changes:\n\n---\n${diff}\n---`;
@@ -2781,7 +2800,9 @@ export async function buildReview(diff, cfg) {
     return { error: `LLM error: ${e.message}`, issues: [], review: "" };
   }
 
-  logMessage(`REVIEW: LLM returned ${reviewText?.length || 0} chars: ${reviewText?.slice(0, 100)}...`);
+  logMessage(
+    `REVIEW: LLM returned ${reviewText?.length || 0} chars: ${reviewText?.slice(0, 100)}...`,
+  );
 
   if (!reviewText || reviewText.trim().length === 0) {
     return { error: "LLM returned empty response", issues: [], review: "" };
@@ -2860,7 +2881,8 @@ export function analyzeCommits(revRange = "HEAD~20..HEAD", repoRoot) {
 
 export function detectBadPractices(revRange = "HEAD~20..HEAD", repoRoot) {
   let logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", revRange], repoRoot);
-  if (!logOutput) logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", "HEAD"], repoRoot);
+  if (!logOutput)
+    logOutput = git(["log", "--first-parent", "--pretty=format:%H %s", "HEAD"], repoRoot);
   if (!logOutput) return [];
 
   const commits = logOutput

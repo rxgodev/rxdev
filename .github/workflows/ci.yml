@@ -21,7 +21,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm install --no-audit --no-fund
       - name: Lint
-        run: npx @biomejs/biome check .githooks/ bin/ tests/
+        run: npx @biomejs/biome@2.5.8 check .githooks/ bin/ tests/
       - name: Syntax check
         run: |
           node --check bin/rxdev.js

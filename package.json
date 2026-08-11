@@ -20,8 +20,8 @@
   "scripts": {
     "test": "node --test tests/test_rxdev.mjs",
     "test:coverage": "c8 node --test tests/test_rxdev.mjs",
-    "lint": "npx @biomejs/biome check .githooks/ bin/ tests/",
-    "format": "npx @biomejs/biome format --write .githooks/ bin/ tests/"
+    "lint": "npx @biomejs/biome@2.5.8 check .githooks/ bin/ tests/",
+    "format": "npx @biomejs/biome@2.5.8 format --write .githooks/ bin/ tests/"
   },
   "dependencies": {
     "inquirer": "^9.0.0",
