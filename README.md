@@ -155,15 +155,7 @@ jobs:
 - **Node.js** >= 18
 - An **API key** from one of the supported providers (see [Providers & Models](#providers--models))
 
-### 1. Set up GitHub Package Registry
-
-```bash
-npm login --scope=@rxgodev --registry=https://npm.pkg.github.com/
-```
-
-Enter your GitHub username and a [personal access token](https://github.com/settings/tokens) with `write:packages` scope when prompted.
-
-### 2. Install globally
+### 1. Install globally
 
 **npm:**
 ```bash
@@ -180,7 +172,7 @@ pnpm add -g rxdev@latest
 yarn global add rxdev@latest
 ```
 
-### 3. Configure your API key
+### 2. Configure your API key
 
 ```bash
 rxdev config
