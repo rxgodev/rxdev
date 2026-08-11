@@ -43,12 +43,13 @@ jobs:
 
           LOG=$(git log --format='%s%n%b' $RANGE)
           COUNT=$(git log --oneline $RANGE | wc -l)
-          HEAD_MSG=$(git log -1 --format='%s%n%b')
+          # only the subject line counts, so prose in a body can't skip a release
+          HEAD_SUBJECT=$(git log -1 --format='%s')
 
           if [ "$COUNT" -eq 0 ]; then
             echo "No new commits since ${LAST_TAG} — nothing to release."
             echo "type=none" >> "$GITHUB_OUTPUT"
-          elif printf '%s' "$HEAD_MSG" | grep -qiE '\[skip release\]'; then
+          elif printf '%s' "$HEAD_SUBJECT" | grep -qiE '\[skip release\]'; then
             echo "Head commit asks to skip the release."
             echo "type=none" >> "$GITHUB_OUTPUT"
           elif printf '%s' "$LOG" | grep -qE '^BREAKING CHANGE|^[a-z]+(\([^)]*\))?!:'; then
