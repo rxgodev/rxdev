@@ -1,0 +1,30 @@
+name: publish
+
+# main = released. Merging to main publishes to npm — but only when the
+# package.json version is new (existing versions are skipped, no failed runs).
+on:
+  push:
+    branches: [main]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - name: Publish if version is new
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          if npm view "rxdev@$VER" version >/dev/null 2>&1; then
+            echo "rxdev@$VER is already on npm — nothing to publish."
+          else
+            npm publish
+            echo "Published rxdev@$VER."
+          fi
