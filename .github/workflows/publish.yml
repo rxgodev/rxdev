@@ -1,30 +1,77 @@
 name: publish
 
-# main = released. Merging to main publishes to npm — but only when the
-# package.json version is new (existing versions are skipped, no failed runs).
+# main = released. Every merge to main auto-bumps the version (from commit
+# messages) and publishes to npm.
+#   feat: / feat(x):        -> minor
+#   BREAKING CHANGE or foo! -> major
+#   anything else           -> patch
+# Put [skip release] in the head commit message to land on main without releasing.
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+
       - run: npm install --no-audit --no-fund
       - run: npm test
-      - name: Publish if version is new
+
+      - name: Decide bump from commit messages
+        id: bump
+        run: |
+          LAST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          if [ -n "$LAST_TAG" ]; then RANGE="$LAST_TAG..HEAD"; else RANGE="HEAD"; fi
+          echo "Range: ${RANGE} (last tag: ${LAST_TAG:-none})"
+
+          LOG=$(git log --format='%s%n%b' $RANGE)
+          COUNT=$(git log --oneline $RANGE | wc -l)
+          HEAD_MSG=$(git log -1 --format='%s%n%b')
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No new commits since ${LAST_TAG} — nothing to release."
+            echo "type=none" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$HEAD_MSG" | grep -qiE '\[skip release\]'; then
+            echo "Head commit asks to skip the release."
+            echo "type=none" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$LOG" | grep -qE '^BREAKING CHANGE|^[a-z]+(\([^)]*\))?!:'; then
+            echo "type=major" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$LOG" | grep -qE '^feat(\([^)]*\))?:'; then
+            echo "type=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump, tag and push
+        if: steps.bump.outputs.type != 'none'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          NEW=$(npm version ${{ steps.bump.outputs.type }} -m "chore(release): v%s [skip ci]")
+          echo "NEW_VERSION=${NEW#v}" >> "$GITHUB_ENV"
+          git push origin HEAD:main --follow-tags
+
+      - name: Publish to npm
+        if: steps.bump.outputs.type != 'none'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          VER=$(node -p "require('./package.json').version")
-          if npm view "rxdev@$VER" version >/dev/null 2>&1; then
-            echo "rxdev@$VER is already on npm — nothing to publish."
-          else
-            npm publish
-            echo "Published rxdev@$VER."
-          fi
+          npm publish
+          echo "Published rxdev@${NEW_VERSION} (${{ steps.bump.outputs.type }} bump)."
