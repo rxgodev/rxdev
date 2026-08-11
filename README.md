@@ -167,17 +167,17 @@ Enter your GitHub username and a [personal access token](https://github.com/sett
 
 **npm:**
 ```bash
-npm install -g @rxgodev/rxdev@latest
+npm install -g rxdev@latest
 ```
 
 **pnpm:**
 ```bash
-pnpm add -g @rxgodev/rxdev@latest
+pnpm add -g rxdev@latest
 ```
 
 **yarn:**
 ```bash
-yarn global add @rxgodev/rxdev@latest
+yarn global add rxdev@latest
 ```
 
 ### 3. Configure your API key

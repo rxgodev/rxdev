@@ -1,5 +1,5 @@
 {
-  "name": "@rxgodev/rxdev",
+  "name": "rxdev",
   "version": "4.1.0",
   "description": "AI-powered developer workflow tool",
   "keywords": [
@@ -38,7 +38,8 @@
     ".githooks/"
   ],
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/rxgodev"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   },
   "repository": {
     "type": "git",

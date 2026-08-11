@@ -88,17 +88,17 @@ Saisissez votre nom d'utilisateur GitHub et un [jeton d'accès personnel](https:
 
 **npm:**
 ```bash
-npm install -g @rxgodev/rxdev@latest
+npm install -g rxdev@latest
 ```
 
 **pnpm:**
 ```bash
-pnpm add -g @rxgodev/rxdev@latest
+pnpm add -g rxdev@latest
 ```
 
 **yarn:**
 ```bash
-yarn global add @rxgodev/rxdev@latest
+yarn global add rxdev@latest
 ```
 
 ### 3. Configurer votre clé API

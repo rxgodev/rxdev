@@ -22,7 +22,7 @@ jobs:
           node-version: 22
 
       - name: Install RXDev
-        run: npm install -g @rxgodev/rxdev
+        run: npm install -g rxdev
 
       - name: Run AI Review
         id: review

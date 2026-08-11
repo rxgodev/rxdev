@@ -29,7 +29,7 @@ if (update?.latest && update.latest !== pkg.version) {
 
   const lines = [
     `Update available: ${RED}${pkg.version}${RST} → ${GREEN}${update.latest}${RST}`,
-    `${DIM}pnpm add -g @rxgodev/rxcommit@${update.latest}${RST}`,
+    `${DIM}pnpm add -g rxdev@${update.latest}${RST}`,
   ];
 
   const maxWidth = Math.max(...lines.map((l) => s(l).length)) + 8;
@@ -2423,21 +2423,21 @@ async function mainCmd() {
       // npm/pnpm are .cmd shims on Windows, which modern Node refuses to spawn
       // without a shell (CVE-2024-27980). Keep POSIX shell-free; use shell on Win.
       const pmOpts = { stdio: "inherit", shell: process.platform === "win32" };
-      const upd = spawnSync(pm, ["add", "-g", "@rxgodev/rxcommit@latest"], pmOpts);
+      const upd = spawnSync(pm, ["add", "-g", "rxdev@latest"], pmOpts);
       if (upd.status === 0) {
         console.log("\n✅ RXDev updated successfully.");
       } else if (pm === "pnpm") {
         console.log("\n⚠️  pnpm update failed, trying npm...\n");
-        const npmUpd = spawnSync("npm", ["install", "-g", "@rxgodev/rxcommit@latest"], pmOpts);
+        const npmUpd = spawnSync("npm", ["install", "-g", "rxdev@latest"], pmOpts);
         if (npmUpd.status === 0) {
           console.log("\n✅ RXDev updated successfully.");
         } else {
           console.log(
-            "\n❌ Update failed. Try manually:\n  pnpm add -g @rxgodev/rxcommit@latest\n  npm install -g @rxgodev/rxcommit@latest",
+            "\n❌ Update failed. Try manually:\n  pnpm add -g rxdev@latest\n  npm install -g rxdev@latest",
           );
         }
       } else {
-        console.log(`\n❌ Update failed. Try manually:\n  npm install -g @rxgodev/rxcommit@latest`);
+        console.log(`\n❌ Update failed. Try manually:\n  npm install -g rxdev@latest`);
       }
       break;
     }
